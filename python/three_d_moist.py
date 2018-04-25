@@ -33,6 +33,7 @@ from mpi4py import MPI
 import time
 
 from dedalus import public as de
+from dedalus.extras import flow_tools
 
 import logging
 logger = logging.getLogger(__name__)
@@ -46,8 +47,6 @@ nz = 32
 q0val= 0.000
 T1ovDTval = 5.5
 betaval =1.201
-
-
 
 # Create bases and domain
 x_basis = de.Fourier('x', nx, interval=(0, Lx), dealias=3/2)
@@ -71,6 +70,11 @@ problem.parameters['aDT'] = 3.00
 problem.parameters['T1ovDT'] = T1ovDTval
 problem.parameters['T1'] = T1ovDTval
 problem.parameters['deltaT'] = 1.00
+problem.parameters['Lx'] = Lx
+problem.parameters['Ly'] = Ly
+
+#problem.substitutions['plane_avg(A)'] = 'integ(A, ["x", "y"])/Lx/Ly'
+problem.substitutions['plane_avg(A)'] = 'integ(A, "x", "y")/Lx/Ly'
 
 problem.add_equation('dx(u) + dy(v) + wz = 0')
 
@@ -117,7 +121,12 @@ qz = solver.state['qz']
 
 # Linear background + perturbations damped at walls
 zb, zt = z_basis.interval
-pert =  1e-3 * np.random.standard_normal(domain.local_grid_shape) * (zt - z) * (z - zb)
+
+gshape = problem.domain.dist.grid_layout.global_shape(scales=problem.domain.dealias)
+slices = problem.domain.dist.grid_layout.slices(scales=problem.domain.dealias)
+rand = np.random.RandomState(seed=42)
+pert = rand.standard_normal(gshape)[slices]
+
 #b['g'] = -0.0*(z - pert)
 b['g'] = T1ovDTval-(1.00-betaval)*z
 b.differentiate('z', out=bz)
@@ -134,94 +143,52 @@ solver.stop_iteration = np.inf
 
 hermitian_cadence = 100
 
-
-
 # CFL routines
-evaluator = solver.evaluator
-evaluator.vars['grid_delta_x'] = domain.grid_spacing(0)
-evaluator.vars['grid_delta_y'] = domain.grid_spacing(1)
-evaluator.vars['grid_delta_z'] = domain.grid_spacing(2)
-
-cfl_cadence = 100
-cfl_variables = evaluator.add_dictionary_handler(iter=cfl_cadence)
-cfl_variables.add_task('u/grid_delta_x', name='f_u')
-cfl_variables.add_task('v/grid_delta_y', name='f_v')
-cfl_variables.add_task('w/grid_delta_z', name='f_w')
-
-def cfl_dt():
-    if z.size > 0:
-        max_f_u = np.max(np.abs(cfl_variables.fields['f_u']['g']))
-        max_f_v = np.max(np.abs(cfl_variables.fields['f_v']['g']))
-        max_f_w = np.max(np.abs(cfl_variables.fields['f_w']['g']))
-    else:
-        max_f_u = max_f_v = max_f_w = 0
-    max_f = max(max_f_u, max_f_v, max_f_w)
-    if max_f > 0:
-        min_t = 1 / max_f
-    else:
-        min_t = np.inf
-    return min_t
-
-safety = 0.3
-dt_array = np.zeros(1, dtype=np.float64)
-def update_dt(dt):
-    new_dt = max(0.5*dt, min(safety*cfl_dt(), 1.1*dt))
-    if domain.distributor.size > 1:
-        dt_array[0] = new_dt
-        domain.distributor.comm_cart.Allreduce(MPI.IN_PLACE, dt_array, op=MPI.MIN)
-        new_dt = dt_array[0]
-    return new_dt
-
-solver.evaluator.vars['Lx'] = Lx
-solver.evaluator.vars['Ly'] = Ly
+logger.info("Starting CFL")
+CFL = flow_tools.CFL(solver, initial_dt=dt, cadence=5, safety=0.3,
+                     max_change=1.5, min_change=0.5)
+CFL.add_velocities(('u', 'v', 'w'))
 
 # Analysis
-snapshots = evaluator.add_file_handler('slices', sim_dt=0.025, max_writes=50)
-snapshots.add_task('interp(b,z = 0.5)', name='b midplane')
-snapshots.add_task('interp(u,z = 0.5)', name='u midplane')
-snapshots.add_task('interp(v,z = 0.5)', name='v midplane')
-snapshots.add_task('interp(w,z = 0.5)', name='w midplane')
-snapshots.add_task('interp(temp,z = 0.5)', name='temp midplane')
-snapshots.add_task('interp(q,z = 0.5)', name='q midplane')
+slices = solver.evaluator.add_file_handler('slices', sim_dt=0.025, max_writes=50)
+slices.add_task('interp(b, z = 0.5)', name='b midplane')
+slices.add_task('interp(u, z = 0.5)', name='u midplane')
+slices.add_task('interp(v, z = 0.5)', name='v midplane')
+slices.add_task('interp(w, z = 0.5)', name='w midplane')
+slices.add_task('interp(temp, z = 0.5)', name='temp midplane')
+slices.add_task('interp(q, z = 0.5)', name='q midplane')
 
-snapshots.add_task('interp(b,x = 0)', name='b vertical')
-snapshots.add_task('interp(u,x = 0)', name='u vertical')
-snapshots.add_task('interp(v,x = 0)', name='v vertical')
-snapshots.add_task('interp(w,x = 0)', name='w vertical')
-snapshots.add_task('interp(temp,x = 0)', name='temp vertical')
-snapshots.add_task('interp(q, x = 0)', name='q vertical')
+slices.add_task('interp(b, x = 0)', name='b vertical')
+slices.add_task('interp(u, x = 0)', name='u vertical')
+slices.add_task('interp(v, x = 0)', name='v vertical')
+slices.add_task('interp(w, x = 0)', name='w vertical')
+slices.add_task('interp(temp, x = 0)', name='temp vertical')
+slices.add_task('interp(q, x = 0)', name='q vertical')
 
-snapshots = evaluator.add_file_handler('dump', sim_dt=1.0, max_writes=10)
-snapshots.add_task('p')
-snapshots.add_task('b')
-snapshots.add_task('u')
-snapshots.add_task('w')
-snapshots.add_task('v')
-snapshots.add_task('temp')
-snapshots.add_task('q')
+snapshots = solver.evaluator.add_file_handler('dump', sim_dt=1.0, max_writes=10)
+snapshots.add_system(solver.state)
 
-
-snapshots = evaluator.add_file_handler('profiles', sim_dt=0.01)
-snapshots.add_task('Integrate(b,dx,dy)/Lx/Ly', name='b')
-snapshots.add_task('Integrate(u,dx,dy)/Lx/Ly', name='u')
-snapshots.add_task('Integrate(v,dx,dy)/Lx/Ly', name='v')
-snapshots.add_task('Integrate(w,dx,dy)/Lx/Ly', name='w')
-snapshots.add_task('Integrate(q,dx,dy)/Lx/Ly', name='q')
-snapshots.add_task('Integrate(temp,dx,dy)/Lx/Ly', name='temp')
+profiles = solver.evaluator.add_file_handler('profiles', sim_dt=0.01)
+profiles.add_task('plane_avg(b)', name='b')
+profiles.add_task('plane_avg(u)', name='u')
+profiles.add_task('plane_avg(v)', name='v')
+profiles.add_task('plane_avg(w)', name='w')
+profiles.add_task('plane_avg(q)', name='q')
+profiles.add_task('plane_avg(temp)', name='temp')
 
 # Main loop
+dt = CFL.compute_dt()
 try:
     logger.info('Starting loop')
     start_time = time.time()
     while solver.ok:
         solver.step(dt)
-        if (solver.iteration - 1) % cfl_cadence == 0:
-            dt = update_dt(dt)
-            logger.info('Iteration: %i, Time: %e, dt: %e' %(solver.iteration, solver.sim_time, dt))
+        logger.info('Iteration: %i, Time: %e, dt: %e' %(solver.iteration, solver.sim_time, dt))
 
         if (solver.iteration - 1) % hermitian_cadence == 0:
             for field in solver.state.fields:
                 field.require_grid_space()
+        dt = CFL.compute_dt()
 
 except:
     logger.error('Exception raised, triggering end of main loop.')
