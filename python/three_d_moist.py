@@ -39,10 +39,10 @@ import logging
 logger = logging.getLogger(__name__)
 
 # Parameters
-Lx, Ly, Lz = (20., 20., 1.)
-nx = 64
-ny = 64
-nz = 32
+Lx, Ly, Lz = (10., 10., 1.)
+nx = 256
+ny = 256
+nz = 64
 
 q0val= 0.000
 T1ovDTval = 5.5
@@ -52,7 +52,7 @@ betaval =1.201
 x_basis = de.Fourier('x', nx, interval=(0, Lx), dealias=3/2)
 y_basis = de.Fourier('y', ny, interval=(0, Ly), dealias=3/2)
 z_basis = de.Chebyshev('z', nz, interval=(0, Lz), dealias=3/2)
-domain = de.Domain([x_basis, y_basis, z_basis], grid_dtype=np.float64, mesh=[2,2])
+domain = de.Domain([x_basis, y_basis, z_basis], grid_dtype=np.float64, mesh=[16,16])
 # 3D Boussinesq hydrodynamics
 problem = de.IVP(domain,
                  variables=['p','b','u','v','w','bz','uz','vz','wz','temp','q','qz'])
@@ -73,7 +73,6 @@ problem.parameters['deltaT'] = 1.00
 problem.parameters['Lx'] = Lx
 problem.parameters['Ly'] = Ly
 
-#problem.substitutions['plane_avg(A)'] = 'integ(A, ["x", "y"])/Lx/Ly'
 problem.substitutions['plane_avg(A)'] = 'integ(A, "x", "y")/Lx/Ly'
 
 problem.add_equation('dx(u) + dy(v) + wz = 0')
@@ -132,12 +131,15 @@ b['g'] = T1ovDTval-(1.00-betaval)*z
 b.differentiate('z', out=bz)
 #q['g'] = q0val*np.exp(-betaval*z/T0val)+1e-2*np.exp(-((x-1.0)/0.01)^2)*np.exp(-((z-0.5)/0.01)^2)
 #q['g'] = q0val*np.exp(-betaval*z/T0val)+(1e-2)*np.exp(-((z-0.5)*(z-0.5)/0.02))*np.exp(-((x-1.0)*(x-1.0)/0.02))
-q['g'] = (2e-2)*np.exp(-((z-0.1)*(z-0.1)/0.005))*np.exp(-((x-1.0)*(x-1.0)/0.005))
+
+#sigma2 = 0.005
+sigma2 = 0.05
+q['g'] = (2e-2)*np.exp(-((z-0.1)*(z-0.1)/sigma2))*np.exp(-((x-1.0)*(x-1.0)/sigma2))*np.exp(-((y-1.0)*(y-1.0)/sigma2))
 q.differentiate('z', out=qz)
 
 # Integration parameters
 dt = 1e-6
-solver.stop_sim_time = 6.5
+solver.stop_sim_time = 1.5
 solver.stop_wall_time = 6000 * 60.
 solver.stop_iteration = np.inf
 
