@@ -29,7 +29,6 @@ and a fraction of the y data (N1/Ny), and a fraction of the z data (N2/Nz).
 
 import os
 import numpy as np
-from mpi4py import MPI
 import time
 
 from dedalus import public as de
@@ -57,32 +56,33 @@ domain = de.Domain([x_basis, y_basis, z_basis], grid_dtype=np.float64, mesh=[16,
 problem = de.IVP(domain,
                  variables=['p','b','u','v','w','bz','uz','vz','wz','temp','q','qz'])
 
-problem.parameters['Eu'] = 1.0
 problem.parameters['Prandtl'] = 1.0
-problem.parameters['Ra'] = 20000000.0
-problem.parameters['M'] = 10.0
+problem.parameters['Ra'] = 2.e7
+problem.parameters['M'] = 0.19
 problem.parameters['S'] = 1.0
 problem.parameters['beta']=betaval
-problem.parameters['K2'] = 4e-10
 problem.parameters['tau'] = 0.00005
 problem.parameters['aDT'] = 3.00
 #problem.parameters['aDT'] = 2.86
 problem.parameters['T1ovDT'] = T1ovDTval
 problem.parameters['T1'] = T1ovDTval
 problem.parameters['deltaT'] = 1.00
+problem.parameters['k'] = 1e5 # cutoff for tanh
 problem.parameters['Lx'] = Lx
 problem.parameters['Ly'] = Ly
 
 problem.substitutions['plane_avg(A)'] = 'integ(A, "x", "y")/Lx/Ly'
+problem.substitutions['H(A)'] = '0.5*(1. + tanh(k*A))'
+problem.substitutions['qs'] = 'exp(aDT*temp)'
 
 problem.add_equation('dx(u) + dy(v) + wz = 0')
 
-problem.add_equation('dt(b) - (dx(dx(b)) +dy(dy(b)) + dz(bz))    = - u*dx(b) - v*dy(b) - w*bz+M*0.5*(1.0+tanh(100000.*(q-K2*exp(aDT*temp))))*(q-K2*exp(aDT*temp))/tau')
-problem.add_equation('dt(q) - S*(dx(dx(q)) + dy(dy(q)) + dz(qz)) = - u*dx(q) -v*dy(q) - w*qz-0.5*(1.0+tanh(100000.*(q-K2*exp(aDT*temp))))*(q-K2*exp(aDT*temp))/tau')
+problem.add_equation('dt(b) - dx(dx(b)) + dy(dy(b)) + dz(bz)     = - u*dx(b) - v*dy(b) - w*bz + M*H(q - qs)*(q - qs)/tau')
+problem.add_equation('dt(q) - S*(dx(dx(q)) + dy(dy(q)) + dz(qz)) = - u*dx(q) - v*dy(q) - w*qz -   H(q - qs)*(qs - q)/tau')
 
-problem.add_equation('dt(u) - Prandtl*(dx(dx(u)) + dy(dy(u)) + dz(uz)) + Eu*dx(p)     = - u*dx(u) - v*dy(u)- w*uz')
-problem.add_equation('dt(v) - Prandtl*(dx(dx(v)) + dy(dy(v)) + dz(vz)) + Eu*dy(p)     = - u*dx(v) - v*dy(v)- w*vz')
-problem.add_equation('dt(w) - Prandtl*(dx(dx(w)) + dy(dy(w)) + dz(wz)) + Eu*dz(p) - Prandtl*Ra*b = - u*dx(w) - v*dy(w) - w*wz')
+problem.add_equation('dt(u) - Prandtl*(dx(dx(u)) + dy(dy(u)) + dz(uz)) + dx(p)                = - u*dx(u) - v*dy(u) - w*uz')
+problem.add_equation('dt(v) - Prandtl*(dx(dx(v)) + dy(dy(v)) + dz(vz)) + dy(p)                = - u*dx(v) - v*dy(v) - w*vz')
+problem.add_equation('dt(w) - Prandtl*(dx(dx(w)) + dy(dy(w)) + dz(wz)) + dz(p) - Prandtl*Ra*b = - u*dx(w) - v*dy(w) - w*wz')
 
 problem.add_equation('bz - dz(b) = 0')
 problem.add_equation('qz - dz(q) = 0')
