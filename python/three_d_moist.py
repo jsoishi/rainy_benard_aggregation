@@ -78,7 +78,7 @@ problem.substitutions['qs'] = 'exp(aDT*temp)'
 problem.add_equation('dx(u) + dy(v) + wz = 0')
 
 problem.add_equation('dt(b) - dx(dx(b)) + dy(dy(b)) + dz(bz)     = - u*dx(b) - v*dy(b) - w*bz + M*H(q - qs)*(q - qs)/tau')
-problem.add_equation('dt(q) - S*(dx(dx(q)) + dy(dy(q)) + dz(qz)) = - u*dx(q) - v*dy(q) - w*qz -   H(q - qs)*(qs - q)/tau')
+problem.add_equation('dt(q) - S*(dx(dx(q)) + dy(dy(q)) + dz(qz)) = - u*dx(q) - v*dy(q) - w*qz +   H(q - qs)*(qs - q)/tau')
 
 problem.add_equation('dt(u) - Prandtl*(dx(dx(u)) + dy(dy(u)) + dz(uz)) + dx(p)                = - u*dx(u) - v*dy(u) - w*uz')
 problem.add_equation('dt(v) - Prandtl*(dx(dx(v)) + dy(dy(v)) + dz(vz)) + dy(p)                = - u*dx(v) - v*dy(v) - w*vz')
@@ -92,13 +92,13 @@ problem.add_equation('wz - dz(w) = 0')
 problem.add_equation('dz(temp)-bz = -beta')
 
 problem.add_bc('left(b) = T1ovDT')
-problem.add_bc('left(q) = K2*exp(aDT*T1ovDT)')
+problem.add_bc('left(q) = exp(aDT*T1ovDT)')
 problem.add_bc('left(u) = 0')
 problem.add_bc('left(v) = 0')
 problem.add_bc('left(w) = 0')
 problem.add_bc('left(temp) =T1ovDT')
 problem.add_bc('right(b) = T1ovDT-1.0+beta')
-problem.add_bc('right(q) = K2*exp(aDT*(T1ovDT-1.0))')
+problem.add_bc('right(q) = exp(aDT*(T1ovDT-1.0))')
 problem.add_bc('right(u) = 0')
 problem.add_bc('right(v) = 0')
 problem.add_bc('right(w) = 0', condition='nx != 0 or ny != 0')
@@ -180,12 +180,18 @@ profiles.add_task('plane_avg(temp)', name='temp')
 
 # Main loop
 dt = CFL.compute_dt()
+
+# Flow properties
+flow = flow_tools.GlobalFlowProperty(solver, cadence=1)
+flow.add_property("(u*u + v*v + w*w)", name='KE')
+
 try:
     logger.info('Starting loop')
     start_time = time.time()
     while solver.ok:
         solver.step(dt)
-        logger.info('Iteration: %i, Time: %e, dt: %e' %(solver.iteration, solver.sim_time, dt))
+        if (solver.iteration - 1) % 1 == 0:
+            logger.info('Iteration: %i, Time: %e, dt: %e, max E_kin: %e' %(solver.iteration, solver.sim_time, dt, flow.max('KE')))
 
         if (solver.iteration - 1) % hermitian_cadence == 0:
             for field in solver.state.fields:
