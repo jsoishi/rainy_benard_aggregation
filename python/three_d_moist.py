@@ -63,7 +63,6 @@ problem.parameters['S'] = 1.0
 problem.parameters['beta']=betaval
 problem.parameters['tau'] = 0.00005
 problem.parameters['aDT'] = 3.00
-#problem.parameters['aDT'] = 2.86
 problem.parameters['T1ovDT'] = T1ovDTval
 problem.parameters['T1'] = T1ovDTval
 problem.parameters['deltaT'] = 1.00
@@ -77,7 +76,7 @@ problem.substitutions['qs'] = 'exp(aDT*temp)'
 
 problem.add_equation('dx(u) + dy(v) + wz = 0')
 
-problem.add_equation('dt(b) - dx(dx(b)) + dy(dy(b)) + dz(bz)     = - u*dx(b) - v*dy(b) - w*bz + M*H(q - qs)*(q - qs)/tau')
+problem.add_equation('dt(b) -   (dx(dx(b)) + dy(dy(b)) + dz(bz)) = - u*dx(b) - v*dy(b) - w*bz + M*H(q - qs)*(q - qs)/tau')
 problem.add_equation('dt(q) - S*(dx(dx(q)) + dy(dy(q)) + dz(qz)) = - u*dx(q) - v*dy(q) - w*qz +   H(q - qs)*(qs - q)/tau')
 
 problem.add_equation('dt(u) - Prandtl*(dx(dx(u)) + dy(dy(u)) + dz(uz)) + dx(p)                = - u*dx(u) - v*dy(u) - w*uz')
