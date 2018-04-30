@@ -73,6 +73,7 @@ problem.parameters['Ly'] = Ly
 problem.substitutions['plane_avg(A)'] = 'integ(A, "x", "y")/Lx/Ly'
 problem.substitutions['H(A)'] = '0.5*(1. + tanh(k*A))'
 problem.substitutions['qs'] = 'exp(aDT*temp)'
+problem.substitutions['rh'] = 'q/exp(aDT*temp)'
 
 problem.add_equation('dx(u) + dy(v) + wz = 0')
 
@@ -158,6 +159,7 @@ slices.add_task('interp(v, z = 0.5)', name='v midplane')
 slices.add_task('interp(w, z = 0.5)', name='w midplane')
 slices.add_task('interp(temp, z = 0.5)', name='temp midplane')
 slices.add_task('interp(q, z = 0.5)', name='q midplane')
+slices.add_task('interp(rh, z = 0.5)', name='rh midplane')
 
 slices.add_task('interp(b, x = 0)', name='b vertical')
 slices.add_task('interp(u, x = 0)', name='u vertical')
@@ -165,6 +167,7 @@ slices.add_task('interp(v, x = 0)', name='v vertical')
 slices.add_task('interp(w, x = 0)', name='w vertical')
 slices.add_task('interp(temp, x = 0)', name='temp vertical')
 slices.add_task('interp(q, x = 0)', name='q vertical')
+slices.add_task('interp(rh, x = 0)', name='rh vertical')
 
 snapshots = solver.evaluator.add_file_handler('dump', sim_dt=1.0, max_writes=10)
 snapshots.add_system(solver.state)
