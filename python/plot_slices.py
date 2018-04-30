@@ -26,7 +26,7 @@ def midplane(filename, start, count, output):
     """Slices in x-y of midplane in z."""
 
     # Plot settings
-    tasks = ['b midplane', 'q midplane', 'temp midplane', 'u midplane']
+    tasks = ['b midplane', 'q midplane', 'temp midplane', 'u midplane', 'v midplane', 'w midplane']
     scale = 2.5
     dpi = 100
     title_func = lambda sim_time: 't = {:.3f}'.format(sim_time)
@@ -67,7 +67,7 @@ def vertical(filename, start, count, output):
     """Slices in y-z at edge (x=0)."""
 
     # Plot settings
-    tasks = ['b vertical', 'q vertical', 'temp vertical', 'u vertical']
+    tasks = ['b midplane', 'q midplane', 'temp midplane', 'u midplane', 'v midplane', 'w midplane']
     scale = 2.5
     dpi = 100
     title_func = lambda sim_time: 't = {:.3f}'.format(sim_time)
