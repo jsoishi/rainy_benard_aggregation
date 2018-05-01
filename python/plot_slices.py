@@ -27,6 +27,7 @@ def midplane(filename, start, count, output):
 
     # Plot settings
     tasks = ['b midplane', 'q midplane', 'temp midplane', 'u midplane', 'v midplane', 'w midplane']
+    even_scale = [False, False, False, True, True, True]
     scale = 2.5
     dpi = 100
     title_func = lambda sim_time: 't = {:.3f}'.format(sim_time)
@@ -51,7 +52,7 @@ def midplane(filename, start, count, output):
                 dset = file['tasks'][task]
                 image_axes = (2, 1)
                 data_slices = (index, slice(None), slice(None), 0)
-                plot_tools.plot_bot(dset, image_axes, data_slices, axes=axes, title=task, even_scale=True)
+                plot_tools.plot_bot(dset, image_axes, data_slices, axes=axes, title=task, even_scale=even_scale[n])
             # Add time title
             title = title_func(file['scales/sim_time'][index])
             title_height = 1 - 0.5 * mfig.margin.top / mfig.fig.y
@@ -67,7 +68,8 @@ def vertical(filename, start, count, output):
     """Slices in y-z at edge (x=0)."""
 
     # Plot settings
-    tasks = ['b midplane', 'q midplane', 'temp midplane', 'u midplane', 'v midplane', 'w midplane']
+    tasks = ['b vertical', 'q vertical', 'temp vertical', 'u vertical', 'v vertical', 'w vertical']
+    even_scale = [False, False, False, True, True, True]
     scale = 2.5
     dpi = 100
     title_func = lambda sim_time: 't = {:.3f}'.format(sim_time)
@@ -82,7 +84,7 @@ def vertical(filename, start, count, output):
     mfig = plot_tools.MultiFigure(nrows, ncols, image, pad, margin, scale)
     fig = mfig.figure
     # Plot writes
-    even_scale = [False, False, False, True]
+
     with h5py.File(filename, mode='r') as file:
         for index in range(start, start+count):
             for n, task in enumerate(tasks):
