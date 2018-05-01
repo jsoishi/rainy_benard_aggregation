@@ -182,8 +182,8 @@ q.differentiate('z', out=qz)
 
 # Integration parameters
 dt = 1e-4
-solver.stop_sim_time = 150
-solver.stop_wall_time = 3600. #6000 * 60.
+solver.stop_sim_time = 1500
+solver.stop_wall_time = 3600. * 24. * 4.9
 solver.stop_iteration = np.inf
 
 hermitian_cadence = 100
