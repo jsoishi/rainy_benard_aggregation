@@ -1,24 +1,6 @@
 """
 Dedalus script for Rainy Benard Aggregation study
 
-Simulation script for 3D Rayleigh-Benard Moist convection.
-
-This script can be ran serially or in parallel, and uses the built-in analysis
-framework to save data snapshots in HDF5 files.  The `process.py` script in this
-folder can be used to merge distributed save files from parallel runs and plot
-the snapshots from the command line.
-
-The scripts make three different types of outputs: full 3D data dumps, 2D slices
-through the data cube, and 1D horizontally averaged profiles.  The `process.py`
-script can only plot the 2D slices.
-
-To run, join, and plot vertical slices using 4 processes, for instance, you could
-use:
-$ mpiexec -n 4 python3 rayleigh_benard.py
-$ mpiexec -n 4 python3 process.py join slices
-$ mpiexec -n 4 python3 process.py plot_slices slices/*.h5 --type=horizontal
-On four processors, the simulation runs in a couple of minutes.
-
 This script is currently parallelized using a 1D mesh decomposition, so that the 
 maximum number of processors is set by the direction with the lowest resolution.
 A 2D mesh decomposition can be used to run the problem with more processors.  To
