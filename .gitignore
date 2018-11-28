@@ -1,3 +1,10 @@
+python/scratch/*
+python/frames/*
+python/profiles/*
+python/ra1e6_run1/*
+python/slices/*
+python/snapshots/*
+
 *.aux
 *.glo
 *.idx
