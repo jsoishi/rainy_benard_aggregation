@@ -96,6 +96,7 @@ if nondim == 'RB':
     slices_dt = 0.025
     snap_dt = 1.0
     prof_dt = 0.01
+    ts_dt = 0.001
 elif nondim == 'buoyancy':                                           #  Buoyancy scaling
     Pval = (Rayleigh * Prandtl)**(-1/2)         #  diffusion on buoyancy
     Sval = (Rayleigh * Prandtlm)**(-1/2)        #  diffusion on moisture
@@ -107,9 +108,10 @@ elif nondim == 'buoyancy':                                           #  Buoyancy
     slices_dt = 0.025*(Rayleigh* Prandtl)**(1/2)
     snap_dt = 1.0*(Rayleigh* Prandtl)**(1/2)
     prof_dt = 0.01*(Rayleigh* Prandtl)**(1/2)
-    logger.info("Output timescales (in sim time): slices = {}, snapshots = {}, profiles ={}".format(slices_dt, snap_dt, prof_dt))
+    ts_dt = 0.001*(Rayleigh* Prandtl)**(1/2)
 else:
     raise ValueError("Nondimensionalization {} not supported.".format(nondim))
+logger.info("Output timescales (in sim time): slices = {}, snapshots = {}, profiles ={}, timeseries = {}".format(slices_dt, snap_dt, prof_dt, ts_dt))
 
 # Create bases and domain
 bases = []
@@ -151,14 +153,17 @@ problem.parameters['DeltaT'] = DeltaTval
 # numerics parameters
 problem.parameters['k'] = 1e5 # cutoff for tanh
 problem.parameters['Lx'] = Lx
+problem.parameters['Lz'] = Lz
 if threeD:
     problem.parameters['Ly'] = Ly
 
 if threeD:
     problem.substitutions['plane_avg(A)'] = 'integ(A, "x", "y")/Lx/Ly'
+    problem.substitutions['vol_avg(A)'] = 'integ(A)/Lx/Ly/Lz'
     problem.substitutions['KE'] = '0.5*(u*u + v*v + w*w)'
 else:
     problem.substitutions['plane_avg(A)'] = 'integ(A, "x")/Lx'
+    problem.substitutions['vol_avg(A)'] = 'integ(A)/Lx/Lz'
     problem.substitutions['KE'] = '0.5*(u*u + w*w)'
 
 problem.substitutions['H(A)'] = '0.5*(1. + tanh(k*A))'
@@ -304,6 +309,9 @@ if threeD:
 profiles.add_task('plane_avg(w)', name='w')
 profiles.add_task('plane_avg(q)', name='q')
 profiles.add_task('plane_avg(temp)', name='temp')
+
+timeseries = solver.evaluator.add_file_handler(os.path.join(data_dir, 'timeseries'), sim_dt=ts_dt)
+timeseries.add_task('vol_avg(KE)', name='KE')
 
 # Main loop
 dt = CFL.compute_dt()
