@@ -21,7 +21,7 @@ Options:
     --F=<F>                  basic state buoyancy difference [default: 0]
     --alpha=<alpha>          Clausius Clapeyron parameter [default: 3.0]
     --beta=<beta>            beta parameter [default: 1.201]
-    --gamma=<gamma>          condensational heating parameter [default: 0.293]
+    --gamma=<gamma>          condensational heating parameter [default: 0.19]
     --DeltaT=<DeltaT>        Temperature at top [default: -1.0]
     --sigma2=<sigma2>        Initial condition sigma2 [default: 0.05]
     --q0=<q0>                Initial condition q0 [default: 5.]
@@ -44,6 +44,7 @@ import time
 
 from dedalus import public as de
 from dedalus.extras import flow_tools
+from dedalus.tools  import post
 
 import logging
 logger = logging.getLogger(__name__)
@@ -143,7 +144,7 @@ if domain.distributor.rank == 0:
 problem.parameters['P'] = Pval
 problem.parameters['PdR'] = PdRval
 problem.parameters['PtR'] = PtRval
-problem.parameters['M'] = 0.19
+problem.parameters['gamma'] = gammaval
 problem.parameters['S'] = 1.0
 problem.parameters['beta'] = betaval
 problem.parameters['tau'] = tauval
@@ -173,7 +174,7 @@ problem.substitutions['rh'] = 'q/exp(alpha*temp)'
 if threeD:
     problem.add_equation('dx(u) + dy(v) + wz = 0')
 
-    problem.add_equation('dt(b) - P*(dx(dx(b)) + dy(dy(b)) + dz(bz)) = - u*dx(b) - v*dy(b) - w*bz + M*H(q - qs)*(q - qs)/tau')
+    problem.add_equation('dt(b) - P*(dx(dx(b)) + dy(dy(b)) + dz(bz)) = - u*dx(b) - v*dy(b) - w*bz + gamma*H(q - qs)*(q - qs)/tau')
     problem.add_equation('dt(q) - S*(dx(dx(q)) + dy(dy(q)) + dz(qz)) = - u*dx(q) - v*dy(q) - w*qz +   H(q - qs)*(qs - q)/tau')
 
     problem.add_equation('dt(u) - PdR*(dx(dx(u)) + dy(dy(u)) + dz(uz)) + dx(p)                = - u*dx(u) - v*dy(u) - w*uz')
@@ -182,7 +183,7 @@ if threeD:
 else:
     problem.add_equation('dx(u) + wz = 0')
 
-    problem.add_equation('dt(b) - P*(dx(dx(b)) + dz(bz)) = - u*dx(b) - w*bz + M*H(q - qs)*(q - qs)/tau')
+    problem.add_equation('dt(b) - P*(dx(dx(b)) + dz(bz)) = - u*dx(b) - w*bz + gamma*H(q - qs)*(q - qs)/tau')
     problem.add_equation('dt(q) - S*(dx(dx(q)) + dz(qz)) = - u*dx(q) - w*qz +   H(q - qs)*(qs - q)/tau')
 
     problem.add_equation('dt(u) - PdR*(dx(dx(u)) + dz(uz)) + dx(p)                = - u*dx(u) - w*uz')
@@ -221,6 +222,7 @@ problem.add_bc('right(p) = 0', condition=cond2)
 
 # Build solver
 ts = de.timesteppers.SBDF3
+#ts = de.timesteppers.RK443
 solver = problem.build_solver(ts)
 logger.info('Solver built')
 
@@ -257,22 +259,25 @@ q.differentiate('z', out=qz)
 
 # Integration parameters
 dt = 1e-4
-solver.stop_sim_time = 3000
+solver.stop_sim_time = 2000
 solver.stop_wall_time = 3600. * 24. * 4.9
 solver.stop_iteration = np.inf
 
-hermitian_cadence = 100
+hermitian_cadence = 10
 
 # CFL routines
 logger.info("Starting CFL")
-CFL = flow_tools.CFL(solver, initial_dt=dt, cadence=5, safety=0.3,
-                     max_change=1.5, min_change=0.5)
+tausafety= 0.1
+
+CFL = flow_tools.CFL(solver, initial_dt=dt, cadence=5, safety=0.30,
+                     max_change=1.5, max_dt=tauval*tausafety)#, min_change=0.5)
 cfl_vels = ['u','w']
 if threeD:
     cfl_vels.append('v')
 CFL.add_velocities(cfl_vels)
 
 # Analysis
+analysis_tasks = []
 slices = solver.evaluator.add_file_handler(os.path.join(data_dir, 'slices'), sim_dt=slices_dt, max_writes=50)
 if threeD:
     slices.add_task('interp(b, z = 0.5)', name='b midplane')
@@ -297,10 +302,11 @@ else:
     slices.add_task('temp', name='temp vertical')
     slices.add_task('q', name='q vertical')
     slices.add_task('rh', name='rh vertical')
+analysis_tasks.append(slices)
 
 snapshots = solver.evaluator.add_file_handler(os.path.join(data_dir, 'snapshots'), sim_dt=snap_dt, max_writes=10)
 snapshots.add_system(solver.state)
-
+analysis_tasks.append(snapshots)
 profiles = solver.evaluator.add_file_handler(os.path.join(data_dir, 'profiles'), sim_dt=prof_dt)
 profiles.add_task('plane_avg(b)', name='b')
 profiles.add_task('plane_avg(u)', name='u')
@@ -308,11 +314,12 @@ if threeD:
     profiles.add_task('plane_avg(v)', name='v')
 profiles.add_task('plane_avg(w)', name='w')
 profiles.add_task('plane_avg(q)', name='q')
+profiles.add_task('plane_avg(rh)', name='rh')
 profiles.add_task('plane_avg(temp)', name='temp')
-
+analysis_tasks.append(profiles)
 timeseries = solver.evaluator.add_file_handler(os.path.join(data_dir, 'timeseries'), sim_dt=ts_dt)
 timeseries.add_task('vol_avg(KE)', name='KE')
-
+analysis_tasks.append(timeseries)
 # Main loop
 dt = CFL.compute_dt()
 
@@ -337,9 +344,16 @@ except:
     logger.error('Exception raised, triggering end of main loop.')
     raise
 finally:
+    solver.evaluate_handlers_now(dt)
+
     end_time = time.time()
 
     # Print statistics
     logger.info('Run time: %f' %(end_time-start_time))
     logger.info('Iterations: %i' %solver.iteration)
+
+    for task in analysis_tasks:
+        logger.info(task.base_path)
+        post.merge_analysis(task.base_path)
+
 
