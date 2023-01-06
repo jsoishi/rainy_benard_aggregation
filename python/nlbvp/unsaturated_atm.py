@@ -21,7 +21,7 @@ Options:
     --tau=<tau>          Tau parameter [default: 5e-5]
     --k=<k>              Tanh width of phase change [default: 1e3]
 
-    --Nz=<Nz>            Vertical (z) grid resolution [default: 256]
+    --nz=<nz>            Vertical (z) grid resolution [default: 256]
 """
 import logging
 logger = logging.getLogger(__name__)
@@ -43,7 +43,7 @@ tau_in = float(args['--tau'])
 k_in = float(args['--k'])
 
 q_surface = float(args['--q0'])
-nz = int(args['--Nz'])
+nz = int(args['--nz'])
 
 α = float(args['--alpha'])
 β = float(args['--beta'])
@@ -59,21 +59,18 @@ S = (Prandtlm/Prandtl)**(-1/2)        #  diffusion on moisture
 data_dir = 'unsaturated_atm_alpha{:}_gamma{:}_q{:}'.format(args['--alpha'], args['--gamma'], args['--q0'])
 case_dir = 'tau_{:}_k{:}_nz{:d}'.format(args['--tau'], args['--k'], nz)
 
-if not os.path.exists('{:s}/'.format(data_dir)):
-    os.mkdir('{:s}/'.format(data_dir))
+import dedalus.tools.logging as dedalus_logging
+dedalus_logging.add_file_handler(data_dir+'/logs/dedalus_log', 'DEBUG')
+
 if not os.path.exists('{:s}/'.format(data_dir+'/'+case_dir)):
     os.mkdir('{:s}/'.format(data_dir+'/'+case_dir))
+
 
 tol = 1e-3
 IC = 'linear' #'LBVP' # 'LBVP' -> compute LBVP, 'linear' (or else) -> use linear ICs
 verbose = True
 
 Lz = 1
-
-# start_tau = 1e-3
-# stop_tau = 5e-5
-# taus = np.logspace(np.log10(start_tau), np.log10(stop_tau), num=10)
-# ks = np.logspace(2, 3, num=4)
 
 # Create bases and domain
 coords = de.CartesianCoordinates('x', 'y', 'z')
@@ -113,92 +110,20 @@ rh = q*np.exp(-α*temp)
 
 tau = dist.Field(name='tau')
 
-
-def plot_solution(solution, title=None, mask=None, linestyle=None, ax=None):
-    b = solution['b']
-    q = solution['q']
-    m = solution['m']
-    T = solution['T']
-    rh = solution['rh']
-
-    for f in [b, q, m, T, rh]:
-        f.change_scales(1)
-
-    if mask is None:
-        mask = np.ones_like(z, dtype=bool)
-    if ax is None:
-        fig, ax = plt.subplots(ncols=2)
-        markup = True
-    else:
-        for axi in ax:
-            axi.set_prop_cycle(None)
-        markup = False
-    ax[0].plot(b['g'][mask],z[mask], label='$b$', linestyle=linestyle)
-    ax[0].plot(γ*q['g'][mask],z[mask], label='$\gamma q$', linestyle=linestyle)
-    ax[0].plot(m['g'][mask],z[mask], label='$b+\gamma q$', linestyle=linestyle)
-
-    ax[1].plot(T['g'][mask],z[mask], label='$T$', linestyle=linestyle)
-    ax[1].plot(q['g'][mask],z[mask], label='$q$', linestyle=linestyle)
-    ax[1].plot(rh['g'][mask],z[mask], label='$r_h$', linestyle=linestyle)
-
-    if markup:
-        ax[1].legend()
-        ax[0].legend()
-        ax[0].set_ylabel('z')
-        if title:
-            ax[0].set_title(title)
-    return ax
-
-
-from scipy.optimize import newton
-from scipy.interpolate import interp1d
-
-def find_zc(sol, ε=1e-3, root_finding = 'inverse'):
-    rh = sol['rh']
-    rh.change_scales(1)
-    f = interp1d(z[0,0,:], rh['g'][0,0,:])
-    if root_finding == 'inverse':
-        # invert the relationship and use interpolation to find where r_h = 1-ε (approach from below)
-        f_i = interp1d(rh['g'][0,0,:], z[0,0,:]) #inverse
-        zc = f_i(1-ε)
-    elif root_finding == 'discrete':
-        # crude initial emperical zc; look for where rh-1 ~ 0, in lower half of domain.
-        zc = z[0,0,np.argmin(np.abs(rh['g'][0,0,0:int(nz/2)]-1))]
-#    if zc is None:
-#        zc = 0.2
-#    zc = newton(f, 0.2)
-    return zc
-
-
-if IC == 'LBVP':
-    dt = lambda A: 0*A
-    # Stable linear solution as an intial guess
-    problem = de.LBVP([b, q, τb1, τb2, τq1, τq2], namespace=locals())
-    problem.add_equation('dt(b) - P*lap(b) + lift(τb1, -1) + lift(τb2, -2) = 0')
-    problem.add_equation('dt(q) - S*lap(q) + lift(τq1, -1) + lift(τq2, -2) = 0')
-    problem.add_equation('b(z=0) = 0')
-    problem.add_equation('b(z=Lz) = β + ΔT') # technically β*Lz
-    problem.add_equation('q(z=0) = q_surface')
-    problem.add_equation('q(z=Lz) = np.exp(α*ΔT)')
-    solver = problem.build_solver()
-    solver.solve()
-else:
-    b['g'] = (β + ΔT)*z
-    q['g'] = (1-z+np.exp(α*ΔT))
+dt = lambda A: 0*A
+# Stable linear solution as an intial guess
+problem = de.LBVP([b, q, τb1, τb2, τq1, τq2], namespace=locals())
+problem.add_equation('dt(b) - P*lap(b) + lift(τb1, -1) + lift(τb2, -2) = 0')
+problem.add_equation('dt(q) - S*lap(q) + lift(τq1, -1) + lift(τq2, -2) = 0')
+problem.add_equation('b(z=0) = 0')
+problem.add_equation('b(z=Lz) = β + ΔT') # technically β*Lz
+problem.add_equation('q(z=0) = q_surface')
+problem.add_equation('q(z=Lz) = np.exp(α*ΔT)')
+solver = problem.build_solver()
+solver.solve()
 
 print('b: {:.2g} -- {:.2g}'.format(b(z=0).evaluate()['g'][0,0,0], b(z=Lz).evaluate()['g'][0,0,0]))
 print('q: {:.2g} -- {:.2g}'.format(q(z=0).evaluate()['g'][0,0,0], q(z=Lz).evaluate()['g'][0,0,0]))
-
-LBVP_sol = {'b':b.copy(), 'q':q.copy(), 'm':(b+γ*q).evaluate().copy(), 'T':temp.evaluate().copy(), 'rh':rh.evaluate().copy()}
-if verbose:
-    plot_solution(LBVP_sol, title='LBVP solution')
-if IC == 'LBVP':
-    zc = find_zc(LBVP_sol)
-    print('LBVP zc = {:.3}'.format(zc))
-    LBVP_sol['zc'] = zc
-
-
-# In[10]:
 
 
 dt = lambda A: 0*A
@@ -223,21 +148,12 @@ while pert_norm > tol:
     solver.newton_iteration()
     pert_norm = sum(pert.allreduce_data_norm('c', 2) for pert in solver.perturbations)
     logger.info("tau = {:.1g}, k = {:.0g}, L2 err = {:.1g}".format(tau['g'][0,0,0], k['g'][0,0,0], pert_norm))
-NLBVP_sol = {'b':b.copy(), 'q':q.copy(),
-             'm':(b+γ*q).evaluate().copy(), 'T':temp.evaluate().copy(), 'rh':rh.evaluate().copy(),
-             'tau':tau['g'][0,0,0], 'k':k['g'][0,0,0]}
-zc = find_zc(NLBVP_sol)
-NLBVP_sol['zc'] = zc
-logger.info('tau = {:.1g}, k = {:.0g}, zc = {:.2g}'.format(tau['g'][0,0,0], k['g'][0,0,0], zc))
 
-value = rh.evaluate()
-value.change_scales(1)
-mask = (value['g'] >= 1-0.01)
-ax = plot_solution(NLBVP_sol, title='NLBVP solution', mask=mask, linestyle='solid')
-mask = (value['g'] < 1-0.01)
-plot_solution(NLBVP_sol, title='NLBVP solution', mask=mask, linestyle='dashed', ax=ax)
-print('zc = {:.3g}'.format(NLBVP_sol['zc']))
-print('zc = {:.3g}'.format(find_zc(NLBVP_sol)))
-
-
-plt.show()
+solution = solver.evaluator.add_file_handler(data_dir+'/'+case_dir, mode='overwrite')
+solution.add_task(b)
+solution.add_task(q)
+solution.add_task(b + γ*q, name='m')
+solution.add_task(temp, name='T')
+solution.add_task(rh)
+solution.process()
+logger.info("wrote solution to {:}/{:}".format(data_dir, case_dir))
