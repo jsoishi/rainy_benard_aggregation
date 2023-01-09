@@ -149,11 +149,13 @@ while pert_norm > tol:
     pert_norm = sum(pert.allreduce_data_norm('c', 2) for pert in solver.perturbations)
     logger.info("tau = {:.1g}, k = {:.0g}, L2 err = {:.1g}".format(tau['g'][0,0,0], k['g'][0,0,0], pert_norm))
 
-solution = solver.evaluator.add_file_handler(data_dir+'/'+case_dir, mode='overwrite')
+solution = solver.evaluator.add_file_handler(data_dir+'/'+case_dir+'/'+'drizzle_sol', mode='overwrite')
 solution.add_task(b)
 solution.add_task(q)
 solution.add_task(b + γ*q, name='m')
 solution.add_task(temp, name='T')
-solution.add_task(rh)
-solution.process()
+solution.add_task(rh, name='rh')
+# work around for file handlers:
+solver.evaluator.evaluate_handlers([solution], timestep=0, wall_time=0, sim_time=0, iteration=0, world_time=0)
+#solution.process()
 logger.info("wrote solution to {:}/{:}".format(data_dir, case_dir))
