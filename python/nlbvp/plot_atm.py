@@ -1,3 +1,25 @@
+"""
+Script for plotting atmosphere properties for unsaturated/saturated atmosphers.
+
+This script plots NLBVP solutions for unsaturated atmospheres, which corresponds to Vallis et al 2019, Figure 2.
+
+Vallis, Parker & Tobias, 2019, JFM,
+``A simple system for moist convection: the Rainy–Bénard model''
+
+Usage:
+    plot_atm.py <cases>... [options]
+
+Options:
+    <cases>         Case (or cases) to plot results from
+    
+    --epsilon=<e>   Epsilon to control search for zc [default: 1e-3]
+"""
+import logging
+logger = logging.getLogger(__name__)
+for system in ['h5py._conv', 'matplotlib', 'PIL']:
+     logging.getLogger(system).setLevel(logging.WARNING)
+import matplotlib.pyplot as plt
+import numpy as np
 
 def plot_solution(solution, title=None, mask=None, linestyle=None, ax=None):
     b = solution['b']
@@ -5,26 +27,28 @@ def plot_solution(solution, title=None, mask=None, linestyle=None, ax=None):
     m = solution['m']
     T = solution['T']
     rh = solution['rh']
-
-    for f in [b, q, m, T, rh]:
-        f.change_scales(1)
-
+    z = solution['z']
+    # hack
+    γ = 0.3
     if mask is None:
         mask = np.ones_like(z, dtype=bool)
     if ax is None:
-        fig, ax = plt.subplots(ncols=2)
+        fig, ax = plt.subplots(ncols=2, sharey=True)
         markup = True
+        return_fig = True
     else:
         for axi in ax:
             axi.set_prop_cycle(None)
         markup = False
-    ax[0].plot(b['g'][mask],z[mask], label='$b$', linestyle=linestyle)
-    ax[0].plot(γ*q['g'][mask],z[mask], label='$\gamma q$', linestyle=linestyle)
-    ax[0].plot(m['g'][mask],z[mask], label='$b+\gamma q$', linestyle=linestyle)
+        return_fig = False
 
-    ax[1].plot(T['g'][mask],z[mask], label='$T$', linestyle=linestyle)
-    ax[1].plot(q['g'][mask],z[mask], label='$q$', linestyle=linestyle)
-    ax[1].plot(rh['g'][mask],z[mask], label='$r_h$', linestyle=linestyle)
+    ax[0].plot(b[mask],z[mask], label='$b$', linestyle=linestyle)
+    ax[0].plot(γ*q[mask],z[mask], label='$\gamma q$', linestyle=linestyle)
+    ax[0].plot(m[mask],z[mask], label='$b+\gamma q$', linestyle=linestyle)
+
+    ax[1].plot(T[mask],z[mask], label='$T$', linestyle=linestyle)
+    ax[1].plot(q[mask],z[mask], label='$q$', linestyle=linestyle)
+    ax[1].plot(rh[mask],z[mask], label='$r_h$', linestyle=linestyle)
 
     if markup:
         ax[1].legend()
@@ -32,44 +56,53 @@ def plot_solution(solution, title=None, mask=None, linestyle=None, ax=None):
         ax[0].set_ylabel('z')
         if title:
             ax[0].set_title(title)
-    return ax
-
+    if return_fig:
+        return fig, ax
+    else:
+        return ax
 
 from scipy.optimize import newton
 from scipy.interpolate import interp1d
 
 def find_zc(sol, ε=1e-3, root_finding = 'inverse'):
     rh = sol['rh']
-    rh.change_scales(1)
-    f = interp1d(z[0,0,:], rh['g'][0,0,:])
+    z = sol['z']
+    nz = z.shape[0]
     if root_finding == 'inverse':
         # invert the relationship and use interpolation to find where r_h = 1-ε (approach from below)
-        f_i = interp1d(rh['g'][0,0,:], z[0,0,:]) #inverse
+        f_i = interp1d(rh, z) #inverse
         zc = f_i(1-ε)
     elif root_finding == 'discrete':
         # crude initial emperical zc; look for where rh-1 ~ 0, in lower half of domain.
-        zc = z[0,0,np.argmin(np.abs(rh['g'][0,0,0:int(nz/2)]-1))]
+        zc = z[np.argmin(np.abs(rh[0:int(nz/2)]-1))]
 #    if zc is None:
 #        zc = 0.2
 #    zc = newton(f, 0.2)
     return zc
 
-NLBVP_sol = {'b':b.copy(), 'q':q.copy(),
-             'm':(b+γ*q).evaluate().copy(), 'T':temp.evaluate().copy(), 'rh':rh.evaluate().copy(),
-             'tau':tau['g'][0,0,0], 'k':k['g'][0,0,0]}
+if __name__=="__main__":
+    from docopt import docopt
+    args = docopt(__doc__)
 
-zc = find_zc(NLBVP_sol)
-NLBVP_sol['zc'] = zc
-logger.info('tau = {:.1g}, k = {:.0g}, zc = {:.2g}'.format(tau['g'][0,0,0], k['g'][0,0,0], zc))
+    import h5py
+    import dedalus.public as de
+    logger = logging.getLogger(__name__)
 
-value = rh.evaluate()
-value.change_scales(1)
-mask = (value['g'] >= 1-0.01)
-ax = plot_solution(NLBVP_sol, title='NLBVP solution', mask=mask, linestyle='solid')
-mask = (value['g'] < 1-0.01)
-plot_solution(NLBVP_sol, title='NLBVP solution', mask=mask, linestyle='dashed', ax=ax)
-print('zc = {:.3g}'.format(NLBVP_sol['zc']))
-print('zc = {:.3g}'.format(find_zc(NLBVP_sol)))
+    ε = float(args['--epsilon'])
 
+    for case in args['<cases>']:
+        f = h5py.File(case+'/drizzle_sol/drizzle_sol_s1.h5', 'r')
+        sol = {}
+        for task in f['tasks']:
+            sol[task] = f['tasks'][task][0,0,0][:]
+        sol['z'] = f['tasks']['b'].dims[3][0][:]
 
-plt.show()
+        mask = (sol['rh'] >= 1-ε)
+        fig, ax = plot_solution(sol, title='NLBVP solution', mask=mask, linestyle='solid')
+        mask = (sol['rh'] < 1-ε)
+        plot_solution(sol, title='NLBVP solution', mask=mask, linestyle='dashed', ax=ax)
+        fig.tight_layout()
+        fig.savefig(case+'/atm.png', dpi=300)
+        fig.savefig(case+'/atm.pdf')
+        zc = find_zc(sol, ε=ε)
+        logger.info('tau = {:.1g}, k = {:.0g}, zc = {:.2g}'.format(sol['tau'][0], sol['k'][0], zc))
