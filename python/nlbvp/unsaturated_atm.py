@@ -21,6 +21,8 @@ Options:
     --tau=<tau>          Tau parameter [default: 5e-5]
     --k=<k>              Tanh width of phase change [default: 1e3]
 
+    --tolerance=<t>      Tolerance for convergence [default: 1e-3]
+
     --nz=<nz>            Vertical (z) grid resolution [default: 256]
 """
 import logging
@@ -66,9 +68,7 @@ if not os.path.exists('{:s}/'.format(data_dir+'/'+case_dir)):
     os.mkdir('{:s}/'.format(data_dir+'/'+case_dir))
 
 
-tol = 1e-3
-IC = 'linear' #'LBVP' # 'LBVP' -> compute LBVP, 'linear' (or else) -> use linear ICs
-verbose = True
+tol = float(args['--tolerance'])
 
 Lz = 1
 
@@ -122,9 +122,12 @@ problem.add_equation('q(z=Lz) = np.exp(α*ΔT)')
 solver = problem.build_solver()
 solver.solve()
 
-print('b: {:.2g} -- {:.2g}'.format(b(z=0).evaluate()['g'][0,0,0], b(z=Lz).evaluate()['g'][0,0,0]))
-print('q: {:.2g} -- {:.2g}'.format(q(z=0).evaluate()['g'][0,0,0], q(z=Lz).evaluate()['g'][0,0,0]))
-
+α_f = dist.Field()
+α_f['g'] = α
+β_f = dist.Field()
+β_f['g'] = β
+γ_f = dist.Field()
+γ_f['g'] = γ
 
 dt = lambda A: 0*A
 
@@ -155,6 +158,11 @@ solution.add_task(q)
 solution.add_task(b + γ*q, name='m')
 solution.add_task(temp, name='T')
 solution.add_task(rh, name='rh')
+solution.add_task(tau, name='tau')
+solution.add_task(k, name='k')
+solution.add_task(α_f, name='α')
+solution.add_task(β_f, name='β')
+solution.add_task(γ_f, name='γ')
 # work around for file handlers:
 solver.evaluator.evaluate_handlers([solution], timestep=0, wall_time=0, sim_time=0, iteration=0, world_time=0)
 #solution.process()

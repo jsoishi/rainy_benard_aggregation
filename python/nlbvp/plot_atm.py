@@ -11,7 +11,7 @@ Usage:
 
 Options:
     <cases>         Case (or cases) to plot results from
-    
+
     --epsilon=<e>   Epsilon to control search for zc [default: 1e-3]
 """
 import logging
@@ -27,9 +27,10 @@ def plot_solution(solution, title=None, mask=None, linestyle=None, ax=None):
     m = solution['m']
     T = solution['T']
     rh = solution['rh']
+
     z = solution['z']
-    # hack
-    γ = 0.3
+    γ = solution['γ']
+
     if mask is None:
         mask = np.ones_like(z, dtype=bool)
     if ax is None:
@@ -98,9 +99,9 @@ if __name__=="__main__":
         sol['z'] = f['tasks']['b'].dims[3][0][:]
 
         mask = (sol['rh'] >= 1-ε)
-        fig, ax = plot_solution(sol, title='NLBVP solution', mask=mask, linestyle='solid')
+        fig, ax = plot_solution(sol, mask=mask, linestyle='solid')
         mask = (sol['rh'] < 1-ε)
-        plot_solution(sol, title='NLBVP solution', mask=mask, linestyle='dashed', ax=ax)
+        plot_solution(sol, mask=mask, linestyle='dashed', ax=ax)
         fig.tight_layout()
         fig.savefig(case+'/atm.png', dpi=300)
         fig.savefig(case+'/atm.pdf')

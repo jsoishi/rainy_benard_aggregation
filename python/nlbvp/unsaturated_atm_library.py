@@ -18,6 +18,8 @@ Options:
     --gamma=<gamma>      Gamma parameter [default: 0.3]
     --beta=<beta>        Beta parameter  [default: 1.2]
 
+    --tolerance=<t>      Tolerance for convergence [default: 1e-5]
+
     --nz=<nz>            Vertical (z) grid resolution [default: 256]
 """
 import logging
@@ -62,9 +64,7 @@ data_dir = 'unsaturated_atm_alpha{:}_gamma{:}_q{:}'.format(args['--alpha'], args
 import dedalus.tools.logging as dedalus_logging
 dedalus_logging.add_file_handler(data_dir+'/logs/dedalus_log', 'DEBUG')
 
-tol = 1e-3
-IC = 'linear' #'LBVP' # 'LBVP' -> compute LBVP, 'linear' (or else) -> use linear ICs
-verbose = True
+tol = float(args['--tolerance'])
 
 Lz = 1
 
@@ -102,6 +102,13 @@ rh = q*np.exp(-α*temp)
 tau = dist.Field(name='tau')
 k = dist.Field(name='k')
 H = lambda A: 0.5*(1+np.tanh(k*A))
+
+α_f = dist.Field()
+α_f['g'] = α
+β_f = dist.Field()
+β_f['g'] = β
+γ_f = dist.Field()
+γ_f['g'] = γ
 
 logger.info('solving LBVP for initial guess; tau, k not needed.')
 dt = lambda A: 0*A
@@ -178,6 +185,10 @@ for i, tau_i in enumerate(taus):
         solution.add_task(rh, name='rh')
         solution.add_task(tau, name='tau')
         solution.add_task(k, name='k')
+        solution.add_task(α_f, name='α')
+        solution.add_task(β_f, name='β')
+        solution.add_task(γ_f, name='γ')
+
         # work around for file handlers:
         solver.evaluator.evaluate_handlers([solution], timestep=0, wall_time=0, sim_time=0, iteration=0, world_time=0)
         #solution.process()
