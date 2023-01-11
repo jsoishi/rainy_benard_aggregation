@@ -84,13 +84,18 @@ def find_zc(sol, ε=1e-3, root_finding = 'inverse'):
 if __name__=="__main__":
     from docopt import docopt
     args = docopt(__doc__)
+
+    import pandas as pd
     import h5py
     import dedalus.public as de
     logger = logging.getLogger(__name__)
 
     ε = float(args['--epsilon'])
 
-    data = {}
+    min_tau = np.inf
+    max_tau = 0
+
+    data = {} #{'tau':[],'k':[],'zc':[]}
     for case in args['<cases>']:
         f = h5py.File(case+'/drizzle_sol/drizzle_sol_s1.h5', 'r')
         sol = {}
@@ -101,13 +106,20 @@ if __name__=="__main__":
         tau = sol['tau'][0]
         k = sol['k'][0]
         if tau in data:
-            data[tau]['zc'][k] = zc
             data[tau]['k'].append(k)
+            data[tau]['zc'].append(zc)
         else:
-            data[tau] = {'zc':{k:zc}, 'k':[k]}
+            data[tau] = {'k':[k], 'zc':[zc]}
+            min_tau = min(tau, min_tau)
+            max_tau = max(tau, max_tau)
         logger.info('tau = {:.1g}, k = {:.0g}, zc = {:.2g}'.format(tau, k, zc))
-
+    print(data)
+    # data = pd.DataFrame(data)
+    # print(data)
+    import matplotlib.colors as colors
     fig, ax = plt.subplots()
     for tau in data:
-        ax.scatter(data[tau]['k'], data[tau]['zc'], c=tau)
-    fig.savefig('case'+'/../zcs.png', dpi=300)
+        ax.scatter(data[tau]['k'], data[tau]['zc'], c=tau*np.ones_like(data[tau]['k']), norm=colors.LogNorm(vmin=min_tau, vmax=max_tau))
+    ax.set_xlabel(r'$k$')
+    ax.set_ylabel(r'$z_c$')
+    fig.savefig(case+'/../zcs.png', dpi=300)
