@@ -12,7 +12,8 @@ Usage:
 Options:
     <cases>         Case (or cases) to plot results from
 
-    --epsilon=<e>   Epsilon to control search for zc [default: 1e-3]
+    --method=<m>    Search method [default: inverse]
+    --epsilon=<e>   Epsilon to control search for zc [default: 5e-3]
 """
 import logging
 logger = logging.getLogger(__name__)
@@ -76,8 +77,9 @@ def find_zc(sol, ε=1e-3, root_finding = 'inverse'):
     elif root_finding == 'discrete':
         # crude initial emperical zc; look for where rh-1 ~ 0, in lower half of domain.
         zc = z[np.argmin(np.abs(rh[0:int(nz/2)]-1))]
-#    if zc is None:
-#        zc = 0.2
+    else:
+        raise ValueError('search method {:} not in [inverse, discrete]'.format(root_finding))
+
 #    zc = newton(f, 0.2)
     return zc
 
@@ -102,7 +104,7 @@ if __name__=="__main__":
         for task in f['tasks']:
             sol[task] = f['tasks'][task][0,0,0][:]
         sol['z'] = f['tasks']['b'].dims[3][0][:]
-        zc = find_zc(sol, ε=ε)
+        zc = find_zc(sol, ε=ε, root_finding=args['--method'])
         tau = sol['tau'][0]
         k = sol['k'][0]
         if tau in data:
@@ -113,13 +115,16 @@ if __name__=="__main__":
             min_tau = min(tau, min_tau)
             max_tau = max(tau, max_tau)
         logger.info('tau = {:.1g}, k = {:.0g}, zc = {:.2g}'.format(tau, k, zc))
-    print(data)
-    # data = pd.DataFrame(data)
-    # print(data)
+
     import matplotlib.colors as colors
+    norm = colors.LogNorm(vmin=min_tau, vmax=max_tau)
+
     fig, ax = plt.subplots()
     for tau in data:
-        ax.scatter(data[tau]['k'], data[tau]['zc'], c=tau*np.ones_like(data[tau]['k']), norm=colors.LogNorm(vmin=min_tau, vmax=max_tau))
+        p = ax.scatter(data[tau]['k'], data[tau]['zc'], c=tau*np.ones_like(data[tau]['k']), norm=norm)
     ax.set_xlabel(r'$k$')
     ax.set_ylabel(r'$z_c$')
-    fig.savefig(case+'/../zcs.png', dpi=300)
+    fig.colorbar(mappable=p, ax=ax, orientation='horizontal', location='top', label=r'$\tau$', norm=norm)
+    fig.savefig(case+'/../zc.png', dpi=300)
+    ax.set_xscale('log')
+    fig.savefig(case+'/../zc_log.png', dpi=300)
