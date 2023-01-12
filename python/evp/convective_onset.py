@@ -49,7 +49,7 @@ for case in args['<cases>']:
     for task in f['tasks']:
         sol[task] = f['tasks'][task][0,0,0][:]
     sol['z'] = f['tasks']['b'].dims[3][0][:]
-    tau = sol['tau'][0]
+    tau_in = sol['tau'][0]
     k = sol['k'][0]
     α = sol['α'][0]
     β = sol['β'][0]
@@ -106,30 +106,26 @@ qs0 = np.exp(α*T0)
 
 tau = dist.Field(name='tau')
 kx = dist.Field(name='kx')
+Rayleigh = dist.Field(name='Ra_c')
+
+tau['g'] = tau_in
+
 # follows Roberts 1972 convention, eq 1.1, 2.8
 dx = lambda A: 1j*kx*A
-dy = lambda A: 1j*kx*A
+dy = lambda A: 0*A #1j*kx*A # try 2-d mode onset
 dz = lambda A: de.Differentiate(A, coords['z'])
 
-grad = lambda A: de.Gradient(A, coords) #+ 1j*kx*A*ex
+grad = lambda A: de.Gradient(A, coords)
 div = lambda A:  dx(A@ex) + dy(A@ey) + dz(A@ez)
 grad = lambda A: dx(A)*ex + dy(A)*ey + dz(A)*ez
 lap = lambda A: dx(dx(A)) + dy(dy(A)) + dz(dz(A))
-# curl = lambda A: (dy(A@ez)-dz(A@ey))*ex + (dz(A@ex)-dx(A@ez))*ey + (dx(A@ey)-dy(A@ex))*ez
 
 vars = [p, u, b, q, τp, τu1, τu2, τb1, τb2, τq1, τq2]
-if method == 'omega':
-    # fix Ra, find omega
-    dt = lambda A: ω*A
-    ω = dist.Field(name='ω')
-    problem = de.EVP(vars, eigenvalue=ω, namespace=locals())
-elif method == 'Rayleigh':
-    # direct onset, find Ra
-    dt = lambda A: 0*A
-    Rayleigh = dist.Field(name='Ra_c')
-    problem = de.EVP(vars, eigenvalue=Rayleigh, namespace=locals())
-else:
-    raise ValueError('method = {:} is not in [omega, Rayleigh]'.format(method))
+# fix Ra, find omega
+dt = lambda A: ω*A
+ω = dist.Field(name='ω')
+problem = de.EVP(vars, eigenvalue=ω, namespace=locals())
+#Ras = np.logspace(4,5,num=5)
 
 P = 1                      #  diffusion on buoyancy. Always = 1 in this scaling.
 S = 1                      #  diffusion on moisture  k_q / k_b
@@ -152,40 +148,7 @@ solver = problem.build_solver()
 dlog = logging.getLogger('subsystems')
 dlog.setLevel(logging.WARNING)
 
-def peak_growth(kx_i):
-    kx['g'] = kx_i
-    if args['--dense']:
-        solver.solve_dense(solver.subproblems[0], rebuild_matrices=True)
-    else:
-        solver.solve_sparse(solver.subproblems[0], N=N_evals, target=target, rebuild_matrices=True)
-    i_evals = np.argsort(solver.eigenvalues.real)
-    evals = solver.eigenvalues[i_evals]
-
-    sort_indices = np.argsort(np.abs(solver.eigenvalues.real))
-    eigenvalues = solver.eigenvalues.real[sort_indices]
-    eigenvalues = eigenvalues[eigenvalues > 0]
-    eigenvalues = eigenvalues[np.isfinite(eigenvalues)]
-    evals = eigenvalues
-    logger.info('kx = {:}, ω = {:}'.format(kx['g'], evals)) #evals[-1]))
-    # turn max into min, for minimize
-    return -1*evals[-1].real
-
-
-
-
-# import scipy.optimize as sciop
-# kx_start = 0.5
-# logger.info('starting optimization solve')
-# result = sciop.minimize(peak_growth, kx_start)
-# logger.info('solve complete')
-# if result.success:
-#     logger.info('fastest growing mode, ω = {:} at kx = {:}'.format(-1*result.fun, result.x[0]))
-# else:
-#     logger.info('solver failed to converge: {}'.format(result.message))
-
-
 # fix Ra, find omega
-Rayleigh = dist.Field(name='Ra_c')
 def compute_growth_rate(kx_i, Ra_i):
     kx['g'] = kx_i
     Rayleigh['g'] = Ra_i
@@ -200,9 +163,8 @@ def compute_growth_rate(kx_i, Ra_i):
 
 
 growth_rates = {}
-
-Ras = np.logspace(4,6,num=3)
-kxs = np.logspace(-1, 2, num=30)
+Ras = np.geomspace(1e4,1e5,num=6)
+kxs = np.logspace(-1, 1, num=40)
 print(Ras)
 for Ra_i in Ras:
     σ = []
@@ -215,16 +177,21 @@ for Ra_i in Ras:
 import matplotlib.pyplot as plt
 fig, ax = plt.subplots()
 peak_σ = -np.inf
+ax2 = ax.twinx()
 for Ra in growth_rates:
     σ = growth_rates[Ra]
     peak_σ = max(peak_σ, np.max(σ))
-    ax.plot(kxs, σ, label='Ra = {:.2g}'.format(Ra))
+    p = ax.plot(kxs, σ.real, label='Ra = {:.2g}'.format(Ra))
+    ax2.plot(kxs, np.abs(σ.imag), linestyle='dashed', color=p[0].get_color())
 ax.set_xscale('log')
-ax.set_ylim(-0.2, 0.05)
+ax.set_ylim(-15, 25)
+ax.set_ylabel(r'$\omega_R$ (solid)')
+ax2.set_ylim(1e-1, 1e3)
+ax2.set_yscale('log')
+ax2.set_ylabel(r'$\omega_I$ (dashed)')
 ax.legend()
 ax.axhline(y=0, linestyle='dashed', color='xkcd:grey', alpha=0.5)
-ax.set_xlim(3e-1,1e1)
-ax.set_title(r'$\gamma$ = {:}, $\beta$ = {:}, $\tau$ = {:}'.format(γ,β, tau))
-ax.set_ylabel('growth rate')
+#ax.set_xlim(3e-1,1e1)
+ax.set_title(r'$\gamma$ = {:}, $\beta$ = {:}, $\tau$ = {:}'.format(γ,β,tau['g'][0,0,0]))
 ax.set_xlabel('$k_x$')
 fig.savefig(case+'/growth_curves.png', dpi=300)
