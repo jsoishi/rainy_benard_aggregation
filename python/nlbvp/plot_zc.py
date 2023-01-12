@@ -70,17 +70,22 @@ def find_zc(sol, ε=1e-3, root_finding = 'inverse'):
     rh = sol['rh']
     z = sol['z']
     nz = z.shape[0]
+    zc0 = z[np.argmin(np.abs(rh[0:int(nz*3/4)]-(1-ε)))]
     if root_finding == 'inverse':
         # invert the relationship and use interpolation to find where r_h = 1-ε (approach from below)
         f_i = interp1d(rh, z) #inverse
         zc = f_i(1-ε)
     elif root_finding == 'discrete':
         # crude initial emperical zc; look for where rh-1 ~ 0, in lower half of domain.
-        zc = z[np.argmin(np.abs(rh[0:int(nz/2)]-1))]
+        zc = zc0
+    elif root_finding == 'newton':
+        f = interp1d(z, rh-(1-ε))
+        zc = newton(f, zc0)
+    elif root_finding == 'log_newton':
+        f = interp1d(z, np.log(rh+ε))
+        zc = newton(f, zc0)
     else:
         raise ValueError('search method {:} not in [inverse, discrete]'.format(root_finding))
-
-#    zc = newton(f, 0.2)
     return zc
 
 if __name__=="__main__":

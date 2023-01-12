@@ -1,5 +1,5 @@
 """
-Script for plotting atmosphere properties for unsaturated/saturated atmosphers.
+Script for plotting atmosphere properties for unsaturated/saturated atmospheres.
 
 This script plots NLBVP solutions for unsaturated atmospheres, which corresponds to Vallis et al 2019, Figure 2.
 
@@ -107,3 +107,4 @@ if __name__=="__main__":
         fig.savefig(case+'/atm.pdf')
         zc = find_zc(sol, ε=ε)
         logger.info('tau = {:.1g}, k = {:.0g}, zc = {:.2g}'.format(sol['tau'][0], sol['k'][0], zc))
+        plt.close(fig)
