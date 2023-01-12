@@ -20,6 +20,8 @@ Options:
     --method=<m>      Method of onset searching [default: Rayleigh]
     --Rayleigh=<Ra>   Rayleigh number to test [default: 1e5]
 
+    --nondim=<n>      Non-Nondimensionalization [default: diffusion]
+
     --target=<targ>   Target value for sparse eigenvalue search [default: 0]
     --eigs=<eigs>     Target number of eigenvalues to search for [default: 20]
 
@@ -60,6 +62,7 @@ nz = sol['z'].shape[0]
 dealias = 3/2
 dtype = np.complex128
 
+Prandtlm = 1
 Prandtl = 1
 Rayleigh = float(args['--Rayleigh'])
 
@@ -108,8 +111,6 @@ tau = dist.Field(name='tau')
 kx = dist.Field(name='kx')
 Rayleigh = dist.Field(name='Ra_c')
 
-tau['g'] = tau_in
-
 # follows Roberts 1972 convention, eq 1.1, 2.8
 dx = lambda A: 1j*kx*A
 dy = lambda A: 0*A #1j*kx*A # try 2-d mode onset
@@ -127,10 +128,23 @@ dt = lambda A: ω*A
 problem = de.EVP(vars, eigenvalue=ω, namespace=locals())
 #Ras = np.logspace(4,5,num=5)
 
-P = 1                      #  diffusion on buoyancy. Always = 1 in this scaling.
-S = 1                      #  diffusion on moisture  k_q / k_b
-PdR = Prandtl              #  diffusion on momentum
-PtR = Prandtl*Rayleigh     #  Prandtl times Rayleigh = buoyancy force
+nondim = args['--nondim']
+if nondim == 'diffusion':
+    P = 1                      #  diffusion on buoyancy. Always = 1 in this scaling.
+    S = Prandtlm               #  diffusion on moisture  k_q / k_b
+    PdR = Prandtl              #  diffusion on momentum
+    PtR = Prandtl*Rayleigh     #  Prandtl times Rayleigh = buoyancy force
+elif nondim == 'buoyancy':
+    P = (Rayleigh * Prandtl)**(-1/2)         #  diffusion on buoyancy
+    S = (Rayleigh * Prandtlm)**(-1/2)        #  diffusion on moisture
+    PdR = (Prandtl / Rayleigh)**(1/2)        #  diffusion on momentum
+    PtR = 1
+    #tau_in /=                     # think through what this should be
+else:
+    raise ValueError('nondim {:} not in valid set [diffusion, buoyancy]'.format(nondim))
+
+tau['g'] = tau_in
+
 
 problem.add_equation('div(u) + τp + 1/PdR*dot(lift(τu2,-1),ez) = 0')
 problem.add_equation('dt(u) - PdR*lap(u) + grad(p) - PtR*b*ez + lift(τu1, -1) + lift(τu2, -2) = 0')
@@ -163,7 +177,7 @@ def compute_growth_rate(kx_i, Ra_i):
 
 
 growth_rates = {}
-Ras = np.geomspace(1e4,1e5,num=6)
+Ras = np.geomspace(3e4,1e5,num=5)
 kxs = np.logspace(-1, 1, num=40)
 print(Ras)
 for Ra_i in Ras:
@@ -171,27 +185,36 @@ for Ra_i in Ras:
     for kx_i in kxs:
         σ_i = compute_growth_rate(kx_i, Ra_i)
         σ.append(σ_i)
-        logger.info('Ra = {:.1g}, kx = {:.2g}, σ = {:.2g}'.format(Ra_i, kx_i, σ_i))
+        logger.info('Ra = {:.2g}, kx = {:.2g}, σ = {:.2g}'.format(Ra_i, kx_i, σ_i))
     growth_rates[Ra_i] = np.array(σ)
 
 import matplotlib.pyplot as plt
 fig, ax = plt.subplots()
 peak_σ = -np.inf
-ax2 = ax.twinx()
+
+if nondim == 'diffusion':
+    ax2 = ax.twinx()
+    ax.set_ylim(-15, 25)
+    ax2.set_ylim(1e-1, 1e3)
+    ax2.set_yscale('log')
+    ax.set_ylabel(r'$\omega_R$ (solid)')
+    ax2.set_ylabel(r'$\omega_I$ (dashed)')
+elif nondim == 'buoyancy':
+    ax2 = ax
+    ax.set_ylim(-0.1, 0.5)
+    ax.set_ylabel(r'$\omega_R$ (solid), $\omega_I$ (dashed)')
+
 for Ra in growth_rates:
     σ = growth_rates[Ra]
     peak_σ = max(peak_σ, np.max(σ))
     p = ax.plot(kxs, σ.real, label='Ra = {:.2g}'.format(Ra))
     ax2.plot(kxs, np.abs(σ.imag), linestyle='dashed', color=p[0].get_color())
 ax.set_xscale('log')
-ax.set_ylim(-15, 25)
-ax.set_ylabel(r'$\omega_R$ (solid)')
-ax2.set_ylim(1e-1, 1e3)
-ax2.set_yscale('log')
-ax2.set_ylabel(r'$\omega_I$ (dashed)')
+
 ax.legend()
 ax.axhline(y=0, linestyle='dashed', color='xkcd:grey', alpha=0.5)
 #ax.set_xlim(3e-1,1e1)
 ax.set_title(r'$\gamma$ = {:}, $\beta$ = {:}, $\tau$ = {:}'.format(γ,β,tau['g'][0,0,0]))
 ax.set_xlabel('$k_x$')
-fig.savefig(case+'/growth_curves.png', dpi=300)
+ax.set_title('{:} timescales'.format(nondim))
+fig.savefig(case+'/growth_curves_{:}.png'.format(nondim), dpi=300)
