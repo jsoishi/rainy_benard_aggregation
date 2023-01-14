@@ -145,11 +145,14 @@ else:
 
 tau['g'] = tau_in
 
+sech = lambda A: 1/np.cosh(A)
+scrN = (H(q0 - qs0) + (q0 - qs0)*k/2*sech(k*(q0 - qs0))**2).evaluate()
+scrN.name='scrN'
 
 problem.add_equation('div(u) + τp + 1/PdR*dot(lift(τu2,-1),ez) = 0')
 problem.add_equation('dt(u) - PdR*lap(u) + grad(p) - PtR*b*ez + lift(τu1, -1) + lift(τu2, -2) = 0')
-problem.add_equation('dt(b) - P*lap(b) + dot(u, grad(b0)) - γ*H(q0-qs0)*(q)/tau + lift(τb1, -1) + lift(τb2, -2) = 0')
-problem.add_equation('dt(q) - S*lap(q) + dot(u, grad(q0)) + H(q0-qs0)*(q)/tau + lift(τq1, -1) + lift(τq2, -2) = 0')
+problem.add_equation('dt(b) - P*lap(b) + dot(u, grad(b0)) - γ/tau*(q-α*qs0*b)*scrN + lift(τb1, -1) + lift(τb2, -2) = 0')
+problem.add_equation('dt(q) - S*lap(q) + dot(u, grad(q0)) + 1/tau*(q-α*qs0*b)*scrN + lift(τq1, -1) + lift(τq2, -2) = 0')
 problem.add_equation('b(z=0) = 0')
 problem.add_equation('b(z=Lz) = 0')
 problem.add_equation('q(z=0) = 0')
