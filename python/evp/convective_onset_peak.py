@@ -189,12 +189,16 @@ import scipy.optimize as sciop
 kx_start = float(args['--kx'])
 Rayleigh_start = float(args['--Rayleigh'])
 
-result = sciop.minimize(peak_growth_rate, kx_start, args=(Rayleigh_start))
-if result.success:
-    σ = compute_growth_rate(result.x[0], Rayleigh_start)
-    logger.info('fastest growing mode, ω = {:} at kx = {:}'.format(σ, result.x[0]))
-else:
-    logger.info('solver failed to converge: {}'.format(result.message))
-    σ = compute_growth_rate(result.x[0], Rayleigh_start)
-    logger.info('final fastest growing mode, ω = {:} at kx = {:}'.format(σ, result.x[0]))
+def critical_kx(log_Ra_i, kx_i):
+    Ra_i = np.exp(log_Ra_i)
+    print(kx_i)
+    result = sciop.minimize(peak_growth_rate, kx_i, args=(Ra_i))
+    σ = compute_growth_rate(result.x[0], Ra_i)
+    logger.info('ω = {:} at kx = {:}, Ra = {:}, success = {:}'.format(σ, result.x[0], Ra_i, result.success))
+    # update outer variable for next loop
+    kx_i = np.abs(result.x[0])
+    return np.abs(σ.real)
+
+log_Ra_start = np.log(Rayleigh_start)
+result = sciop.minimize(critical_kx, log_Ra_start, args=(kx_start))
 print(result)
