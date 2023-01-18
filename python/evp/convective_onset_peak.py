@@ -22,6 +22,7 @@ Options:
 
     --nondim=<n>      Non-Nondimensionalization [default: buoyancy]
 
+    --nz=<nz>         Number of coeffs to use in eigenvalue search; if not set, uses resolution of background
     --target=<targ>   Target value for sparse eigenvalue search [default: 0]
     --eigs=<eigs>     Target number of eigenvalues to search for [default: 20]
 
@@ -59,7 +60,11 @@ for case in args['<cases>']:
     β = sol['β'][0]
     γ = sol['γ'][0]
 
-nz = sol['z'].shape[0]
+nz_sol = sol['z'].shape[0]
+if args['--nz']:
+    nz = int(float(args['--nz']))
+else:
+    nz = nz_sol
 
 dealias = 3/2
 dtype = np.complex128
@@ -78,8 +83,21 @@ z = zb.local_grid(1)
 
 b0 = dist.Field(name='b0', bases=zb)
 q0 = dist.Field(name='q0', bases=zb)
-b0['g'] = sol['b']
-q0['g'] = sol['q']
+
+zb_sol = de.ChebyshevT(coords.coords[2], size=nz_sol, bounds=(0, Lz), dealias=dealias)
+b0_sol = dist.Field(name='b0_sol', bases=zb_sol)
+q0_sol = dist.Field(name='q0_sol', bases=zb_sol)
+
+b0_sol['g'] = sol['b']
+q0_sol['g'] = sol['q']
+
+scale_ratio = nz/nz_sol
+b0_sol.change_scales(scale_ratio)
+q0_sol.change_scales(scale_ratio)
+
+logger.info('rescaling background from {:} to {:} coeffs (ratio: {:})'.format(nz_sol, nz, scale_ratio))
+b0['g'] = b0_sol['g']
+q0['g'] = q0_sol['g']
 
 p = dist.Field(name='p', bases=zb)
 u = dist.VectorField(coords, name='u', bases=zb)
@@ -201,7 +219,7 @@ def critical_kx(Ra_in, log_search):
     bounds = sciop.Bounds(lb=1, ub=10)
     result = sciop.minimize(peak_growth_rate, kx_i, args=(Ra_i), bounds=bounds, method='Nelder-Mead', tol=tol)
     σ = compute_growth_rate(result.x[0], Ra_i)
-    logger.info('ω = {:} at kx = {:}, Ra = {:}, success = {:}'.format(σ, result.x[0], Ra_i, result.success))
+    logger.info('ω = {:.6g},{:.2g}i at kx = {:.4g}, Ra = {:.4g}, success = {:}'.format(σ.real, np.abs(σ.imag), result.x[0], Ra_i[0], result.success))
     # update outer variable for next loop
     kx_dict['peak_kx'] = np.abs(result.x[0])
     return np.abs(σ.real)
@@ -218,6 +236,7 @@ elif method == 'line':
     result = sciop.minimize(critical_kx, np.log(Rayleigh_start), args=(False))
     # logger.info('beginning linear search about Ra={:}, kx={:}'.format(result.x[0], kx_dict['peak_kx']))
     # result = sciop.minimize(critical_kx, result.x[0], args=(False))
+    σ = compute_growth_rate(kx_dict['peak_kx'], result.x[0])
 else:
     raise ValueError("search method {:} not in valid set ['line', '2d']".format(method))
 
