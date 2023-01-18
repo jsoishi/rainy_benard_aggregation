@@ -17,7 +17,7 @@ Usage:
 Options:
     <cases>           Case (or cases) to plot results from
 
-    --Rayleigh=<Ra>   Initial Rayleigh to begin search at [default: 1e4]
+    --Rayleigh=<Ra>   Initial Rayleigh to begin search at; appears better to start from above onset [default: 1e5]
     --kx=<kx>         Initial kx to begin search at [default: 5]
 
     --nondim=<n>      Non-Nondimensionalization [default: buoyancy]
@@ -25,7 +25,7 @@ Options:
     --target=<targ>   Target value for sparse eigenvalue search [default: 0]
     --eigs=<eigs>     Target number of eigenvalues to search for [default: 20]
 
-    --method=<m>      Method for Ra search [default: brent]
+    --method=<m>      Method for Ra search; valid entries are 'line' or '2d' [default: line]
 
     --dense           Solve densely for all eigenvalues (slow)
 
@@ -180,15 +180,46 @@ def compute_growth_rate(kx_i, Ra_i):
     evals = solver.eigenvalues[i_evals]
     return evals[-1]
 
-def critical_finder(kx_Ra):
+def critical_finder_2d(kx_Ra):
     rate = compute_growth_rate(kx_Ra[0], np.exp(kx_Ra[1]))
     # looking for nearest zero values, so return abs(Re(σ))
     return np.abs(rate.real)
 
+def peak_growth_rate(*args):
+    rate = compute_growth_rate(*args)
+    # flip sign so minimize finds maximum
+    return -1*rate.real
+
+def critical_kx(Ra_in, log_search):
+    if log_search:
+        Ra_i = np.exp(Ra_in)
+        tol = 1e-3
+    else:
+        Ra_i = np.exp(Ra_in)
+        tol = 1e-5
+    kx_i = kx_dict['peak_kx']
+    bounds = sciop.Bounds(lb=1, ub=10)
+    result = sciop.minimize(peak_growth_rate, kx_i, args=(Ra_i), bounds=bounds, method='Nelder-Mead', tol=tol)
+    σ = compute_growth_rate(result.x[0], Ra_i)
+    logger.info('ω = {:} at kx = {:}, Ra = {:}, success = {:}'.format(σ, result.x[0], Ra_i, result.success))
+    # update outer variable for next loop
+    kx_dict['peak_kx'] = np.abs(result.x[0])
+    return np.abs(σ.real)
+
 import scipy.optimize as sciop
 kx_start = float(args['--kx'])
 Rayleigh_start = float(args['--Rayleigh'])
-result = sciop.minimize(critical_finder, x0=[kx_start, np.log(Rayleigh_start)])
-σ = compute_growth_rate(result.x[0], np.exp(result.x[1]))
+if method == '2d':
+    result = sciop.minimize(critical_finder, x0=[kx_start, np.log(Rayleigh_start)])
+    σ = compute_growth_rate(result.x[0], np.exp(result.x[1]))
+elif method == 'line':
+    kx_dict = {'peak_kx':kx_start}
+    logger.info('beginning linear search about Ra={:}, kx={:}'.format(Rayleigh_start, kx_dict['peak_kx']))
+    result = sciop.minimize(critical_kx, np.log(Rayleigh_start), args=(False))
+    # logger.info('beginning linear search about Ra={:}, kx={:}'.format(result.x[0], kx_dict['peak_kx']))
+    # result = sciop.minimize(critical_kx, result.x[0], args=(False))
+else:
+    raise ValueError("search method {:} not in valid set ['line', '2d']".format(method))
+
 logger.info('ω = {:} at kx = {:}, Ra = {:}, success = {:}'.format(σ, result.x[0], np.exp(result.x[1]), result.success))
 print(result)
