@@ -180,34 +180,15 @@ def compute_growth_rate(kx_i, Ra_i):
     evals = solver.eigenvalues[i_evals]
     return evals[-1]
 
-def peak_growth_rate(*args):
-    print(*args)
-    rate = compute_growth_rate(*args)
-    # flip sign so minimize finds maximum
-    return -1*rate.real
+def critical_finder(kx_Ra):
+    rate = compute_growth_rate(kx_Ra[0], np.exp(kx_Ra[1]))
+    # looking for nearest zero values, so return abs(Re(σ))
+    return np.abs(rate.real)
 
 import scipy.optimize as sciop
 kx_start = float(args['--kx'])
 Rayleigh_start = float(args['--Rayleigh'])
-
-kx_dict = {'peak_kx':kx_start}
-def critical_kx(log_Ra_i):
-    Ra_i = np.exp(log_Ra_i)
-    kx_i = kx_dict['peak_kx']
-    print(kx_i)
-    result = sciop.minimize(peak_growth_rate, kx_i, args=(Ra_i))
-    σ = compute_growth_rate(result.x[0], Ra_i)
-    logger.info('ω = {:} at kx = {:}, Ra = {:}, success = {:}'.format(σ, result.x[0], Ra_i, result.success))
-    # update outer variable for next loop
-    kx_dict['peak_kx'] = np.abs(result.x[0])
-    return np.abs(σ.real)
-
-method = args['--method']
-log_Ra_start = np.log(Rayleigh_start)
-if method == 'brent':
-    log_lower_Ra = np.log(1e4)
-    log_upper_Ra = np.log(Rayleigh_start)
-    result = sciop.minimize_scalar(critical_kx, bracket=(log_lower_Ra, log_upper_Ra))
-else:
-    result = sciop.minimize(critical_kx, log_Ra_start)
+result = sciop.minimize(critical_finder, x0=[kx_start, np.log(Rayleigh_start)])
+σ = compute_growth_rate(result.x[0], np.exp(result.x[1]))
+logger.info('ω = {:} at kx = {:}, Ra = {:}, success = {:}'.format(σ, result.x[0], np.exp(result.x[1]), result.success))
 print(result)
