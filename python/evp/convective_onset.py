@@ -194,7 +194,16 @@ def compute_growth_rate(kx_i, Ra_i):
         solver.solve_sparse(solver.subproblems[0], N=N_evals, target=target, rebuild_matrices=True)
     i_evals = np.argsort(solver.eigenvalues.real)
     evals = solver.eigenvalues[i_evals]
-    return evals[-1]
+    peak_eval = evals[-1]
+    # choose convention: return the positive complex mode of the pair
+    if peak_eval.imag < 0:
+        peak_eval = np.conj(peak_eval)
+    return peak_eval
+
+def peak_growth_rate(*args):
+    rate = compute_growth_rate(*args)
+    # flip sign so minimize finds maximum
+    return -1*rate.real
 
 
 growth_rates = {}
@@ -230,7 +239,7 @@ for Ra in growth_rates:
     σ = growth_rates[Ra]
     peak_σ = max(peak_σ, np.max(σ))
     p = ax.plot(kxs, σ.real, label='Ra = {:.2g}'.format(Ra))
-    ax2.plot(kxs, np.abs(σ.imag), linestyle='dashed', color=p[0].get_color())
+    ax2.plot(kxs, σ.imag, linestyle='dashed', color=p[0].get_color())
 ax.set_xscale('log')
 
 ax.legend()
@@ -242,22 +251,6 @@ ax.set_title('{:} timescales'.format(nondim))
 fig.savefig(case+'/growth_curves_{:}.png'.format(nondim), dpi=300)
 
 
-def compute_growth_rate(kx_i, Ra_i):
-    kx['g'] = kx_i
-    Rayleigh['g'] = Ra_i
-
-    if args['--dense']:
-        solver.solve_dense(solver.subproblems[0], rebuild_matrices=True)
-    else:
-        solver.solve_sparse(solver.subproblems[0], N=N_evals, target=target, rebuild_matrices=True)
-    i_evals = np.argsort(solver.eigenvalues.real)
-    evals = solver.eigenvalues[i_evals]
-    return evals[-1]
-
-def peak_growth_rate(*args):
-    rate = compute_growth_rate(*args)
-    # flip sign so minimize finds maximum
-    return -1*rate.real
 
 import scipy.optimize as sciop
 bounds = sciop.Bounds(lb=1, ub=10)
@@ -267,10 +260,10 @@ for Ra in growth_rates:
     σ = growth_rates[Ra]
     peak_i = np.argmax(σ)
     kx_i = kxs[peak_i]
-    logger.info('peak search: Ra = {:}, kx = {:}'.format(Ra, kx_i))
     result = sciop.minimize(peak_growth_rate, kx_i, args=(Ra), bounds=bounds, method='Nelder-Mead', tol=1e-5)
     # obtain full complex rate
     σ = compute_growth_rate(result.x[0], Ra)
+    logger.info('peak search: start at Ra = {:.4g}, kx = {:.4g}, found σ_max = {:.2g},{:.2g}i, kx = {:.4g}'.format(Ra, kx_i, σ.real, σ.imag, result.x[0]))
     peaks['σ'].append(σ)
     peaks['k'].append(result.x[0])
     peaks['Ra'].append(Ra)
@@ -282,13 +275,13 @@ peaks['Ra'] = np.array(peaks['Ra'])
 from scipy.interpolate import interp1d
 f_σR_i = interp1d(peaks['σ'].real, peaks['k']) #inverse
 f_σR = interp1d(peaks['k'], peaks['σ'].real)
-f_σI_i = interp1d(np.abs(peaks['σ'].imag), peaks['k']) #inverse
-f_σI = interp1d(peaks['k'], np.abs(peaks['σ'].imag))
+f_σI_i = interp1d(peaks['σ'].imag, peaks['k']) #inverse
+f_σI = interp1d(peaks['k'], peaks['σ'].imag)
 
 # to find critical Ra
 f_σR_Ra_i = interp1d(peaks['σ'].real, peaks['Ra'])
 f_σR_Ra = interp1d(peaks['Ra'], peaks['σ'].real)
-f_σI_Ra = interp1d(peaks['Ra'], np.abs(peaks['σ'].imag))
+f_σI_Ra = interp1d(peaks['Ra'], peaks['σ'].imag)
 f_k_Ra = interp1d(peaks['Ra'], peaks['k'])
 
 peak_ks = np.geomspace(np.min(peaks['k']), np.max(peaks['k']))
@@ -301,10 +294,6 @@ logger.info('Critical point, based on interpolation:')
 logger.info('Ra = {:}, k = {:}'.format(crit_Ra, crit_k))
 logger.info('σ = {:}, {:}i'.format(crit_σ_R, crit_σ_I))
 
-#p = ax.plot(peaks['k'], peaks['σ'].real, linestyle='dotted')
-#ax.plot(peaks['k'], np.abs(peaks['σ'].imag), linestyle='dashdot', color=p[0].get_color())
-
-p = ax.plot(peak_ks, f_σR(peak_ks), linestyle='dotted')
-#ax.plot(peak_ks, f_σI(peak_ks), linestyle='dashdot', color=p[0].get_color())
+p = ax.plot(peak_ks, f_σR(peak_ks), linestyle='dotted', color='xkcd:grey')
 
 fig.savefig(case+'/growth_curves_peaks_{:}.png'.format(nondim), dpi=300)
