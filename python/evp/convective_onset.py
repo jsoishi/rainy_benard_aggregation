@@ -22,6 +22,9 @@ Options:
 
     --nondim=<n>      Non-Nondimensionalization [default: buoyancy]
 
+    --top-stress-free     Stress-free upper boundary
+    --stress-free         Stress-free both boundaries
+
     --nz=<nz>         Number of coeffs to use in eigenvalue search; if not set, uses resolution of background
     --target=<targ>   Target value for sparse eigenvalue search [default: 0]
     --eigs=<eigs>     Target number of eigenvalues to search for [default: 20]
@@ -138,7 +141,9 @@ grad = lambda A: de.Gradient(A, coords)
 div = lambda A:  dx(A@ex) + dy(A@ey) + dz(A@ez)
 grad = lambda A: dx(A)*ex + dy(A)*ey + dz(A)*ez
 lap = lambda A: dx(dx(A)) + dy(dy(A)) + dz(dz(A))
+trans = lambda A: de.TransposeComponents(A)
 
+e = grad(u) + trans(grad(u))
 vars = [p, u, b, q, τp, τu1, τu2, τb1, τb2, τq1, τq2]
 # fix Ra, find omega
 dt = lambda A: ω*A
@@ -175,8 +180,18 @@ problem.add_equation('b(z=0) = 0')
 problem.add_equation('b(z=Lz) = 0')
 problem.add_equation('q(z=0) = 0')
 problem.add_equation('q(z=Lz) = 0')
-problem.add_equation('u(z=0) = 0')
-problem.add_equation('u(z=Lz) = 0')
+if args['--stress-free']:
+    problem.add_equation('ez@u(z=0) = 0')
+    problem.add_equation('ez@(ex@e(z=0)) = 0')
+    problem.add_equation('ez@(ey@e(z=0)) = 0')
+else:
+    problem.add_equation('u(z=0) = 0')
+if args['--top-stress-free'] or args['--stress-free']:
+    problem.add_equation('ez@u(z=Lz) = 0')
+    problem.add_equation('ez@(ex@e(z=Lz)) = 0')
+    problem.add_equation('ez@(ey@e(z=Lz)) = 0')
+else:
+    problem.add_equation('u(z=Lz) = 0')
 problem.add_equation('integ(p) = 0')
 solver = problem.build_solver()
 
@@ -242,13 +257,17 @@ for Ra in growth_rates:
     ax2.plot(kxs, σ.imag, linestyle='dashed', color=p[0].get_color())
 ax.set_xscale('log')
 
+fig_filename = 'growth_curves_{:}'.format(nondim)
+if args['--stress-free']:
+    fig_filename += '_SF'
+if args['--top-stress-free']:
+    fig_filename += '_TSF'
 ax.legend()
 ax.axhline(y=0, linestyle='dashed', color='xkcd:grey', alpha=0.5)
-#ax.set_xlim(3e-1,1e1)
 ax.set_title(r'$\gamma$ = {:}, $\beta$ = {:}, $\tau$ = {:}'.format(γ,β,tau['g'][0,0,0]))
 ax.set_xlabel('$k_x$')
 ax.set_title('{:} timescales'.format(nondim))
-fig.savefig(case+'/growth_curves_{:}.png'.format(nondim), dpi=300)
+fig.savefig(case+'/'+fig_filename+'.png', dpi=300)
 
 
 
@@ -296,4 +315,9 @@ logger.info('σ = {:}, {:}i'.format(crit_σ_R, crit_σ_I))
 
 p = ax.plot(peak_ks, f_σR(peak_ks), linestyle='dotted', color='xkcd:grey')
 
-fig.savefig(case+'/growth_curves_peaks_{:}.png'.format(nondim), dpi=300)
+fig_filename = 'growth_curves_peaks_{:}'.format(nondim)
+if args['--stress-free']:
+    fig_filename += '_SF'
+if args['--top-stress-free']:
+    fig_filename += '_TSF'
+fig.savefig(case+'/'+fig_filename+'.png', dpi=300)
