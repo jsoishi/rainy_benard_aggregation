@@ -28,6 +28,10 @@ Options:
 
     --max_dt=<dt>     Largest timestep to use; should be set by oscillation timescales of waves (Brunt) [default: 1]
 
+    --run_time_diff=<rtd>      Run time, in diffusion times [default: 1]
+    --run_time_buoy=<rtb>      Run time, in buoyancy times
+    --run_time_iter=<rti>      Run time, number of iterations; if not set, n_iter=np.inf
+
     --verbose         Show plots on screen
 """
 import logging
@@ -74,12 +78,25 @@ else:
 
 case_dir = 'rainy_benard_Ra{:}_tau{:.2g}_k{:.2g}_nz{:d}_nx{:d}'.format(args['--Rayleigh'], tau, k, nz, nx)
 
-dealias = 3/2
-dtype = np.float64
-
 Prandtlm = 1
 Prandtl = 1
 Rayleigh = float(args['--Rayleigh'])
+
+run_time_buoy = args['--run_time_buoy']
+if run_time_buoy != None:
+    run_time_buoy = float(run_time_buoy)
+else:
+    run_time_buoy = float(args['--run_time_diff'])*np.sqrt(Rayleigh)
+
+run_time_iter = args['--run_time_iter']
+if run_time_iter != None:
+    run_time_iter = int(float(run_time_iter))
+else:
+    run_time_iter = np.inf
+
+
+dealias = 3/2
+dtype = np.float64
 
 Lz = 1
 Lx = aspect
@@ -141,6 +158,18 @@ qs0 = np.exp(α*T0)
 
 T = b
 qs = q0*np.exp(α*T)
+
+dx = lambda A: de.Differentiate(A, coords['x'])
+dy = lambda A: 0*A #1j*kx*A # try 2-d mode onset
+dz = lambda A: de.Differentiate(A, coords['z'])
+
+grad = lambda A: de.Gradient(A, coords)
+div = lambda A:  dx(A@ex) + dy(A@ey) + dz(A@ez)
+grad = lambda A: dx(A)*ex + dy(A)*ey + dz(A)*ez
+lap = lambda A: dx(dx(A)) + dy(dy(A)) + dz(dz(A))
+trans = lambda A: de.TransposeComponents(A)
+
+e = grad(u) + trans(grad(u))
 
 vars = [p, u, b, q, τp, τu1, τu2, τb1, τb2, τq1, τq2]
 problem = de.IVP(vars, namespace=locals())
@@ -207,7 +236,9 @@ b['g'] = noise['g']*np.cos(np.pi/2*z/Lz)
 
 ts = de.SBDF2
 cfl_safety_factor = 0.2
+
 solver = problem.build_solver(ts)
+solver.stop_sim_time = run_time_buoy
 solver.stop_iteration = run_time_iter
 
 Δt = max_Δt = float(args['--max_dt'])
