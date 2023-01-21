@@ -26,6 +26,8 @@ Options:
     --nz=<nz>         Number z coeffs to use in IVP; if not set, uses resolution of background solution
     --nx=<nx>         Number of x coeffs to use in IVP; if not set, scales nz by aspect
 
+    --max_dt=<dt>     Largest timestep to use; should be set by oscillation timescales of waves (Brunt) [default: 1]
+
     --verbose         Show plots on screen
 """
 import logging
@@ -35,15 +37,14 @@ for system in ['h5py._conv', 'matplotlib', 'PIL']:
 
 import numpy as np
 import dedalus.public as de
+from dedalus.extras import flow_tools
 import h5py
 
 from docopt import docopt
 args = docopt(__doc__)
 
-method = args['--method']
-
-case = args['<cass>']
-with f as h5py.File(case+'/drizzle_sol/drizzle_sol_s1.h5', 'r'):
+case = args['<case>']
+with h5py.File(case+'/drizzle_sol/drizzle_sol_s1.h5', 'r') as f:
     sol = {}
     for task in f['tasks']:
         sol[task] = f['tasks'][task][0,0,0][:]
@@ -142,7 +143,7 @@ T = b
 qs = q0*np.exp(α*T)
 
 vars = [p, u, b, q, τp, τu1, τu2, τb1, τb2, τq1, τq2]
-problem = de.IVP(vars, eigenvalue=ω, namespace=locals())
+problem = de.IVP(vars, namespace=locals())
 
 nondim = args['--nondim']
 if nondim == 'diffusion':
@@ -193,7 +194,62 @@ if args['--top-stress-free'] or args['--stress-free']:
 else:
     problem.add_equation('u(z=Lz) = 0')
 problem.add_equation('integ(p) = 0')
-solver = problem.build_solver()
 
-dlog = logging.getLogger('subsystems')
-dlog.setLevel(logging.WARNING)
+# initial conditions
+amp = 1e-4
+
+noise = dist.Field(name='noise', bases=bases)
+noise.fill_random('g', seed=42, distribution='normal', scale=amp) # Random noise
+noise.low_pass_filter(scales=0.25)
+
+# noise ICs in buoyancy
+b['g'] = noise['g']*np.cos(np.pi/2*z/Lz)
+
+ts = de.SBDF2
+cfl_safety_factor = 0.2
+solver = problem.build_solver(ts)
+solver.stop_iteration = run_time_iter
+
+Δt = max_Δt = float(args['--max_dt'])
+cfl = flow_tools.CFL(solver, Δt, safety=cfl_safety_factor, cadence=1, threshold=0.1,
+                     max_change=1.5, min_change=0.5, max_dt=max_Δt)
+cfl.add_velocity(u)
+
+report_cadence = 10
+
+integ = lambda A: de.Integrate(de.Integrate(A, 'x'), 'z')
+avg = lambda A: integ(A)/(Lx*Lz)
+x_avg = lambda A: de.Integrate(A, 'x')/(Lx)
+
+Re = np.sqrt(u@u)/PdR
+KE = 0.5*np.sqrt(u@u)
+
+flow = flow_tools.GlobalFlowProperty(solver, cadence=report_cadence)
+flow.add_property(Re, name='Re')
+flow.add_property(KE, name='KE')
+flow.add_property(np.sqrt(τu1@τu1), name='|τu1|')
+flow.add_property(np.sqrt(τu2@τu2), name='|τu2|')
+flow.add_property(np.abs(τb1), name='|τb1|')
+flow.add_property(np.abs(τb2), name='|τb2|')
+flow.add_property(np.abs(τq1), name='|τq1|')
+flow.add_property(np.abs(τq2), name='|τq2|')
+flow.add_property(np.abs(τp), name='|τp|')
+
+vol = Lx*Lz
+
+good_solution = True
+KE_avg = 0
+while solver.proceed and good_solution:
+    # advance
+    solver.step(Δt)
+    if solver.iteration % report_cadence == 0:
+        τ_max = np.max([flow.max('|τu1|'),flow.max('|τu2|'),flow.max('|τb1|'),flow.max('|τb2|'),flow.max('|τq1|'),flow.max('|τq2|'),flow.max('|τp|')])
+        Re_max = flow.max('Re')
+        Re_avg = flow.volume_integral('Re')/vol
+        KE_avg = flow.volume_integral('KE')/vol
+        log_string = 'Iteration: {:5d}, Time: {:8.3e}, dt: {:5.1e}'.format(solver.iteration, solver.sim_time, Δt)
+        log_string += ', KE: {:.2g}, Re: {:.2g} ({:.2g})'.format(KE_avg, Re_avg, Re_max)
+        log_string += ', τ: {:.2g}'.format(τ_max)
+        logger.info(log_string)
+    Δt = cfl.compute_timestep()
+    good_solution = np.isfinite(Δt)*np.isfinite(KE_avg)
