@@ -14,7 +14,7 @@ Usage:
 Options:
     <case>            Case to build IVP around
 
-    --Rayleigh=<Ra>   Rayleigh number to test [default: 1e5]
+    --Rayleigh=<Ra>   Rayleigh number [default: 1e5]
     --tau=<tau>       Tau to solve; if not set, use tau of background
     --aspect=<a>      Aspect ratio of domain, Lx/Lz [default: 10]
 
@@ -26,7 +26,7 @@ Options:
     --nz=<nz>         Number z coeffs to use in IVP; if not set, uses resolution of background solution
     --nx=<nx>         Number of x coeffs to use in IVP; if not set, scales nz by aspect
 
-    --max_dt=<dt>     Largest timestep to use; should be set by oscillation timescales of waves (Brunt) [default: 1]
+    --max_dt=<dt>     Largest timestep to use; should be set by oscillation timescales of waves (Brunt) [default: 1e-2]
 
     --run_time_diff=<rtd>      Run time, in diffusion times [default: 1]
     --run_time_buoy=<rtb>      Run time, in buoyancy times
@@ -40,8 +40,6 @@ for system in ['h5py._conv', 'matplotlib', 'PIL']:
      logging.getLogger(system).setLevel(logging.WARNING)
 
 import numpy as np
-import dedalus.public as de
-from dedalus.extras import flow_tools
 import h5py
 
 from docopt import docopt
@@ -76,7 +74,13 @@ if args['--tau']:
 else:
     tau = tau_in
 
-case_dir = 'rainy_benard_Ra{:}_tau{:.2g}_k{:.2g}_nz{:d}_nx{:d}'.format(args['--Rayleigh'], tau, k, nz, nx)
+data_dir = 'rainy_benard_Ra{:}_tau{:.2g}_k{:.2g}_nz{:d}_nx{:d}'.format(args['--Rayleigh'], tau, k, nz, nx)
+
+import dedalus.tools.logging as dedalus_logging
+dedalus_logging.add_file_handler(data_dir+'/logs/dedalus_log', 'DEBUG')
+
+import dedalus.public as de
+from dedalus.extras import flow_tools
 
 Prandtlm = 1
 Prandtl = 1
@@ -157,7 +161,7 @@ T0 = b0 - β*z_grid
 qs0 = np.exp(α*T0)
 
 T = b
-qs = q0*np.exp(α*T)
+qs = q0*np.expm1(α*T)
 
 dx = lambda A: de.Differentiate(A, coords['x'])
 dy = lambda A: 0*A #1j*kx*A # try 2-d mode onset
@@ -166,10 +170,12 @@ dz = lambda A: de.Differentiate(A, coords['z'])
 grad = lambda A: de.Gradient(A, coords)
 div = lambda A:  dx(A@ex) + dy(A@ey) + dz(A@ez)
 grad = lambda A: dx(A)*ex + dy(A)*ey + dz(A)*ez
+curl = lambda A: (dy(A@ez)-dz(A@ey))*ex + (dz(A@ex)-dx(A@ez))*ey + (dx(A@ey)-dy(A@ex))*ez
 lap = lambda A: dx(dx(A)) + dy(dy(A)) + dz(dz(A))
 trans = lambda A: de.TransposeComponents(A)
 
 e = grad(u) + trans(grad(u))
+ω = curl(u)
 
 vars = [p, u, b, q, τp, τu1, τu2, τb1, τb2, τq1, τq2]
 problem = de.IVP(vars, namespace=locals())
@@ -197,8 +203,6 @@ scrN_g = de.Grid(scrN).evaluate()
 H_q0 = ((q0 - qs0)*H(q0 - qs0)).evaluate()
 H_q0.name='((q0-qs0)*H(q0-qs0))'
 H_q0_g = de.Grid(H_q0).evaluate()
-
-qs = np.exp(α*T)
 
 problem.add_equation('div(u) + τp + 1/PdR*dot(lift(τu2,-1),ez) = 0')
 problem.add_equation('dt(u) - PdR*lap(u) + grad(p) - PtR*b*ez + lift(τu1, -1) + lift(τu2, -2) = -(u@grad(u))')
@@ -242,9 +246,9 @@ solver.stop_sim_time = run_time_buoy
 solver.stop_iteration = run_time_iter
 
 Δt = max_Δt = float(args['--max_dt'])
-cfl = flow_tools.CFL(solver, Δt, safety=cfl_safety_factor, cadence=1, threshold=0.1,
-                     max_change=1.5, min_change=0.5, max_dt=max_Δt)
-cfl.add_velocity(u)
+# cfl = flow_tools.CFL(solver, Δt, safety=cfl_safety_factor, cadence=1, threshold=0.1,
+#                      max_change=1.5, min_change=0.5, max_dt=max_Δt)
+# cfl.add_velocity(u)
 
 report_cadence = 10
 
@@ -253,7 +257,25 @@ avg = lambda A: integ(A)/(Lx*Lz)
 x_avg = lambda A: de.Integrate(A, 'x')/(Lx)
 
 Re = np.sqrt(u@u)/PdR
-KE = 0.5*np.sqrt(u@u)
+KE = 0.5*u@u
+PE = PtR*(b+b0)
+QE = ((q+q0)-(qs+qs0))*H((q+q0)-(qs+qs0))
+
+trace_dt = 0.1
+traces = solver.evaluator.add_file_handler(data_dir+'/traces', sim_dt=trace_dt, max_writes=None)
+traces.add_task(avg(KE), name='KE')
+traces.add_task(avg(PE), name='PE')
+traces.add_task(avg(QE), name='QE')
+traces.add_task(avg(Re), name='Re')
+traces.add_task(avg(ω@ω), name='enstrophy')
+traces.add_task(x_avg(np.sqrt(τu1@τu1)), name='τu1')
+traces.add_task(x_avg(np.sqrt(τu2@τu2)), name='τu2')
+traces.add_task(x_avg(np.abs(τb1)), name='τb1')
+traces.add_task(x_avg(np.abs(τb2)), name='τb2')
+traces.add_task(x_avg(np.abs(τq1)), name='τq1')
+traces.add_task(x_avg(np.abs(τq2)), name='τq2')
+traces.add_task(np.abs(τp), name='τp')
+
 
 flow = flow_tools.GlobalFlowProperty(solver, cadence=report_cadence)
 flow.add_property(Re, name='Re')
@@ -282,5 +304,5 @@ while solver.proceed and good_solution:
         log_string += ', KE: {:.2g}, Re: {:.2g} ({:.2g})'.format(KE_avg, Re_avg, Re_max)
         log_string += ', τ: {:.2g}'.format(τ_max)
         logger.info(log_string)
-    Δt = cfl.compute_timestep()
+    #Δt = cfl.compute_timestep()
     good_solution = np.isfinite(Δt)*np.isfinite(KE_avg)
