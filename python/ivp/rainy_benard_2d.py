@@ -245,7 +245,8 @@ solver = problem.build_solver(ts)
 solver.stop_sim_time = run_time_buoy
 solver.stop_iteration = run_time_iter
 
-Δt = max_Δt = float(args['--max_dt'])
+Δt = max_Δt = min(float(args['--max_dt']), tau/4)
+logger.info('setting Δt = min(--max_dt={:.2g}, tau/4={:.2g})'.format(float(args['--max_dt']), tau/4))
 # cfl = flow_tools.CFL(solver, Δt, safety=cfl_safety_factor, cadence=1, threshold=0.1,
 #                      max_change=1.5, min_change=0.5, max_dt=max_Δt)
 # cfl.add_velocity(u)
