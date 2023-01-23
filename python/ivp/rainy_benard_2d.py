@@ -57,6 +57,8 @@ with h5py.File(case+'/drizzle_sol/drizzle_sol_s1.h5', 'r') as f:
     β = sol['β'][0]
     γ = sol['γ'][0]
 
+logger.info('α={:}, β={:}, γ={:}, tau={:}, k={:}'.format(α,β,γ,tau_in, k))
+
 aspect = float(args['--aspect'])
 
 nz_sol = sol['z'].shape[0]
@@ -233,10 +235,10 @@ amp = 1e-4
 
 noise = dist.Field(name='noise', bases=bases)
 noise.fill_random('g', seed=42, distribution='normal', scale=amp) # Random noise
-noise.low_pass_filter(scales=0.25)
+noise.low_pass_filter(scales=0.75)
 
 # noise ICs in buoyancy
-b['g'] = noise['g']*np.cos(np.pi/2*z/Lz)
+q['g'] = noise['g']*np.cos(np.pi/2*z/Lz)
 
 ts = de.SBDF2
 cfl_safety_factor = 0.2

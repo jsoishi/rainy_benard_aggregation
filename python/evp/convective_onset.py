@@ -60,7 +60,7 @@ for case in args['<cases>']:
     α = sol['α'][0]
     β = sol['β'][0]
     γ = sol['γ'][0]
-
+logger.info('α={:}, β={:}, γ={:}, tau={:}, k={:}'.format(α,β,γ,tau_in, k))
 nz_sol = sol['z'].shape[0]
 if args['--nz']:
     nz = int(float(args['--nz']))
