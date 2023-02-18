@@ -15,10 +15,7 @@ Usage:
     convective_onset.py <cases>... [options]
 
 Options:
-    <cases>           Case (or cases) to plot results from
-
-    --method=<m>      Method of onset searching [default: Rayleigh]
-    --Rayleigh=<Ra>   Rayleigh number to test [default: 1e5]
+    <cases>           Case (or cases) to calculate onset for
 
     --nondim=<n>      Non-Nondimensionalization [default: buoyancy]
 
@@ -45,7 +42,6 @@ import h5py
 from docopt import docopt
 args = docopt(__doc__)
 
-method = args['--method']
 N_evals = int(float(args['--eigs']))
 target = float(args['--target'])
 
@@ -72,8 +68,6 @@ dtype = np.complex128
 
 Prandtlm = 1
 Prandtl = 1
-Rayleigh = float(args['--Rayleigh'])
-
 
 Lz = 1
 coords = de.CartesianCoordinates('x', 'y', 'z')
@@ -133,14 +127,12 @@ kx = dist.Field(name='kx')
 Rayleigh = dist.Field(name='Ra_c')
 
 # follows Roberts 1972 convention, eq 1.1, 2.8
-dx = lambda A: 1j*kx*A
-dy = lambda A: 0*A #1j*kx*A # try 2-d mode onset
-dz = lambda A: de.Differentiate(A, coords['z'])
+dx = lambda A: 1j*kx*A # 1-d mode onset
+dy = lambda A: 0*A # flexibility to add 2-d mode if desired
 
-grad = lambda A: de.Gradient(A, coords)
-div = lambda A:  dx(A@ex) + dy(A@ey) + dz(A@ez)
-grad = lambda A: dx(A)*ex + dy(A)*ey + dz(A)*ez
-lap = lambda A: dx(dx(A)) + dy(dy(A)) + dz(dz(A))
+grad = lambda A: de.Gradient(A, coords) + dx(A)*ex + dy(A)*ey
+div = lambda A:  de.div(A) + dx(A@ex) + dy(A@ey)
+lap = lambda A: de.lap(A) + dx(dx(A)) + dy(dy(A))
 trans = lambda A: de.TransposeComponents(A)
 
 e = grad(u) + trans(grad(u))
