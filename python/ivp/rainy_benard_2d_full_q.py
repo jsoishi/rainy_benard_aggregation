@@ -32,7 +32,7 @@ Options:
     --run_time_buoy=<rtb>      Run time, in buoyancy times
     --run_time_iter=<rti>      Run time, number of iterations; if not set, n_iter=np.inf
 
-    --verbose         Show plots on screen
+    --label=<label>   Label to add to output directory
 """
 import logging
 logger = logging.getLogger(__name__)
@@ -75,6 +75,9 @@ else:
     tau = tau_in
 
 data_dir = 'rainy_benard_Ra{:}_tau{:.2g}_k{:.2g}_nz{:d}_nx{:d}'.format(args['--Rayleigh'], tau, k, nz, nx)
+
+if args['--label']:
+    data_dir += '_{:s}'.format(args['--label'])
 
 import dedalus.tools.logging as dedalus_logging
 dedalus_logging.add_file_handler(data_dir+'/logs/dedalus_log', 'DEBUG')
@@ -248,9 +251,9 @@ solver.stop_iteration = run_time_iter
 
 Δt = max_Δt = min(float(args['--max_dt']), tau/4)
 logger.info('setting Δt = min(--max_dt={:.2g}, tau/4={:.2g})'.format(float(args['--max_dt']), tau/4))
-# cfl = flow_tools.CFL(solver, Δt, safety=cfl_safety_factor, cadence=1, threshold=0.1,
-#                      max_change=1.5, min_change=0.5, max_dt=max_Δt)
-# cfl.add_velocity(u)
+cfl = flow_tools.CFL(solver, Δt, safety=cfl_safety_factor, cadence=1, threshold=0.1,
+                      max_change=1.5, min_change=0.5, max_dt=max_Δt)
+cfl.add_velocity(u)
 
 report_cadence = 10
 
@@ -306,5 +309,5 @@ while solver.proceed and good_solution:
         log_string += ', KE: {:.2g}, Re: {:.2g} ({:.2g})'.format(KE_avg, Re_avg, Re_max)
         log_string += ', τ: {:.2g}'.format(τ_max)
         logger.info(log_string)
-    #Δt = cfl.compute_timestep()
+    Δt = cfl.compute_timestep()
     good_solution = np.isfinite(Δt)*np.isfinite(KE_avg)
