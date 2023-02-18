@@ -170,17 +170,9 @@ q_surface = dist.Field(name='q_surface')
 if q0['g'].size > 0 :
     q_surface['g'] = q0(z=0).evaluate()['g']
 
-
-dx = lambda A: de.Differentiate(A, coords['x'])
-dy = lambda A: 0*A #1j*kx*A # try 2-d mode onset
-dz = lambda A: de.Differentiate(A, coords['z'])
-
 grad = lambda A: de.Gradient(A, coords)
-div = lambda A:  dx(A@ex) + dy(A@ey) + dz(A@ez)
-grad = lambda A: dx(A)*ex + dy(A)*ey + dz(A)*ez
-curl = lambda A: (dy(A@ez)-dz(A@ey))*ex + (dz(A@ex)-dx(A@ez))*ey + (dx(A@ey)-dy(A@ex))*ez
-lap = lambda A: dx(dx(A)) + dy(dy(A)) + dz(dz(A))
 trans = lambda A: de.TransposeComponents(A)
+curl = lambda A: de.Curl(A)
 
 e = grad(u) + trans(grad(u))
 ω = curl(u)
