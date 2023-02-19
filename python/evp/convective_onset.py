@@ -111,10 +111,7 @@ q = dist.Field(name='q', bases=zb)
 τq1 = dist.Field(name='τq1')
 τq2 = dist.Field(name='τq2')
 
-zb1 = zb.clone_with(a=zb.a+1, b=zb.b+1)
-zb2 = zb.clone_with(a=zb.a+2, b=zb.b+2)
-lift1 = lambda A, n: de.Lift(A, zb1, n)
-lift = lambda A, n: de.Lift(A, zb2, n)
+lift = lambda A, n: de.Lift(A, zb, n)
 
 ex, ey, ez = coords.unit_vector_fields(dist)
 
@@ -124,7 +121,7 @@ z_grid = dist.Field(name='z_grid', bases=zb)
 z_grid['g'] = z
 
 T0 = b0 - β*z_grid
-qs0 = np.exp(α*T0)
+qs0 = np.exp(α*T0).evaluate()
 
 tau = dist.Field(name='tau')
 kx = dist.Field(name='kx')
@@ -145,7 +142,6 @@ vars = [p, u, b, q, τp, τu1, τu2, τb1, τb2, τq1, τq2]
 dt = lambda A: ω*A
 ω = dist.Field(name='ω')
 problem = de.EVP(vars, eigenvalue=ω, namespace=locals())
-#Ras = np.logspace(4,5,num=5)
 
 nondim = args['--nondim']
 if nondim == 'diffusion':
@@ -165,7 +161,7 @@ else:
 tau['g'] = tau_in
 
 sech = lambda A: 1/np.cosh(A)
-scrN = (H(q0 - qs0) + (q0 - qs0)*k/2*sech(k*(q0 - qs0))**2).evaluate()
+scrN = (H(q0 - qs0) + 1/2*(q0 - qs0)*k**2*sech(k*(q0 - qs0))**2).evaluate()
 scrN.name='scrN'
 
 problem.add_equation('div(u) + τp + 1/PdR*dot(lift(τu2,-1),ez) = 0')
