@@ -79,6 +79,7 @@ dist = de.Distributor(coords, dtype=dtype)
 dealias = 2
 zb = de.ChebyshevT(coords.coords[2], size=nz, bounds=(0, Lz), dealias=dealias)
 z = zb.local_grid(1)
+zd = zb.local_grid(2)
 
 b0 = dist.Field(name='b0', bases=zb)
 q0 = dist.Field(name='q0', bases=zb)
@@ -160,8 +161,9 @@ else:
 
 tau['g'] = tau_in
 
-sech = lambda A: 1/np.cosh(A)
-scrN = (H(q0 - qs0) + 1/2*(q0 - qs0)*k**2*sech(k*(q0 - qs0))**2).evaluate()
+#sech = lambda A: 1/np.cosh(A)
+#scrN = (H(q0 - qs0) + 1/2*(q0 - qs0)*k**2*sech(k*(q0 - qs0))**2).evaluate()
+scrN = (H(q0 - qs0) + 1/2*(q0 - qs0)*k*(1-(np.tanh(k*(q0 - qs0)))**2)).evaluate()
 scrN.name='scrN'
 
 problem.add_equation('div(u) + τp + 1/PdR*dot(lift(τu2,-1),ez) = 0')
@@ -190,13 +192,42 @@ solver = problem.build_solver()
 dlog = logging.getLogger('subsystems')
 dlog.setLevel(logging.WARNING)
 
+
+import matplotlib.pyplot as plt
+fig, ax = plt.subplots(ncols=2)
+b0.change_scales(1)
+q0.change_scales(1)
+qs0.change_scales(1)
+p0 = ax[0].plot(b0['g'][0,0,:], z[0,0,:], label=r'$b$')
+p1 = ax[0].plot(γ*q0['g'][0,0,:], z[0,0,:], label=r'$\gamma q$')
+p2 = ax[0].plot(b0['g'][0,0,:]+γ*q0['g'][0,0,:], z[0,0,:], label=r'$m = b + \gamma q$')
+p3 = ax[0].plot(γ*qs0['g'][0,0,:], z[0,0,:], linestyle='dashed', alpha=0.3, label=r'$\gamma q_s$')
+ax2 = ax[0].twiny()
+p4 = ax2.plot(scrN['g'][0,0,:], zd[0,0,:], color='xkcd:purple grey', label=r'$\mathcal{N}(z)$')
+ax2.set_xlabel(r'$\mathcal{N}(z)$')
+ax2.xaxis.label.set_color('xkcd:purple grey')
+lines = p0 + p1 + p2 + p3 + p4
+labels = [l.get_label() for l in lines]
+ax[0].legend(lines, labels)
+ax[0].set_xlabel(r'$b$, $\gamma q$, $m$')
+ax[0].set_ylabel(r'$z$')
+#ax[1].plot(q0['g'][0,0,:]-qs0['g'][0,0,:], z[0,0,:])
+ax[1].plot(grad(b0).evaluate()['g'][-1][0,0,:], zd[0,0,:], label=r'$\nabla b$')
+ax[1].plot(grad(γ*q0).evaluate()['g'][-1][0,0,:], zd[0,0,:], label=r'$\gamma \nabla q$')
+ax[1].plot(grad(b0+γ*q0).evaluate()['g'][-1][0,0,:], zd[0,0,:], label=r'$\nabla m$')
+ax[1].set_xlabel(r'$\nabla b$, $\gamma \nabla q$, $\nabla m$')
+ax[1].legend()
+ax[1].axvline(x=0, linestyle='dashed', color='xkcd:dark grey', alpha=0.5)
+fig.savefig(case+'/evp_background.png', dpi=300)
+
+
 # fix Ra, find omega
 def compute_growth_rate(kx_i, Ra_i):
     kx['g'] = kx_i
     Rayleigh['g'] = Ra_i
-
     if args['--dense']:
         solver.solve_dense(solver.subproblems[0], rebuild_matrices=True)
+        solver.eigenvalues = solver.eigenvalues[np.isfinite(solver.eigenvalues)]
     else:
         solver.solve_sparse(solver.subproblems[0], N=N_evals, target=target, rebuild_matrices=True)
     i_evals = np.argsort(solver.eigenvalues.real)
@@ -248,11 +279,13 @@ for Ra in growth_rates:
     ax2.plot(kxs, σ.imag, linestyle='dashed', color=p[0].get_color())
 ax.set_xscale('log')
 
-fig_filename = 'growth_curves_{:}'.format(nondim)
+fig_filename = 'growth_curves_{:}_nz{:d}'.format(nondim, nz)
 if args['--stress-free']:
     fig_filename += '_SF'
 if args['--top-stress-free']:
     fig_filename += '_TSF'
+if args['--dense']:
+    fig_filename += '_dense'
 ax.legend()
 ax.axhline(y=0, linestyle='dashed', color='xkcd:grey', alpha=0.5)
 ax.set_title(r'$\gamma$ = {:}, $\beta$ = {:}, $\tau$ = {:}'.format(γ,β,tau['g'][0,0,0]))
@@ -306,9 +339,11 @@ logger.info('σ = {:}, {:}i'.format(crit_σ_R, crit_σ_I))
 
 p = ax.plot(peak_ks, f_σR(peak_ks), linestyle='dotted', color='xkcd:grey')
 
-fig_filename = 'growth_curves_peaks_{:}'.format(nondim)
+fig_filename = 'growth_curves_peaks_{:}_nz{:d}'.format(nondim, nz)
 if args['--stress-free']:
     fig_filename += '_SF'
 if args['--top-stress-free']:
     fig_filename += '_TSF'
+if args['--dense']:
+    fig_filename += '_dense'
 fig.savefig(case+'/'+fig_filename+'.png', dpi=300)
