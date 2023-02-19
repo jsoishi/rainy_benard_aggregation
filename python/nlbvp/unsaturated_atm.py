@@ -21,7 +21,7 @@ Options:
     --tau=<tau>          Tau parameter [default: 5e-5]
     --k=<k>              Tanh width of phase change [default: 1e3]
 
-    --tolerance=<t>      Tolerance for convergence [default: 1e-3]
+    --tolerance=<t>      Tolerance for convergence [default: 1e-6]
 
     --nz=<nz>            Vertical (z) grid resolution [default: 256]
 """
@@ -58,7 +58,7 @@ Prandtlm = 1
 P = 1                                 #  diffusion on buoyancy
 S = (Prandtlm/Prandtl)**(-1/2)        #  diffusion on moisture
 
-data_dir = 'unsaturated_atm_alpha{:}_beta_{:}_gamma{:}_q{:}'.format(args['--alpha'], args['--beta'], args['--gamma'], args['--q0'])
+data_dir = 'unsaturated_atm_alpha{:}_beta{:}_gamma{:}_q{:}'.format(args['--alpha'], args['--beta'], args['--gamma'], args['--q0'])
 case_dir = 'tau_{:}_k{:}_nz{:d}'.format(args['--tau'], args['--k'], nz)
 
 import dedalus.tools.logging as dedalus_logging
@@ -87,9 +87,6 @@ q = dist.Field(name='q', bases=zb)
 τq1 = dist.Field(name='τq1')
 τq2 = dist.Field(name='τq2')
 
-zb1 = zb.clone_with(a=zb.a+1, b=zb.b+1)
-zb2 = zb.clone_with(a=zb.a+2, b=zb.b+2)
-#lift1 = lambda A, n: de.Lift(A, zb1, n)
 lift = lambda A, n: de.Lift(A, zb, n)
 
 ex, ey, ez = coords.unit_vector_fields(dist)
