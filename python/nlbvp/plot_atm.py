@@ -50,7 +50,7 @@ def plot_solution(solution, title=None, mask=None, linestyle=None, ax=None):
     ax[1].plot(T[mask],z[mask], label='$T$', linestyle=linestyle)
     ax[1].plot(q[mask],z[mask], label='$q$', linestyle=linestyle)
     ax[1].plot(rh[mask],z[mask], label='$r_h$', linestyle=linestyle)
-
+    ax[1].axvline(x=1, linestyle='dotted')
     if markup:
         ax[1].legend()
         ax[0].legend()
@@ -71,7 +71,7 @@ def find_zc(sol, ε=1e-3, root_finding = 'inverse'):
     nz = z.shape[0]
     if root_finding == 'inverse':
         # invert the relationship and use interpolation to find where r_h = 1-ε (approach from below)
-        f_i = interp1d(rh, z) #inverse
+        f_i = interp1d(rh, z, bounds_error=False, fill_value=np.NaN) #inverse
         zc = f_i(1-ε)
     elif root_finding == 'discrete':
         # crude initial emperical zc; look for where rh-1 ~ 0, in lower half of domain.

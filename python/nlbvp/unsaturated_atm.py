@@ -58,7 +58,7 @@ Prandtlm = 1
 P = 1                                 #  diffusion on buoyancy
 S = (Prandtlm/Prandtl)**(-1/2)        #  diffusion on moisture
 
-data_dir = 'unsaturated_atm_alpha{:}_gamma{:}_q{:}'.format(args['--alpha'], args['--gamma'], args['--q0'])
+data_dir = 'unsaturated_atm_alpha{:}_beta_{:}_gamma{:}_q{:}'.format(args['--alpha'], args['--beta'], args['--gamma'], args['--q0'])
 case_dir = 'tau_{:}_k{:}_nz{:d}'.format(args['--tau'], args['--k'], nz)
 
 import dedalus.tools.logging as dedalus_logging
@@ -89,8 +89,8 @@ q = dist.Field(name='q', bases=zb)
 
 zb1 = zb.clone_with(a=zb.a+1, b=zb.b+1)
 zb2 = zb.clone_with(a=zb.a+2, b=zb.b+2)
-lift1 = lambda A, n: de.Lift(A, zb1, n)
-lift = lambda A, n: de.Lift(A, zb2, n)
+#lift1 = lambda A, n: de.Lift(A, zb1, n)
+lift = lambda A, n: de.Lift(A, zb, n)
 
 ex, ey, ez = coords.unit_vector_fields(dist)
 
@@ -167,3 +167,12 @@ solution.add_task(γ_f, name='γ')
 solver.evaluator.evaluate_handlers([solution], timestep=0, wall_time=0, sim_time=0, iteration=0, world_time=0)
 #solution.process()
 logger.info("wrote solution to {:}/{:}".format(data_dir, case_dir))
+
+
+integ = lambda A: de.Integrate(A, 'z')
+logger.info('values at boundaries')
+logger.info('b {:.3g} to {:.3g}'.format(b(z=0).evaluate()['g'][0,0,0], b(z=Lz).evaluate()['g'][0,0,0]))
+logger.info('T {:.3g} to {:.3g}'.format(temp(z=0).evaluate()['g'][0,0,0], temp(z=Lz).evaluate()['g'][0,0,0]))
+logger.info('rh {:.3g} to {:.3g}'.format(rh(z=0).evaluate()['g'][0,0,0], rh(z=Lz).evaluate()['g'][0,0,0]))
+if np.isclose(q_surface, 1):
+    logger.info('L2(rh - 1) = {:.3g} '.format(np.sqrt(integ((rh-1)**2)).evaluate()['g'][0,0,0]))

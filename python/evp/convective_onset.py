@@ -19,6 +19,10 @@ Options:
 
     --nondim=<n>      Non-Nondimensionalization [default: buoyancy]
 
+    --min_Ra=<minR>   Minimum Rayleigh number to sample [default: 1e4]
+    --max_Ra=<maxR>   Maximum Rayleigh number to sample [default: 1e5]
+    --num_Ra=<nRa>    How many Rayleigh numbers to sample [default: 5]
+
     --top-stress-free     Stress-free upper boundary
     --stress-free         Stress-free both boundaries
 
@@ -214,8 +218,7 @@ def peak_growth_rate(*args):
 
 
 growth_rates = {}
-Ras = np.geomspace(1e4,1e5,num=10)
-Ras = np.geomspace(2.5e4,1e5,num=10)
+Ras = np.geomspace(float(args['--min_Ra']),float(args['--max_Ra']),num=int(float(args['--num_Ra'])))
 kxs = np.logspace(-1, 1, num=40)
 print(Ras)
 for Ra_i in Ras:
