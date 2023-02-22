@@ -12,12 +12,17 @@ Roberts, G.O., 1972,
 ``Dynamo action of fluid motions with two-dimensional periodicity''
 
 Usage:
-    convective_onset.py <cases>... [options]
+    convective_onset.py [options]
 
 Options:
-    <cases>           Case (or cases) to calculate onset for
-
     --nondim=<n>      Non-Nondimensionalization [default: buoyancy]
+
+    --alpha=<alpha>      Alpha parameter [default: 3]
+    --gamma=<gamma>      Gamma parameter [default: 0.3]
+    --beta=<beta>        Beta parameter  [default: 1.2]
+
+    --tau=<tau>          Tau parameter [default: 1e-3]
+    --k=<k>              Tanh width of phase change [default: 1e3]
 
     --min_Ra=<minR>   Minimum Rayleigh number to sample [default: 1e4]
     --max_Ra=<maxR>   Maximum Rayleigh number to sample [default: 1e5]
@@ -26,7 +31,7 @@ Options:
     --top-stress-free     Stress-free upper boundary
     --stress-free         Stress-free both boundaries
 
-    --nz=<nz>         Number of coeffs to use in eigenvalue search; if not set, uses resolution of background
+    --nz=<nz>         Number of coeffs to use in eigenvalue search [default: 128]
     --target=<targ>   Target value for sparse eigenvalue search [default: 0]
     --eigs=<eigs>     Target number of eigenvalues to search for [default: 20]
 
@@ -49,23 +54,44 @@ args = docopt(__doc__)
 N_evals = int(float(args['--eigs']))
 target = float(args['--target'])
 
-for case in args['<cases>']:
-    f = h5py.File(case+'/drizzle_sol/drizzle_sol_s1.h5', 'r')
-    sol = {}
-    for task in f['tasks']:
-        sol[task] = f['tasks'][task][0,0,0][:]
-    sol['z'] = f['tasks']['b'].dims[3][0][:]
-    tau_in = sol['tau'][0]
-    k = sol['k'][0]
-    α = sol['α'][0]
-    β = sol['β'][0]
-    γ = sol['γ'][0]
+tau_in = float(args['--tau'])
+k = float(args['--k'])
+
+q_surface = 1
+nz = int(args['--nz'])
+
+α = float(args['--alpha'])
+β = float(args['--beta'])
+γ = float(args['--gamma'])
+
 logger.info('α={:}, β={:}, γ={:}, tau={:}, k={:}'.format(α,β,γ,tau_in, k))
-nz_sol = sol['z'].shape[0]
-if args['--nz']:
-    nz = int(float(args['--nz']))
-else:
-    nz = nz_sol
+
+nz = int(float(args['--nz']))
+
+ΔT = -1
+
+from scipy.special import lambertw as W
+def compute_analytic(z_in):
+    z = dist.Field(bases=zb)
+    z['g'] = z_in
+
+    b1 = 0
+    b2 = β + ΔT
+    q1 = q_surface
+    q2 = np.exp(α*ΔT)
+
+    P = b1 + γ*q1
+    Q = ((b2-b1) + γ*(q2-q1))
+
+    C = P + (Q-β)*z['g']
+
+    m = (P+Q*z).evaluate()
+    T = dist.Field(bases=zb)
+    T['g'] = C - W(α*γ*np.exp(α*C)).real/α
+    b = (T + β*z).evaluate()
+    q = ((m-b)/γ).evaluate()
+    rh = (q*np.exp(-α*T)).evaluate()
+    return {'b':b, 'q':q, 'm':m, 'T':T, 'rh':rh}
 
 dealias = 3/2
 dtype = np.complex128
@@ -79,25 +105,17 @@ dist = de.Distributor(coords, dtype=dtype)
 dealias = 2
 zb = de.ChebyshevT(coords.coords[2], size=nz, bounds=(0, Lz), dealias=dealias)
 z = zb.local_grid(1)
-zd = zb.local_grid(2)
+zd = zb.local_grid(dealias)
 
 b0 = dist.Field(name='b0', bases=zb)
 q0 = dist.Field(name='q0', bases=zb)
+analytic_sol = compute_analytic(z)
 
-zb_sol = de.ChebyshevT(coords.coords[2], size=nz_sol, bounds=(0, Lz), dealias=dealias)
-b0_sol = dist.Field(name='b0_sol', bases=zb_sol)
-q0_sol = dist.Field(name='q0_sol', bases=zb_sol)
-
-b0_sol['g'] = sol['b']
-q0_sol['g'] = sol['q']
-
-scale_ratio = nz/nz_sol
-b0_sol.change_scales(scale_ratio)
-q0_sol.change_scales(scale_ratio)
-
-logger.info('rescaling background from {:} to {:} coeffs (ratio: {:})'.format(nz_sol, nz, scale_ratio))
-b0['g'] = b0_sol['g']
-q0['g'] = q0_sol['g']
+logger.info('setting background from analytic solution')
+b0.change_scales(dealias)
+q0.change_scales(dealias)
+b0['g'] = analytic_sol['b']['g']
+q0['g'] = analytic_sol['q']['g']
 
 p = dist.Field(name='p', bases=zb)
 u = dist.VectorField(coords, name='u', bases=zb)
@@ -196,7 +214,7 @@ solver = problem.build_solver()
 dlog = logging.getLogger('subsystems')
 dlog.setLevel(logging.WARNING)
 
-
+case = '.'
 import matplotlib.pyplot as plt
 fig, ax = plt.subplots(ncols=2)
 b0.change_scales(1)
