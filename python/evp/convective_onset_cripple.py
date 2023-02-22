@@ -160,10 +160,10 @@ else:
     raise ValueError('nondim {:} not in valid set [diffusion, buoyancy]'.format(nondim))
 
 tau['g'] = tau_in
-
+grad_b0 = grad(b0).evaluate()
 problem.add_equation('div(u) + τp + 1/PdR*dot(lift(τu2,-1),ez) = 0')
 problem.add_equation('dt(u) - PdR*lap(u) + grad(p) - PtR*b*ez + lift(τu1, -1) + lift(τu2, -2) = 0')
-problem.add_equation('dt(b) - P*lap(b) + dot(u, grad(b0)) + lift(τb1, -1) + lift(τb2, -2) = 0')
+problem.add_equation('dt(b) - P*lap(b) + u@grad_b0 + lift(τb1, -1) + lift(τb2, -2) = 0')
 problem.add_equation('b(z=0) = 0')
 problem.add_equation('b(z=Lz) = 0')
 if args['--stress-free']:

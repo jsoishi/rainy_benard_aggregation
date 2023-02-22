@@ -153,7 +153,7 @@ if nondim == 'diffusion':
 elif nondim == 'buoyancy':
     P = (Rayleigh * Prandtl)**(-1/2)         #  diffusion on buoyancy
     S = (Rayleigh * Prandtlm)**(-1/2)        #  diffusion on moisture
-    PdR = (Prandtl / Rayleigh)**(1/2)        #  diffusion on momentum
+    PdR = (Rayleigh/Prandtl)**(-1/2)         #  diffusion on momentum
     PtR = 1
     #tau_in /=                     # think through what this should be
 else:
@@ -161,15 +161,19 @@ else:
 
 tau['g'] = tau_in
 
-#sech = lambda A: 1/np.cosh(A)
-#scrN = (H(q0 - qs0) + 1/2*(q0 - qs0)*k**2*sech(k*(q0 - qs0))**2).evaluate()
-scrN = (H(q0 - qs0) + 1/2*(q0 - qs0)*k*(1-(np.tanh(k*(q0 - qs0)))**2)).evaluate()
+# sech = lambda A: 1/np.cosh(A)
+# scrN = (H(q0 - qs0) + 1/2*(q0 - qs0)*k**2*sech(k*(q0 - qs0))**2).evaluate()
+# scrN = (H(q0 - qs0) + 1/2*(q0 - qs0)*k*(1-(np.tanh(k*(q0 - qs0)))**2)).evaluate()
+scrN = dist.Field(bases=zb)
+scrN['g'] = 0.5
 scrN.name='scrN'
-
+grad_b0 = grad(b0).evaluate()
+grad_q0 = grad(q0).evaluate()
+#
 problem.add_equation('div(u) + τp + 1/PdR*dot(lift(τu2,-1),ez) = 0')
 problem.add_equation('dt(u) - PdR*lap(u) + grad(p) - PtR*b*ez + lift(τu1, -1) + lift(τu2, -2) = 0')
-problem.add_equation('dt(b) - P*lap(b) + dot(u, grad(b0)) - γ/tau*(q-α*qs0*b)*scrN + lift(τb1, -1) + lift(τb2, -2) = 0')
-problem.add_equation('dt(q) - S*lap(q) + dot(u, grad(q0)) + 1/tau*(q-α*qs0*b)*scrN + lift(τq1, -1) + lift(τq2, -2) = 0')
+problem.add_equation('dt(b) - P*lap(b) + u@grad_b0 - γ/tau*(q-α*qs0*b)*scrN + lift(τb1, -1) + lift(τb2, -2) = 0')
+problem.add_equation('dt(q) - S*lap(q) + u@grad_q0 + 1/tau*(q-α*qs0*b)*scrN + lift(τq1, -1) + lift(τq2, -2) = 0')
 problem.add_equation('b(z=0) = 0')
 problem.add_equation('b(z=Lz) = 0')
 problem.add_equation('q(z=0) = 0')
@@ -203,7 +207,7 @@ p1 = ax[0].plot(γ*q0['g'][0,0,:], z[0,0,:], label=r'$\gamma q$')
 p2 = ax[0].plot(b0['g'][0,0,:]+γ*q0['g'][0,0,:], z[0,0,:], label=r'$m = b + \gamma q$')
 p3 = ax[0].plot(γ*qs0['g'][0,0,:], z[0,0,:], linestyle='dashed', alpha=0.3, label=r'$\gamma q_s$')
 ax2 = ax[0].twiny()
-p4 = ax2.plot(scrN['g'][0,0,:], zd[0,0,:], color='xkcd:purple grey', label=r'$\mathcal{N}(z)$')
+p4 = ax2.plot(scrN['g'][0,0,:], z[0,0,:], color='xkcd:purple grey', label=r'$\mathcal{N}(z)$')
 ax2.set_xlabel(r'$\mathcal{N}(z)$')
 ax2.xaxis.label.set_color('xkcd:purple grey')
 lines = p0 + p1 + p2 + p3 + p4
