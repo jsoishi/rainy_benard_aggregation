@@ -28,7 +28,9 @@ Options:
 
     --min_Ra=<minR>   Minimum Rayleigh number to sample [default: 1e3]
     --max_Ra=<maxR>   Maximum Rayleigh number to sample [default: 1e5]
-    --num_Ra=<nRa>    How many Rayleigh numbers to sample [default: 10]
+    --num_Ra=<nRa>    How many Rayleigh numbers to sample [default: 21]
+
+    --num_k=<nk>      How many kxs to sample [default: 11]
 
     --top-stress-free     Stress-free upper boundary
     --stress-free         Stress-free both boundaries
@@ -239,7 +241,7 @@ import scipy.optimize as sciop
 
 growth_rates = {}
 Ras = np.geomspace(float(args['--min_Ra']),float(args['--max_Ra']),num=int(float(args['--num_Ra'])))
-kxs = np.logspace(0, 1, num=20)
+kxs = np.logspace(0, 1, num=int(float(args['--num_k'])))
 print(Ras)
 
 crit_Ras = []
