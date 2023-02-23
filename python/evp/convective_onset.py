@@ -225,6 +225,27 @@ ax[1].axvline(x=0, linestyle='dashed', color='xkcd:dark grey', alpha=0.5)
 fig.savefig(case+'/evp_background.png', dpi=300)
 
 
+def plot_eigenfunctions(σ):
+    print(σ)
+    i_max = np.argmax(np.abs(b['g'][0,0,:]))
+    phase_correction = b['g'][0,0,i_max]
+    u['g'][:] /= phase_correction
+    b['g'] /= phase_correction
+    q['g'] /= phase_correction
+    fig, ax = plt.subplots()
+    for Q in [u, q, b]:
+        if Q.tensorsig:
+            for i in range(3):
+                p = ax.plot(Q['g'][i][0,0,:].real, z[0,0,:], label=Q.name+r'$_'+'{:d}'.format(i)+r'$')
+                ax.plot(Q['g'][i][0,0,:].imag, z[0,0,:], linestyle='dashed', color=p[0].get_color())
+        else:
+            p = ax.plot(Q['g'][0,0,:].real, z[0,0,:], label=Q)
+            ax.plot(Q['g'][0,0,:].imag, z[0,0,:], linestyle='dashed', color=p[0].get_color())
+    ax.set_title(r'$\omega_R = ${:.3g}'.format(σ.real)+ r' $\omega_I = ${:.3g}'.format(σ.imag)+' at kx = {:.3g} and Ra = {:.3g}'.format(kx['g'][0,0,0].real, Rayleigh['g'][0,0,0].real))
+    ax.legend()
+    fig_filename = 'eigenfunctions_{:}_Ra{:.2g}_kx{:.2g}_nz{:d}'.format(nondim, Rayleigh['g'][0,0,0].real, kx['g'][0,0,0].real, nz)
+    fig.savefig(case+'/'+fig_filename+'.png', dpi=300)
+
 # fix Ra, find omega
 def compute_growth_rate(kx_i, Ra_i):
     kx['g'] = kx_i
@@ -240,6 +261,8 @@ def compute_growth_rate(kx_i, Ra_i):
     # choose convention: return the positive complex mode of the pair
     if peak_eval.imag < 0:
         peak_eval = np.conj(peak_eval)
+    # set solver state to peak eigenmode, in case we wish to plot it
+    solver.set_state(i_evals[-1],0)
     return peak_eval
 
 def peak_growth_rate(*args):
@@ -314,10 +337,10 @@ for Ra in growth_rates:
     peaks['σ'].append(σ)
     peaks['k'].append(result.x[0])
     peaks['Ra'].append(Ra)
+    plot_eigenfunctions(σ)
 
-peaks['σ'] = np.array(peaks['σ'])
-peaks['k'] = np.array(peaks['k'])
-peaks['Ra'] = np.array(peaks['Ra'])
+for key in ['σ', 'k', 'Ra']:
+    peaks[key] = np.array(peaks[key])
 
 from scipy.interpolate import interp1d
 f_σR_i = interp1d(peaks['σ'].real, peaks['k']) #inverse
@@ -341,7 +364,14 @@ logger.info('Critical point, based on interpolation:')
 logger.info('Ra = {:}, k = {:}'.format(crit_Ra, crit_k))
 logger.info('σ = {:}, {:}i'.format(crit_σ_R, crit_σ_I))
 
-p = ax.plot(peak_ks, f_σR(peak_ks), linestyle='dotted', color='xkcd:grey')
+σ = compute_growth_rate(crit_k, crit_Ra)
+plot_eigenfunctions(σ)
+logger.info('σ = {:}, {:}i'.format(crit_σ_R, crit_σ_I))
+logger.info('σ = {:}, {:}i (sigma)'.format(σ.real, σ.imag))
+
+ax.plot(peak_ks, f_σR(peak_ks), linestyle='dotted', color='xkcd:grey')
+ax.scatter(crit_k, crit_σ_R, color='xkcd:grey', marker='x')
+ax.scatter(crit_k, σ.real, color='xkcd:pink', marker='o', alpha=0.5)
 
 fig_filename = 'growth_curves_peaks_{:}_nz{:d}'.format(nondim, nz)
 if args['--stress-free']:
