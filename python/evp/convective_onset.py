@@ -350,27 +350,25 @@ f_σI = interp1d(peaks['k'], peaks['σ'].imag)
 
 # to find critical Ra
 f_σR_Ra_i = interp1d(peaks['σ'].real, peaks['Ra'])
-f_σR_Ra = interp1d(peaks['Ra'], peaks['σ'].real)
-f_σI_Ra = interp1d(peaks['Ra'], peaks['σ'].imag)
+f_σ_Ra = interp1d(peaks['Ra'], peaks['σ'])
 f_k_Ra = interp1d(peaks['Ra'], peaks['k'])
 
 peak_ks = np.geomspace(np.min(peaks['k']), np.max(peaks['k']))
 
 crit_Ra = f_σR_Ra_i(0)
 crit_k = f_k_Ra(crit_Ra)
-crit_σ_R = f_σR_Ra(crit_Ra)
-crit_σ_I = f_σI_Ra(crit_Ra)
+crit_σ = f_σ_Ra(crit_Ra)
 logger.info('Critical point, based on interpolation:')
 logger.info('Ra = {:}, k = {:}'.format(crit_Ra, crit_k))
-logger.info('σ = {:}, {:}i'.format(crit_σ_R, crit_σ_I))
+logger.info('σ = {:}, {:}i'.format(crit_σ.real, crit_σ.imag))
 
 σ = compute_growth_rate(crit_k, crit_Ra)
 plot_eigenfunctions(σ)
-logger.info('σ = {:}, {:}i'.format(crit_σ_R, crit_σ_I))
+logger.info('σ = {:}, {:}i'.format(crit_σ.real, crit_σ.imag))
 logger.info('σ = {:}, {:}i (sigma)'.format(σ.real, σ.imag))
 
 ax.plot(peak_ks, f_σR(peak_ks), linestyle='dotted', color='xkcd:grey')
-ax.scatter(crit_k, crit_σ_R, color='xkcd:grey', marker='x')
+ax.scatter(crit_k, crit_σ.real, color='xkcd:grey', marker='x')
 ax.scatter(crit_k, σ.real, color='xkcd:pink', marker='o', alpha=0.5)
 
 fig_filename = 'growth_curves_peaks_{:}_nz{:d}'.format(nondim, nz)
