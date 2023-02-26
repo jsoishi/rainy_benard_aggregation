@@ -163,9 +163,9 @@ tau['g'] = tau_in
 
 # sech = lambda A: 1/np.cosh(A)
 # scrN = (H(q0 - qs0) + 1/2*(q0 - qs0)*k**2*sech(k*(q0 - qs0))**2).evaluate()
-# scrN = (H(q0 - qs0) + 1/2*(q0 - qs0)*k*(1-(np.tanh(k*(q0 - qs0)))**2)).evaluate()
-scrN = dist.Field(bases=zb)
-scrN['g'] = 0.5
+scrN = (H(q0 - qs0) + 1/2*(q0 - qs0)*k*(1-(np.tanh(k*(q0 - qs0)))**2)).evaluate()
+# scrN = dist.Field(bases=zb)
+# scrN['g'] = 0.5
 scrN.name='scrN'
 grad_b0 = grad(b0).evaluate()
 grad_q0 = grad(q0).evaluate()
@@ -207,6 +207,7 @@ p1 = ax[0].plot(γ*q0['g'][0,0,:], z[0,0,:], label=r'$\gamma q$')
 p2 = ax[0].plot(b0['g'][0,0,:]+γ*q0['g'][0,0,:], z[0,0,:], label=r'$m = b + \gamma q$')
 p3 = ax[0].plot(γ*qs0['g'][0,0,:], z[0,0,:], linestyle='dashed', alpha=0.3, label=r'$\gamma q_s$')
 ax2 = ax[0].twiny()
+scrN.change_scales(1)
 p4 = ax2.plot(scrN['g'][0,0,:], z[0,0,:], color='xkcd:purple grey', label=r'$\mathcal{N}(z)$')
 ax2.set_xlabel(r'$\mathcal{N}(z)$')
 ax2.xaxis.label.set_color('xkcd:purple grey')
@@ -226,7 +227,6 @@ fig.savefig(case+'/evp_background.png', dpi=300)
 
 
 def plot_eigenfunctions(σ):
-    print(σ)
     i_max = np.argmax(np.abs(b['g'][0,0,:]))
     phase_correction = b['g'][0,0,i_max]
     u['g'][:] /= phase_correction
