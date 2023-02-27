@@ -197,7 +197,7 @@ else:
 
 
 problem.add_equation('div(u) + τp + 1/PdR*dot(lift(τu2,-1),ez) = 0')
-problem.add_equation('dt(u) - PdR*lap(u) + grad(p) - PtR*b*ez + lift(τu1, -1) + lift(τu2, -2) = -(u@grad(u))')
+problem.add_equation('dt(u) - PdR*lap(u) + grad(p) - PtR*b*ez + lift(τu1, -1) + lift(τu2, -2) = cross(u, ω)')
 # problem.add_equation('dt(b) - P*lap(b) + u@grad(b0) - γ/tau*(q-α*qs0*b)*scrN + lift(τb1, -1) + lift(τb2, -2) = - (u@grad(b)) + γ/tau*((q-qs)*H(q-qs) - (q-α*qs0*b)*scrN_g)')
 # problem.add_equation('dt(q) - S*lap(q) + u@grad(q0) + 1/tau*(q-α*qs0*b)*scrN + lift(τq1, -1) + lift(τq2, -2) = - (u@grad(q)) - 1/tau*((q-qs)*H(q-qs) - (q-α*qs0*b)*scrN_g)')
 problem.add_equation('dt(b) - P*lap(b) + lift(τb1, -1) + lift(τb2, -2) = - (u@grad(b)) + γ/tau*((q-qs)*H(q-qs))')
@@ -257,6 +257,16 @@ Re = np.sqrt(u@u)/PdR
 KE = 0.5*u@u
 PE = PtR*b
 QE = (q-qs)*H(q - qs)
+
+snapshots = solver.evaluator.add_file_handler(data_dir+'/snapshots', sim_dt=0.5, max_writes=20)
+snapshots.add_task(b, name='b')
+snapshots.add_task(q, name='q')
+snapshots.add_task(b-x_avg(b), name='b_fluc')
+snapshots.add_task(q-x_avg(q), name='q_fluc')
+snapshots.add_task(ex@u, name='ux')
+snapshots.add_task(ez@u, name='uz')
+snapshots.add_task(ey@ω, name='vorticity')
+snapshots.add_task(ω@ω, name='enstrophy')
 
 trace_dt = 0.1
 traces = solver.evaluator.add_file_handler(data_dir+'/traces', sim_dt=trace_dt, max_writes=None)
