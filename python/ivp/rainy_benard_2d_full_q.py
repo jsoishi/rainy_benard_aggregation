@@ -26,7 +26,7 @@ Options:
     --nz=<nz>         Number z coeffs to use in IVP; if not set, uses resolution of background solution
     --nx=<nx>         Number of x coeffs to use in IVP; if not set, scales nz by aspect
 
-    --max_dt=<dt>     Largest timestep to use; should be set by oscillation timescales of waves (Brunt) [default: 1e-2]
+    --max_dt=<dt>     Largest timestep to use; should be set by oscillation timescales of waves (Brunt) [default: 1]
 
     --run_time_diff=<rtd>      Run time, in diffusion times [default: 1]
     --run_time_buoy=<rtb>      Run time, in buoyancy times
@@ -74,7 +74,7 @@ if args['--tau']:
 else:
     tau = tau_in
 
-data_dir = 'rainy_benard_Ra{:}_tau{:.2g}_k{:.2g}_nz{:d}_nx{:d}'.format(args['--Rayleigh'], tau, k, nz, nx)
+data_dir = case+'/rainy_benard_Ra{:}_tau{:.2g}_k{:.2g}_nz{:d}_nx{:d}'.format(args['--Rayleigh'], tau, k, nz, nx)
 
 if args['--label']:
     data_dir += '_{:s}'.format(args['--label'])
@@ -164,6 +164,7 @@ z_grid['g'] = z
 
 T = b - β*z_grid
 qs = np.exp(α*T)
+rh = q*np.exp(-α*T)
 
 ΔT = -1
 q_surface = dist.Field(name='q_surface')
@@ -232,7 +233,7 @@ b0.change_scales(1)
 q0.change_scales(1)
 b['g'] = b0['g']
 q['g'] = q0['g']
-q['g'] += noise['g']*np.cos(np.pi/2*z/Lz)
+b['g'] += noise['g']*np.cos(np.pi/2*z/Lz)
 
 ts = de.SBDF2
 cfl_safety_factor = 0.2
@@ -247,7 +248,7 @@ cfl = flow_tools.CFL(solver, Δt, safety=cfl_safety_factor, cadence=1, threshold
                       max_change=1.5, min_change=0.5, max_dt=max_Δt)
 cfl.add_velocity(u)
 
-report_cadence = 10
+report_cadence = 1e2
 
 integ = lambda A: de.Integrate(de.Integrate(A, 'x'), 'z')
 avg = lambda A: integ(A)/(Lx*Lz)
@@ -258,11 +259,13 @@ KE = 0.5*u@u
 PE = PtR*b
 QE = (q-qs)*H(q - qs)
 
-snapshots = solver.evaluator.add_file_handler(data_dir+'/snapshots', sim_dt=0.5, max_writes=20)
+snapshots = solver.evaluator.add_file_handler(data_dir+'/snapshots', sim_dt=2, max_writes=20)
 snapshots.add_task(b, name='b')
 snapshots.add_task(q, name='q')
 snapshots.add_task(b-x_avg(b), name='b_fluc')
 snapshots.add_task(q-x_avg(q), name='q_fluc')
+snapshots.add_task(rh, name='rh')
+snapshots.add_task(rh-x_avg(rh), name='rh_fluc')
 snapshots.add_task(ex@u, name='ux')
 snapshots.add_task(ez@u, name='uz')
 snapshots.add_task(ey@ω, name='vorticity')
@@ -299,17 +302,23 @@ vol = Lx*Lz
 
 good_solution = True
 KE_avg = 0
-while solver.proceed and good_solution:
-    # advance
-    solver.step(Δt)
-    if solver.iteration % report_cadence == 0:
-        τ_max = np.max([flow.max('|τu1|'),flow.max('|τu2|'),flow.max('|τb1|'),flow.max('|τb2|'),flow.max('|τq1|'),flow.max('|τq2|'),flow.max('|τp|')])
-        Re_max = flow.max('Re')
-        Re_avg = flow.volume_integral('Re')/vol
-        KE_avg = flow.volume_integral('KE')/vol
-        log_string = 'Iteration: {:5d}, Time: {:8.3e}, dt: {:5.1e}'.format(solver.iteration, solver.sim_time, Δt)
-        log_string += ', KE: {:.2g}, Re: {:.2g} ({:.2g})'.format(KE_avg, Re_avg, Re_max)
-        log_string += ', τ: {:.2g}'.format(τ_max)
-        logger.info(log_string)
-    Δt = cfl.compute_timestep()
-    good_solution = np.isfinite(Δt)*np.isfinite(KE_avg)
+try:
+    while solver.proceed and good_solution:
+        # advance
+        solver.step(Δt)
+        if solver.iteration % report_cadence == 0:
+            τ_max = np.max([flow.max('|τu1|'),flow.max('|τu2|'),flow.max('|τb1|'),flow.max('|τb2|'),flow.max('|τq1|'),flow.max('|τq2|'),flow.max('|τp|')])
+            Re_max = flow.max('Re')
+            Re_avg = flow.volume_integral('Re')/vol
+            KE_avg = flow.volume_integral('KE')/vol
+            log_string = 'Iteration: {:5d}, Time: {:8.3e}, dt: {:5.1e}'.format(solver.iteration, solver.sim_time, Δt)
+            log_string += ', KE: {:.2g}, Re: {:.2g} ({:.2g})'.format(KE_avg, Re_avg, Re_max)
+            log_string += ', τ: {:.2g}'.format(τ_max)
+            logger.info(log_string)
+        Δt = cfl.compute_timestep()
+        good_solution = np.isfinite(Δt)*np.isfinite(KE_avg)
+except:
+    logger.error('Exception raised, triggering end of main loop.')
+    raise
+finally:
+    solver.log_stats()
