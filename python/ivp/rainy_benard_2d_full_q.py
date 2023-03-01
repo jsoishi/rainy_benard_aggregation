@@ -270,8 +270,13 @@ snapshots.add_task(ex@u, name='ux')
 snapshots.add_task(ez@u, name='uz')
 snapshots.add_task(ey@ω, name='vorticity')
 snapshots.add_task(ω@ω, name='enstrophy')
+snapshots.add_task(x_avg(b), name='b_avg')
+snapshots.add_task(x_avg(q), name='q_avg')
+snapshots.add_task(x_avg(rh), name='rh_avg')
+snapshots.add_task(x_avg(ez@u*q), name='uq_avg')
+snapshots.add_task(x_avg(ez@u*b), name='ub_avg')
 
-trace_dt = 0.1
+trace_dt = 0.5
 traces = solver.evaluator.add_file_handler(data_dir+'/traces', sim_dt=trace_dt, max_writes=None)
 traces.add_task(avg(KE), name='KE')
 traces.add_task(avg(PE), name='PE')

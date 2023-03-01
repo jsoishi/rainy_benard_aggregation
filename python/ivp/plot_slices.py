@@ -6,7 +6,7 @@ Usage:
 
 Options:
     --output=<dir>     Output directory; defaults to 'frames' subdir within the case dir
-    --tasks=<tasks>    Tasks to plot [default: b,q,b_fluc,q_fluc,vorticity]
+    --tasks=<tasks>    Tasks to plot [default: b,q,b_fluc,q_fluc,rh,rh_fluc,vorticity]
 """
 
 import h5py
@@ -102,7 +102,7 @@ if __name__ == "__main__":
     if args['--output']:
         output_path = pathlib.Path(args['--output']).absolute()
     else:
-        case_name = args['<files>'][0].split('/')[0]
+        case_name = args['<files>'][0].split('snapshots')[0]
         output_path = pathlib.Path(case_name+'/frames').absolute()
     # Create output directory if needed
     with Sync() as sync:

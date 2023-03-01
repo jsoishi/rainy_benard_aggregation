@@ -26,7 +26,7 @@ file = args['<file>']
 if args['--output'] is not None:
     output_path = pathlib.Path(args['--output']).absolute()
 else:
-    data_dir = args['<file>'].split('/')[0]
+    data_dir = args['<file>'].split('traces')[0]
     data_dir += '/'
     output_path = pathlib.Path(data_dir).absolute()
 
