@@ -24,7 +24,9 @@ Options:
     --stress-free         Stress-free both boundaries
 
     --nz=<nz>         Number z coeffs to use in IVP; if not set, uses resolution of background solution
-    --nx=<nx>         Number of x coeffs to use in IVP; if not set, scales nz by aspect
+    --nx=<nx>         Number of x and y coeffs to use in IVP; if not set, scales nz by aspect
+
+    --mesh=<mesh>     Processor mesh for 3-D runs; if not set a sensible guess will be made
 
     --max_dt=<dt>     Largest timestep to use; should be set by oscillation timescales of waves (Brunt) [default: 1]
 
@@ -44,6 +46,22 @@ import h5py
 
 from docopt import docopt
 args = docopt(__doc__)
+
+from mpi4py import MPI
+
+comm = MPI.COMM_WORLD
+ncpu = comm.size
+
+mesh = args['--mesh']
+if mesh is not None:
+    mesh = mesh.split(',')
+    mesh = [int(mesh[0]), int(mesh[1])]
+else:
+    log2 = np.log2(ncpu)
+    if log2 == int(log2):
+        mesh = [int(2**np.ceil(log2/2)),int(2**np.floor(log2/2))]
+logger.info("running on processor mesh={}".format(mesh))
+
 
 case = args['<case>']
 with h5py.File(case+'/drizzle_sol/drizzle_sol_s1.h5', 'r') as f:
@@ -69,12 +87,14 @@ if args['--nx']:
 else:
     nx = int(aspect)*nz
 
+ny = nx
+
 if args['--tau']:
     tau = float(args['--tau'])
 else:
     tau = tau_in
 
-data_dir = case+'/rainy_benard_Ra{:}_tau{:.2g}_k{:.2g}_nz{:d}_nx{:d}'.format(args['--Rayleigh'], tau, k, nz, nx)
+data_dir = case+'/rainy_benard_Ra{:}_tau{:.2g}_k{:.2g}_nz{:d}_nx{:d}_ny{:d}'.format(args['--Rayleigh'], tau, k, nz, nx, ny)
 
 if args['--label']:
     data_dir += '_{:s}'.format(args['--label'])
@@ -109,33 +129,43 @@ dtype = np.float64
 
 Lz = 1
 Lx = aspect
+Ly = Lx
 
 coords = de.CartesianCoordinates('x', 'y', 'z')
-dist = de.Distributor(coords, dtype=dtype)
+dist = de.Distributor(coords, dtype=dtype, mesh=mesh)
 xb = de.RealFourier(coords.coords[0], size=nx, bounds=(0, Lx), dealias=dealias)
+yb = de.RealFourier(coords.coords[1], size=ny, bounds=(0, Ly), dealias=dealias)
 zb = de.ChebyshevT(coords.coords[2], size=nz, bounds=(0, Lz), dealias=dealias)
 x = xb.local_grid(1)
+y = yb.local_grid(1)
 z = zb.local_grid(1)
 
 b0 = dist.Field(name='b0', bases=zb)
 q0 = dist.Field(name='q0', bases=zb)
 
 zb_sol = de.ChebyshevT(coords.coords[2], size=nz_sol, bounds=(0, Lz), dealias=dealias)
+z_sol = zb_sol.local_grid(1)
 b0_sol = dist.Field(name='b0_sol', bases=zb_sol)
 q0_sol = dist.Field(name='q0_sol', bases=zb_sol)
 
-b0_sol['g'] = sol['b']
-q0_sol['g'] = sol['q']
+logger.info('reading in solution')
+if b0['g'].size > 0 :
+    print(b0['g'].shape, b0_sol['g'].shape, sol['b'].shape)
+    print(sol.keys())
+    for i, z_i in enumerate(z_sol[0,0,:]):
+        b0_sol['g'][:,:,i] = sol['b'][i]
+        q0_sol['g'][:,:,i] = sol['q'][i]
 
 scale_ratio = nz/nz_sol
 b0_sol.change_scales(scale_ratio)
 q0_sol.change_scales(scale_ratio)
 
 logger.info('rescaling background from {:} to {:} coeffs (ratio: {:})'.format(nz_sol, nz, scale_ratio))
-b0['g'] = b0_sol['g']
-q0['g'] = q0_sol['g']
+if b0['g'].size > 0 :
+    b0['g'] = b0_sol['g']
+    q0['g'] = q0_sol['g']
 
-bases = (xb, zb)
+bases = (xb, yb, zb)
 
 p = dist.Field(name='p', bases=bases)
 u = dist.VectorField(coords, name='u', bases=bases)
@@ -250,9 +280,10 @@ cfl.add_velocity(u)
 
 report_cadence = 1e2
 
-integ = lambda A: de.Integrate(de.Integrate(A, 'x'), 'z')
-avg = lambda A: integ(A)/(Lx*Lz)
-x_avg = lambda A: de.Integrate(A, 'x')/(Lx)
+vol = Lx*Ly*Lz
+integ = lambda A: de.Integrate(de.Integrate(de.Integrate(A, 'x'), 'y'), 'z')
+avg = lambda A: integ(A)/vol
+xy_avg = lambda A: de.Integrate(de.Integrate(A, 'x'), 'y')/(Lx*Ly)
 
 Re = np.sqrt(u@u)/PdR
 KE = 0.5*u@u
@@ -260,24 +291,29 @@ PE = PtR*b
 QE = (q-qs)*H(q - qs)
 
 snapshots = solver.evaluator.add_file_handler(data_dir+'/snapshots', sim_dt=2, max_writes=20)
-snapshots.add_task(b, name='b')
-snapshots.add_task(q, name='q')
-snapshots.add_task(b-x_avg(b), name='b_fluc')
-snapshots.add_task(q-x_avg(q), name='q_fluc')
-snapshots.add_task(rh, name='rh')
-snapshots.add_task(rh-x_avg(rh), name='rh_fluc')
-snapshots.add_task(ex@u, name='ux')
-snapshots.add_task(ez@u, name='uz')
-snapshots.add_task(ey@ω, name='vorticity')
-snapshots.add_task(ω@ω, name='enstrophy')
-snapshots.add_task(x_avg(b), name='b_avg')
-snapshots.add_task(x_avg(q), name='q_avg')
-snapshots.add_task(x_avg(rh), name='rh_avg')
-snapshots.add_task(x_avg(ez@u*q), name='uq_avg')
-snapshots.add_task(x_avg(ez@u*b), name='ub_avg')
-snapshots.add_task(x_avg(ex@u), name='ux')
-snapshots.add_task(x_avg(ez@u), name='uz')
-snapshots.add_task(x_avg(np.sqrt((u-x_avg(u))@(u-x_avg(u)))), name='u_rms')
+snapshots.add_task(b(y=Ly/2), name='b mid y')
+snapshots.add_task(q(y=Ly/2), name='q mid y')
+snapshots.add_task(rh(y=Ly/2), name='rh mid y')
+snapshots.add_task(ex@u(y=Ly/2), name='ux mid y')
+snapshots.add_task(ez@u(y=Ly/2), name='uz mid y')
+snapshots.add_task(ey@ω(y=Ly/2), name='vorticity y mid y')
+snapshots.add_task((ω@ω)(y=Ly/2), name='enstrophy mid y')
+snapshots.add_task(b(z=Lz*3/4), name='b mid z')
+snapshots.add_task(q(z=Lz*3/4), name='q mid z')
+snapshots.add_task(rh(z=Lz*3/4), name='rh mid z')
+snapshots.add_task(ex@u(z=Lz*3/4), name='ux mid z')
+snapshots.add_task(ez@u(z=Lz*3/4), name='uz mid z')
+snapshots.add_task(ez@ω(z=Lz*3/4), name='vorticity z mid z')
+snapshots.add_task((ω@ω)(z=Lz*3/4), name='enstrophy mid z')
+snapshots.add_task(xy_avg(b), name='b_avg')
+snapshots.add_task(xy_avg(q), name='q_avg')
+snapshots.add_task(xy_avg(rh), name='rh_avg')
+snapshots.add_task(xy_avg(ez@u*q), name='uq_avg')
+snapshots.add_task(xy_avg(ez@u*b), name='ub_avg')
+snapshots.add_task(xy_avg(ex@u), name='ux')
+snapshots.add_task(xy_avg(ey@u), name='uy')
+snapshots.add_task(xy_avg(ez@u), name='uz')
+snapshots.add_task(xy_avg(np.sqrt((u-xy_avg(u))@(u-xy_avg(u)))), name='u_rms')
 
 
 trace_dt = 0.5
@@ -287,12 +323,12 @@ traces.add_task(avg(PE), name='PE')
 traces.add_task(avg(QE), name='QE')
 traces.add_task(avg(Re), name='Re')
 traces.add_task(avg(ω@ω), name='enstrophy')
-traces.add_task(x_avg(np.sqrt(τu1@τu1)), name='τu1')
-traces.add_task(x_avg(np.sqrt(τu2@τu2)), name='τu2')
-traces.add_task(x_avg(np.abs(τb1)), name='τb1')
-traces.add_task(x_avg(np.abs(τb2)), name='τb2')
-traces.add_task(x_avg(np.abs(τq1)), name='τq1')
-traces.add_task(x_avg(np.abs(τq2)), name='τq2')
+traces.add_task(xy_avg(np.sqrt(τu1@τu1)), name='τu1')
+traces.add_task(xy_avg(np.sqrt(τu2@τu2)), name='τu2')
+traces.add_task(xy_avg(np.abs(τb1)), name='τb1')
+traces.add_task(xy_avg(np.abs(τb2)), name='τb2')
+traces.add_task(xy_avg(np.abs(τq1)), name='τq1')
+traces.add_task(xy_avg(np.abs(τq2)), name='τq2')
 traces.add_task(np.abs(τp), name='τp')
 
 
@@ -306,8 +342,6 @@ flow.add_property(np.abs(τb2), name='|τb2|')
 flow.add_property(np.abs(τq1), name='|τq1|')
 flow.add_property(np.abs(τq2), name='|τq2|')
 flow.add_property(np.abs(τp), name='|τp|')
-
-vol = Lx*Lz
 
 good_solution = True
 KE_avg = 0
