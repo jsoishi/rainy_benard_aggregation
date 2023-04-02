@@ -16,7 +16,7 @@ Options:
 
     --Rayleigh=<Ra>   Rayleigh number [default: 1e5]
     --tau=<tau>       Tau to solve; if not set, use tau of background
-    --aspect=<a>      Aspect ratio of domain, Lx/Lz [default: 10]
+    --aspect=<a>      Aspect ratio of domain, [Lx,Ly]/Lz [default: 10]
 
     --nondim=<n>      Non-Nondimensionalization [default: buoyancy]
 
@@ -105,7 +105,7 @@ dedalus_logging.add_file_handler(data_dir+'/logs/dedalus_log', 'DEBUG')
 import dedalus.public as de
 from dedalus.extras import flow_tools
 
-logger.info('α={:}, β={:}, γ={:}, tau={:}, k={:}'.format(α,β,γ,tau_in, k))
+logger.info('α={:}, β={:}, γ={:}, tau={:}, k={:}'.format(α,β,γ,tau_in,k))
 
 Prandtlm = 1
 Prandtl = 1
@@ -123,7 +123,6 @@ if run_time_iter != None:
 else:
     run_time_iter = np.inf
 
-
 dealias = 3/2
 dtype = np.float64
 
@@ -133,12 +132,15 @@ Ly = Lx
 
 coords = de.CartesianCoordinates('x', 'y', 'z')
 dist = de.Distributor(coords, dtype=dtype, mesh=mesh)
-xb = de.RealFourier(coords.coords[0], size=nx, bounds=(0, Lx), dealias=dealias)
-yb = de.RealFourier(coords.coords[1], size=ny, bounds=(0, Ly), dealias=dealias)
-zb = de.ChebyshevT(coords.coords[2], size=nz, bounds=(0, Lz), dealias=dealias)
+xb = de.RealFourier(coords['x'], size=nx, bounds=(0, Lx), dealias=dealias)
+yb = de.RealFourier(coords['y'], size=ny, bounds=(0, Ly), dealias=dealias)
+zb = de.ChebyshevT(coords['z'], size=nz, bounds=(0, Lz), dealias=dealias)
 x = xb.local_grid(1)
 y = yb.local_grid(1)
 z = zb.local_grid(1)
+
+bases = (xb, yb, zb)
+bases_perp = (xb, yb)
 
 b0 = dist.Field(name='b0', bases=zb)
 q0 = dist.Field(name='q0', bases=zb)
@@ -148,10 +150,10 @@ z_sol = zb_sol.local_grid(1)
 b0_sol = dist.Field(name='b0_sol', bases=zb_sol)
 q0_sol = dist.Field(name='q0_sol', bases=zb_sol)
 
+has_k0 = (b0['g'].size > 0)
+
 logger.info('reading in solution')
-if b0['g'].size > 0 :
-    print(b0['g'].shape, b0_sol['g'].shape, sol['b'].shape)
-    print(sol.keys())
+if has_k0:
     for i, z_i in enumerate(z_sol[0,0,:]):
         b0_sol['g'][:,:,i] = sol['b'][i]
         q0_sol['g'][:,:,i] = sol['q'][i]
@@ -161,11 +163,9 @@ b0_sol.change_scales(scale_ratio)
 q0_sol.change_scales(scale_ratio)
 
 logger.info('rescaling background from {:} to {:} coeffs (ratio: {:})'.format(nz_sol, nz, scale_ratio))
-if b0['g'].size > 0 :
+if has_k0:
     b0['g'] = b0_sol['g']
     q0['g'] = q0_sol['g']
-
-bases = (xb, yb, zb)
 
 p = dist.Field(name='p', bases=bases)
 u = dist.VectorField(coords, name='u', bases=bases)
@@ -173,12 +173,12 @@ b = dist.Field(name='b', bases=bases)
 q = dist.Field(name='q', bases=bases)
 
 τp = dist.Field(name='τp')
-τu1 = dist.VectorField(coords, name='τu1', bases=xb)
-τu2 = dist.VectorField(coords, name='τu2', bases=xb)
-τb1 = dist.Field(name='τb1', bases=xb)
-τb2 = dist.Field(name='τb2', bases=xb)
-τq1 = dist.Field(name='τq1', bases=xb)
-τq2 = dist.Field(name='τq2', bases=xb)
+τu1 = dist.VectorField(coords, name='τu1', bases=bases_perp)
+τu2 = dist.VectorField(coords, name='τu2', bases=bases_perp)
+τb1 = dist.Field(name='τb1', bases=bases_perp)
+τb2 = dist.Field(name='τb2', bases=bases_perp)
+τq1 = dist.Field(name='τq1', bases=bases_perp)
+τq2 = dist.Field(name='τq2', bases=bases_perp)
 
 zb1 = zb.clone_with(a=zb.a+1, b=zb.b+1)
 zb2 = zb.clone_with(a=zb.a+2, b=zb.b+2)
@@ -198,7 +198,7 @@ rh = q*np.exp(-α*T)
 
 ΔT = -1
 q_surface = dist.Field(name='q_surface')
-if q0['g'].size > 0 :
+if has_k0:
     q_surface['g'] = q0(z=0).evaluate()['g']
 
 grad = lambda A: de.Gradient(A, coords)
@@ -261,16 +261,22 @@ noise.low_pass_filter(scales=0.75)
 # noise ICs in moisture
 b0.change_scales(1)
 q0.change_scales(1)
-b['g'] = b0['g']
-q['g'] = q0['g']
+if has_k0:
+    # if the print statement below isn't here, we lock
+    print(b['g'].shape, b0['g'].shape, z.shape)
+    b['g'] = b0['g']
+    # if we load in q0 as well as b0, then we lock
+    q['g'] = q0['g']
 b['g'] += noise['g']*np.cos(np.pi/2*z/Lz)
 
 ts = de.SBDF2
 cfl_safety_factor = 0.2
 
+logger.info('building solver')
 solver = problem.build_solver(ts)
 solver.stop_sim_time = run_time_buoy
 solver.stop_iteration = run_time_iter
+logger.info('finished building solver')
 
 Δt = max_Δt = min(float(args['--max_dt']), tau/4)
 logger.info('setting Δt = min(--max_dt={:.2g}, tau/4={:.2g})'.format(float(args['--max_dt']), tau/4))
@@ -343,12 +349,14 @@ flow.add_property(np.abs(τq1), name='|τq1|')
 flow.add_property(np.abs(τq2), name='|τq2|')
 flow.add_property(np.abs(τp), name='|τp|')
 
+logger.info('starting IVP main loop')
 good_solution = True
 KE_avg = 0
 try:
     while solver.proceed and good_solution:
         # advance
         solver.step(Δt)
+        logger.info('did a step')
         if solver.iteration % report_cadence == 0:
             τ_max = np.max([flow.max('|τu1|'),flow.max('|τu2|'),flow.max('|τb1|'),flow.max('|τb2|'),flow.max('|τq1|'),flow.max('|τq2|'),flow.max('|τp|')])
             Re_max = flow.max('Re')
