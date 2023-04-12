@@ -259,14 +259,9 @@ noise.fill_random('g', seed=42, distribution='normal', scale=amp) # Random noise
 noise.low_pass_filter(scales=0.75)
 
 # noise ICs in moisture
-b0.change_scales(1)
-q0.change_scales(1)
-if has_k0:
-    # if the print statement below isn't here, we lock
-    print(b['g'].shape, b0['g'].shape, z.shape)
-    b['g'] = b0['g']
-    # if we load in q0 as well as b0, then we lock
-    q['g'] = q0['g']
+if b0['c'].size > 0:
+    b['c'][0,0,:] = b0['c']
+    q['c'][0,0,:] = q0['c']
 b['g'] += noise['g']*np.cos(np.pi/2*z/Lz)
 
 ts = de.SBDF2
@@ -356,7 +351,6 @@ try:
     while solver.proceed and good_solution:
         # advance
         solver.step(Δt)
-        logger.info('did a step')
         if solver.iteration % report_cadence == 0:
             τ_max = np.max([flow.max('|τu1|'),flow.max('|τu2|'),flow.max('|τb1|'),flow.max('|τb2|'),flow.max('|τq1|'),flow.max('|τq2|'),flow.max('|τp|')])
             Re_max = flow.max('Re')
