@@ -120,20 +120,13 @@ z = zb.local_grid(1)
 b0 = dist.Field(name='b0', bases=zb)
 q0 = dist.Field(name='q0', bases=zb)
 
-zb_sol = de.ChebyshevT(coords.coords[2], size=nz_sol, bounds=(0, Lz), dealias=dealias)
-b0_sol = dist.Field(name='b0_sol', bases=zb_sol)
-q0_sol = dist.Field(name='q0_sol', bases=zb_sol)
+scale_ratio = nz_sol/nz
+b0.change_scales(scale_ratio)
+q0.change_scales(scale_ratio)
+logger.info('rescaling b0, q0 to match background from {:} to {:} coeffs (ratio: {:})'.format(nz, nz_sol, scale_ratio))
 
-b0_sol['g'] = sol['b']
-q0_sol['g'] = sol['q']
-
-scale_ratio = nz/nz_sol
-b0_sol.change_scales(scale_ratio)
-q0_sol.change_scales(scale_ratio)
-
-logger.info('rescaling background from {:} to {:} coeffs (ratio: {:})'.format(nz_sol, nz, scale_ratio))
-b0['g'] = b0_sol['g']
-q0['g'] = q0_sol['g']
+b0['g'] = sol['b']
+q0['g'] = sol['q']
 
 bases = (xb, zb)
 
@@ -275,8 +268,8 @@ snapshots.add_task(x_avg(q), name='q_avg')
 snapshots.add_task(x_avg(rh), name='rh_avg')
 snapshots.add_task(x_avg(ez@u*q), name='uq_avg')
 snapshots.add_task(x_avg(ez@u*b), name='ub_avg')
-snapshots.add_task(x_avg(ex@u), name='ux')
-snapshots.add_task(x_avg(ez@u), name='uz')
+snapshots.add_task(x_avg(ex@u), name='ux_avg')
+snapshots.add_task(x_avg(ez@u), name='uz_avg')
 snapshots.add_task(x_avg(np.sqrt((u-x_avg(u))@(u-x_avg(u)))), name='u_rms')
 
 

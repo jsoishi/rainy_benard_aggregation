@@ -117,20 +117,13 @@ z = zb.local_grid(1)
 b0 = dist.Field(name='b0', bases=zb)
 q0 = dist.Field(name='q0', bases=zb)
 
-zb_sol = de.ChebyshevT(coords.coords[2], size=nz_sol, bounds=(0, Lz), dealias=dealias)
-b0_sol = dist.Field(name='b0_sol', bases=zb_sol)
-q0_sol = dist.Field(name='q0_sol', bases=zb_sol)
+scale_ratio = nz_sol/nz
+b0.change_scales(scale_ratio)
+q0.change_scales(scale_ratio)
+logger.info('rescaling b0, q0 to match background from {:} to {:} coeffs (ratio: {:})'.format(nz, nz_sol, scale_ratio))
 
-b0_sol['g'] = sol['b']
-q0_sol['g'] = sol['q']
-
-scale_ratio = nz/nz_sol
-b0_sol.change_scales(scale_ratio)
-q0_sol.change_scales(scale_ratio)
-
-logger.info('rescaling background from {:} to {:} coeffs (ratio: {:})'.format(nz_sol, nz, scale_ratio))
-b0['g'] = b0_sol['g']
-q0['g'] = q0_sol['g']
+b0['g'] = sol['b']
+q0['g'] = sol['q']
 
 bases = (xb, zb)
 
@@ -238,7 +231,7 @@ noise.fill_random('g', seed=42, distribution='normal', scale=amp) # Random noise
 noise.low_pass_filter(scales=0.75)
 
 # noise ICs in buoyancy
-q['g'] = noise['g']*np.cos(np.pi/2*z/Lz)
+b['g'] += noise['g']*np.cos(np.pi/2*z/Lz)
 
 ts = de.SBDF2
 cfl_safety_factor = 0.2
