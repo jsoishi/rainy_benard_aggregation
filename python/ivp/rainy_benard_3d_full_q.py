@@ -155,8 +155,10 @@ has_k0 = (b0['g'].size > 0)
 logger.info('reading in solution from grid')
 if has_k0:
     for i, z_i in enumerate(z_sol[0,0,:]):
-        b0['g'][:,:,i] = sol['b'][i]
-        q0['g'][:,:,i] = sol['q'][i]
+        # need to actually match z_i to sol['z'], as i is local and idx is global
+        idx = np.abs(z_i-sol['z']).argmin()
+        b0['g'][:,:,i] = sol['b'][idx]
+        q0['g'][:,:,i] = sol['q'][idx]
 
 p = dist.Field(name='p', bases=bases)
 u = dist.VectorField(coords, name='u', bases=bases)
