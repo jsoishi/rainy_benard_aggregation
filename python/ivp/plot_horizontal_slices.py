@@ -2,11 +2,11 @@
 Plot planes from joint analysis files.
 
 Usage:
-    plot_slices.py <files>... [options]
+    plot_horizontal_slices.py <files>... [options]
 
 Options:
     --output=<dir>     Output directory; defaults to 'frames' subdir within the case dir
-    --tasks=<tasks>    Tasks to plot [default: b,q,b_fluc,q_fluc,rh,rh_fluc,vorticity]
+    --tasks=<tasks>    Tasks to plot [default: rh mid z,uz mid z,vorticity z mid z]
 """
 
 import h5py
@@ -44,15 +44,15 @@ def main(filename, start, count, tasks, output):
             savename_func = lambda write: '{:s}_{:06d}.png'.format(file_name, write)
             task = f['tasks'][task]
             x = task.dims[1][0][:]
-            z = task.dims[3][0][:]
-            Lz = np.max(z)-np.min(z)
+            y = task.dims[2][0][:]
+            Ly = np.max(y)-np.min(y)
             Lx = np.max(x)-np.min(x)
-            figsize = (6.4, 1.2*Lz/Lx*6.4)
+            figsize = (6.4, 6.4)
             for k in range(len(t)):
                 time = t[k]
                 fig, ax = plt.subplots(1, figsize=figsize)
                 ax.set_aspect(1)
-                pcm = ax.pcolormesh(x, z, task[k,:,0,:].T, shading='nearest',cmap=cmap)
+                pcm = ax.pcolormesh(x, y, task[k,:,:,0].T, shading='nearest',cmap=cmap)
                 pmin,pmax = pcm.get_clim()
                 if center_zero:
                     # use a CDF to find the
@@ -71,7 +71,7 @@ def main(filename, start, count, tasks, output):
                     cNorm = matplotlib.colors.TwoSlopeNorm(vmin=pmin, vcenter=0, vmax=pmax)
                 else:
                     cNorm = matplotlib.colors.Normalize(vmin=pmin, vmax=pmax)
-                pcm = ax.pcolormesh(x, z, task[k,:,0,:].T, shading='nearest',cmap=cmap, norm=cNorm)
+                pcm = ax.pcolormesh(x, y, task[k,:,:,0].T, shading='nearest',cmap=cmap, norm=cNorm)
                 ax_cb = fig.add_axes([0.91, 0.4, 0.02, 1-0.4*2])
                 cb = fig.colorbar(pcm, cax=ax_cb)
                 cb.formatter.set_scientific(True)
