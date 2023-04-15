@@ -250,7 +250,9 @@ x_avg = lambda A: de.Integrate(A, 'x')/(Lx)
 Re = np.sqrt(u@u)/PdR
 KE = 0.5*u@u
 PE = PtR*b
-QE = (q-qs)*H(q - qs)
+QE = PtR*γ*q
+ME = PE + QE # moist static energy
+Q_eq = (q-qs)*H(q - qs)
 
 snapshots = solver.evaluator.add_file_handler(data_dir+'/snapshots', sim_dt=2, max_writes=20)
 snapshots.add_task(b, name='b')
@@ -265,7 +267,9 @@ snapshots.add_task(ey@ω, name='vorticity')
 snapshots.add_task(ω@ω, name='enstrophy')
 snapshots.add_task(x_avg(b), name='b_avg')
 snapshots.add_task(x_avg(q), name='q_avg')
+snapshots.add_task(x_avg(b+γ*q), name='m_avg')
 snapshots.add_task(x_avg(rh), name='rh_avg')
+snapshots.add_task(x_avg(Q_eq), name='Q_eq_avg')
 snapshots.add_task(x_avg(ez@u*q), name='uq_avg')
 snapshots.add_task(x_avg(ez@u*b), name='ub_avg')
 snapshots.add_task(x_avg(ex@u), name='ux_avg')
@@ -278,6 +282,8 @@ traces = solver.evaluator.add_file_handler(data_dir+'/traces', sim_dt=trace_dt, 
 traces.add_task(avg(KE), name='KE')
 traces.add_task(avg(PE), name='PE')
 traces.add_task(avg(QE), name='QE')
+traces.add_task(avg(ME), name='ME')
+traces.add_task(avg(Q_eq), name='Q_eq')
 traces.add_task(avg(Re), name='Re')
 traces.add_task(avg(ω@ω), name='enstrophy')
 traces.add_task(x_avg(np.sqrt(τu1@τu1)), name='τu1')
