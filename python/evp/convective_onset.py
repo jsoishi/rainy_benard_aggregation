@@ -17,6 +17,8 @@ Usage:
 Options:
     <cases>           Case (or cases) to calculate onset for
 
+    --tau=<tau>       If set, override value of tau
+
     --nondim=<n>      Non-Nondimensionalization [default: buoyancy]
 
     --min_Ra=<minR>   Minimum Rayleigh number to sample [default: 1e4]
@@ -67,6 +69,9 @@ if args['--nz']:
 else:
     nz = nz_sol
 
+if args['--tau']:
+    tau_in = float(args['--tau'])
+
 dealias = 3/2
 dtype = np.complex128
 
@@ -84,20 +89,14 @@ zd = zb.local_grid(2)
 b0 = dist.Field(name='b0', bases=zb)
 q0 = dist.Field(name='q0', bases=zb)
 
-zb_sol = de.ChebyshevT(coords.coords[2], size=nz_sol, bounds=(0, Lz), dealias=dealias)
-b0_sol = dist.Field(name='b0_sol', bases=zb_sol)
-q0_sol = dist.Field(name='q0_sol', bases=zb_sol)
+scale_ratio = nz_sol/nz
+b0.change_scales(scale_ratio)
+q0.change_scales(scale_ratio)
+logger.info('rescaling b0, q0 to match background from {:} to {:} coeffs (ratio: {:})'.format(nz, nz_sol, scale_ratio))
 
-b0_sol['g'] = sol['b']
-q0_sol['g'] = sol['q']
+b0['g'] = sol['b']
+q0['g'] = sol['q']
 
-scale_ratio = nz/nz_sol
-b0_sol.change_scales(scale_ratio)
-q0_sol.change_scales(scale_ratio)
-
-logger.info('rescaling background from {:} to {:} coeffs (ratio: {:})'.format(nz_sol, nz, scale_ratio))
-b0['g'] = b0_sol['g']
-q0['g'] = q0_sol['g']
 
 p = dist.Field(name='p', bases=zb)
 u = dist.VectorField(coords, name='u', bases=zb)
@@ -247,7 +246,7 @@ def plot_eigenfunctions(σ):
     fig.savefig(case+'/'+fig_filename+'.png', dpi=300)
 
 # fix Ra, find omega
-def compute_growth_rate(kx_i, Ra_i):
+def compute_growth_rate(kx_i, Ra_i, target=0):
     kx['g'] = kx_i
     Rayleigh['g'] = Ra_i
     if args['--dense']:
@@ -277,10 +276,15 @@ kxs = np.logspace(-1, 1, num=40)
 print(Ras)
 for Ra_i in Ras:
     σ = []
+    # reset to base target for each Ra loop
+    target = float(args['--target'])
     for kx_i in kxs:
-        σ_i = compute_growth_rate(kx_i, Ra_i)
+        σ_i = compute_growth_rate(kx_i, Ra_i, target=target)
         σ.append(σ_i)
         logger.info('Ra = {:.2g}, kx = {:.2g}, σ = {:.2g}'.format(Ra_i, kx_i, σ_i))
+        if σ_i.imag > 0:
+            # update target if on growing branch
+            target = σ_i.imag
     growth_rates[Ra_i] = np.array(σ)
 
 import matplotlib.pyplot as plt
