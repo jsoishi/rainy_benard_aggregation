@@ -47,12 +47,12 @@ if args['--times']:
 else:
     subrange = False
 
-energy_keys = ['KE', 'PE', 'QE']
+energy_keys = ['KE','PE','QE']
 
 fig_E, ax_E = plt.subplots(nrows=2, sharex=True)
 for key in energy_keys:
     ax_E[0].plot(t, data[key], label=key)
-for key in energy_keys[:-1]:
+for key in energy_keys[::2]: # skip PE
     ax_E[1].plot(t, data[key], label=key)
 
 for ax in ax_E:
@@ -68,6 +68,23 @@ for ax in ax_E:
     ax.set_yscale('log')
 fig_E.savefig('{:s}/log_energies.pdf'.format(str(output_path)))
 fig_E.savefig('{:s}/log_energies.png'.format(str(output_path)), dpi=300)
+
+fig_E, ax_E = plt.subplots(nrows=2, sharex=True)
+for key in energy_keys:
+    ax_E[0].plot(t, data[key]-data[key][0], label=key+"'")
+    ax_E[1].plot(t, data[key]-data[key][0], label=key+"'")
+ax_E[1].set_yscale('log')
+for ax in ax_E:
+    if subrange:
+        ax.set_xlim(t_min,t_max)
+    ax.set_xlabel('time')
+    ax.legend(loc='lower left')
+    ax.set_ylabel('fluc energy density')
+fig_E.tight_layout()
+fig_E.savefig('{:s}/fluc_energies.pdf'.format(str(output_path)))
+fig_E.savefig('{:s}/fluc_energies.png'.format(str(output_path)), dpi=300)
+
+
 
 fig_tau, ax_tau = plt.subplots(nrows=2, sharex=True)
 for i in range(2):
