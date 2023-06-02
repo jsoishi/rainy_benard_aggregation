@@ -160,9 +160,7 @@ solution.add_task(k, name='k')
 solution.add_task(α_f, name='α')
 solution.add_task(β_f, name='β')
 solution.add_task(γ_f, name='γ')
-# work around for file handlers:
-solver.evaluator.evaluate_handlers([solution], timestep=0, wall_time=0, sim_time=0, iteration=0, world_time=0)
-#solution.process()
+solver.evaluate_handlers()
 logger.info("wrote solution to {:}/{:}".format(data_dir, case_dir))
 
 
