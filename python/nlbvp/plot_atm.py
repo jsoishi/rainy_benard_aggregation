@@ -12,7 +12,7 @@ Usage:
 Options:
     <cases>         Case (or cases) to plot results from
 
-    --epsilon=<e>   Epsilon to control search for zc [default: 1e-3]
+    --epsilon=<e>   Epsilon to control search for zc [default: 1e-5]
 """
 import logging
 logger = logging.getLogger(__name__)
@@ -65,21 +65,28 @@ def plot_solution(solution, title=None, mask=None, linestyle=None, ax=None):
 from scipy.optimize import newton
 from scipy.interpolate import interp1d
 
-def find_zc(sol, ε=1e-3, root_finding = 'inverse'):
+def find_zc(sol, ε=1e-3, root_finding = 'log_newton'):
     rh = sol['rh']
     z = sol['z']
     nz = z.shape[0]
+    zc0 = z[np.argmin(np.abs(rh[0:int(nz*3/4)]-(1-ε)))]
     if root_finding == 'inverse':
         # invert the relationship and use interpolation to find where r_h = 1-ε (approach from below)
-        f_i = interp1d(rh, z, bounds_error=False, fill_value=np.NaN) #inverse
+        f_i = interp1d(rh, z) #inverse
         zc = f_i(1-ε)
     elif root_finding == 'discrete':
         # crude initial emperical zc; look for where rh-1 ~ 0, in lower half of domain.
-        zc = z[np.argmin(np.abs(rh[0:int(nz/2)]-1))]
-#    if zc is None:
-#        zc = 0.2
-#    zc = newton(f, 0.2)
+        zc = zc0
+    elif root_finding == 'newton':
+        f = interp1d(z, rh-(1-ε))
+        zc = newton(f, zc0)
+    elif root_finding == 'log_newton':
+        f = interp1d(z, np.log(rh+ε))
+        zc = newton(f, zc0)
+    else:
+        raise ValueError('search method {:} not in [inverse, discrete]'.format(root_finding))
     return zc
+
 
 if __name__=="__main__":
     from docopt import docopt
@@ -102,9 +109,10 @@ if __name__=="__main__":
         fig, ax = plot_solution(sol, mask=mask, linestyle='solid')
         mask = (sol['rh'] < 1-ε)
         plot_solution(sol, mask=mask, linestyle='dashed', ax=ax)
+        zc = find_zc(sol, ε=ε)
+        ax[1].scatter(1, zc, marker='*')
         fig.tight_layout()
         fig.savefig(case+'/atm.png', dpi=300)
         fig.savefig(case+'/atm.pdf')
-        zc = find_zc(sol, ε=ε)
-        logger.info('tau = {:.1g}, k = {:.0g}, zc = {:.2g}'.format(sol['tau'][0], sol['k'][0], zc))
+        logger.info('tau = {:.1g}, k = {:.0g}, zc = {:.4g}'.format(sol['tau'][0], sol['k'][0], zc))
         plt.close(fig)

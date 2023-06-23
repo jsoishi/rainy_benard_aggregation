@@ -131,8 +131,8 @@ Rayleigh = dist.Field(name='Ra_c')
 dx = lambda A: 1j*kx*A # 1-d mode onset
 dy = lambda A: 0*A # flexibility to add 2-d mode if desired
 
-grad = lambda A: de.Gradient(A, coords) + dx(A)*ex + dy(A)*ey
-div = lambda A:  de.div(A) + dx(A@ex) + dy(A@ey)
+grad = lambda A: de.grad(A) + ex*dx(A) + ey*dy(A)
+div = lambda A:  de.div(A) + dx(ex@A) + dy(ey@A)
 lap = lambda A: de.lap(A) + dx(dx(A)) + dy(dy(A))
 trans = lambda A: de.TransposeComponents(A)
 
@@ -272,7 +272,7 @@ def peak_growth_rate(*args):
 
 growth_rates = {}
 Ras = np.geomspace(float(args['--min_Ra']),float(args['--max_Ra']),num=int(float(args['--num_Ra'])))
-kxs = np.logspace(-1, 1, num=40)
+kxs = np.logspace(-1, 1.5, num=50)
 print(Ras)
 for Ra_i in Ras:
     σ = []

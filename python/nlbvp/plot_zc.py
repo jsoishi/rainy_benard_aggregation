@@ -12,8 +12,10 @@ Usage:
 Options:
     <cases>         Case (or cases) to plot results from
 
-    --method=<m>    Search method [default: inverse]
-    --epsilon=<e>   Epsilon to control search for zc [default: 5e-3]
+    --method=<m>    Search method [default: log_newton]
+    --epsilon=<e>   Epsilon to control search for zc [default: 1e-5]
+
+    --show_discrete
 """
 import logging
 logger = logging.getLogger(__name__)
@@ -102,6 +104,8 @@ if __name__=="__main__":
     min_tau = np.inf
     max_tau = 0
 
+    zc_analytic = 0.48329 # Jeff's value for gamma=0.3, rh=0.6
+
     data = {} #{'tau':[],'k':[],'zc':[]}
     for case in args['<cases>']:
         f = h5py.File(case+'/drizzle_sol/drizzle_sol_s1.h5', 'r')
@@ -110,16 +114,20 @@ if __name__=="__main__":
             sol[task] = f['tasks'][task][0,0,0][:]
         sol['z'] = f['tasks']['b'].dims[3][0][:]
         zc = find_zc(sol, ε=ε, root_finding=args['--method'])
+        zc_discrete = find_zc(sol, ε=ε, root_finding='discrete')
         tau = sol['tau'][0]
         k = sol['k'][0]
         if tau in data:
             data[tau]['k'].append(k)
             data[tau]['zc'].append(zc)
+            data[tau]['zc_discrete'].append(zc_discrete)
         else:
-            data[tau] = {'k':[k], 'zc':[zc]}
+            data[tau] = {'k':[k], 'zc':[zc], 'zc_discrete':[zc_discrete]}
             min_tau = min(tau, min_tau)
             max_tau = max(tau, max_tau)
-        logger.info('tau = {:.1g}, k = {:.0g}, zc = {:.2g}'.format(tau, k, zc))
+        logger.info('tau = {:.1g}, k = {:.0g}, zc = {:.2g}, {:.2g}'.format(tau, k, zc, zc_discrete))
+    for tau in data:
+        data[tau]['zc'] = np.array(data[tau]['zc'])
 
     import matplotlib.colors as colors
     norm = colors.LogNorm(vmin=min_tau, vmax=max_tau)
@@ -127,9 +135,34 @@ if __name__=="__main__":
     fig, ax = plt.subplots()
     for tau in data:
         p = ax.scatter(data[tau]['k'], data[tau]['zc'], c=tau*np.ones_like(data[tau]['k']), norm=norm)
+        if args['--show_discrete']:
+            ax.scatter(data[tau]['k'], data[tau]['zc_discrete'], c=tau*np.ones_like(data[tau]['k']), norm=norm, alpha=0.3, marker='s')
     ax.set_xlabel(r'$k$')
     ax.set_ylabel(r'$z_c$')
     fig.colorbar(mappable=p, ax=ax, orientation='horizontal', location='top', label=r'$\tau$', norm=norm)
+    fig.tight_layout()
     fig.savefig(case+'/../zc.png', dpi=300)
     ax.set_xscale('log')
+    fig.tight_layout()
     fig.savefig(case+'/../zc_log.png', dpi=300)
+
+    fig, ax = plt.subplots()
+    for tau in data:
+        p = ax.scatter(data[tau]['k'], data[tau]['zc']-zc_analytic, c=tau*np.ones_like(data[tau]['k']), norm=norm)
+    ax.set_xlabel(r'$k$')
+    ax.set_ylabel(r'$z_c - z_{c,a}$')
+    fig.colorbar(mappable=p, ax=ax, orientation='horizontal', location='top', label=r'$\tau$', norm=norm)
+    ax.set_xscale('log')
+    fig.tight_layout()
+    fig.savefig(case+'/../delta_zc_log.png', dpi=300)
+
+    fig, ax = plt.subplots()
+    for tau in data:
+        p = ax.scatter(data[tau]['k'], np.abs(data[tau]['zc']-zc_analytic)/zc_analytic, c=tau*np.ones_like(data[tau]['k']), norm=norm)
+    ax.set_xlabel(r'$k$')
+    ax.set_ylabel(r'$|z_c - z_{c,a}|z_{c,a}$')
+    fig.colorbar(mappable=p, ax=ax, orientation='horizontal', location='top', label=r'$\tau$', norm=norm)
+    ax.set_xscale('log')
+    ax.set_yscale('log')
+    fig.tight_layout()
+    fig.savefig(case+'/../L2_zc_log.png', dpi=300)
