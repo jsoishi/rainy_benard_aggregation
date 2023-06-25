@@ -197,7 +197,7 @@ dlog.setLevel(logging.WARNING)
 
 
 import matplotlib.pyplot as plt
-fig, ax = plt.subplots(ncols=2)
+fig, ax = plt.subplots(ncols=2, figsize=[6,6/2])
 b0.change_scales(1)
 q0.change_scales(1)
 qs0.change_scales(1)
@@ -224,18 +224,17 @@ ax[1].legend()
 ax[1].axvline(x=0, linestyle='dashed', color='xkcd:dark grey', alpha=0.5)
 fig.savefig(case+'/evp_background.png', dpi=300)
 
-
 def plot_eigenfunctions(σ):
     i_max = np.argmax(np.abs(b['g'][0,0,:]))
     phase_correction = b['g'][0,0,i_max]
     u['g'][:] /= phase_correction
     b['g'] /= phase_correction
     q['g'] /= phase_correction
-    fig, ax = plt.subplots()
+    fig, ax = plt.subplots(figsize=[6,6/1.6])
     for Q in [u, q, b]:
         if Q.tensorsig:
             for i in range(3):
-                p = ax.plot(Q['g'][i][0,0,:].real, z[0,0,:], label=Q.name+r'$_'+'{:d}'.format(i)+r'$')
+                p = ax.plot(Q['g'][i][0,0,:].real, z[0,0,:], label=Q.name+r'$_'+'{:s}'.format(coords.names[i])+r'$')
                 ax.plot(Q['g'][i][0,0,:].imag, z[0,0,:], linestyle='dashed', color=p[0].get_color())
         else:
             p = ax.plot(Q['g'][0,0,:].real, z[0,0,:], label=Q)
@@ -288,7 +287,7 @@ for Ra_i in Ras:
     growth_rates[Ra_i] = np.array(σ)
 
 import matplotlib.pyplot as plt
-fig, ax = plt.subplots()
+fig, ax = plt.subplots(figsize=[6,6/1.6])
 peak_σ = -np.inf
 
 if nondim == 'diffusion':
@@ -300,7 +299,7 @@ if nondim == 'diffusion':
     ax2.set_ylabel(r'$\omega_I$ (dashed)')
 elif nondim == 'buoyancy':
     ax2 = ax
-    ax.set_ylim(-0.1, 0.5)
+    ax.set_ylim(-0.1, 0.1)
     ax.set_ylabel(r'$\omega_R$ (solid), $\omega_I$ (dashed)')
 
 for Ra in growth_rates:
