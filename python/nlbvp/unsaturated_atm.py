@@ -20,6 +20,8 @@ Options:
 
     --use_analytic       Use an analytic solution as the beginning guess
 
+    --Legendre
+
     --tau=<tau>          Tau parameter [default: 5e-5]
     --k=<k>              Tanh width of phase change [default: 1e3]
 
@@ -78,7 +80,10 @@ Lz = 1
 coords = de.CartesianCoordinates('x', 'y', 'z')
 dist = de.Distributor(coords, dtype=np.float64)
 dealias = 2
-zb = de.ChebyshevT(coords.coords[2], size=nz, bounds=(0, Lz), dealias=dealias)
+if args['--Legendre']:
+    zb = de.Legendre(coords.coords[2], size=nz, bounds=(0, Lz), dealias=dealias)
+else:
+    zb = de.ChebyshevT(coords.coords[2], size=nz, bounds=(0, Lz), dealias=dealias)
 z = zb.local_grid(1)
 
 b = dist.Field(name='b', bases=zb)
@@ -89,7 +94,8 @@ q = dist.Field(name='q', bases=zb)
 τq1 = dist.Field(name='τq1')
 τq2 = dist.Field(name='τq2')
 
-lift = lambda A, n: de.Lift(A, zb, n)
+lift_basis = zb.derivative_basis(2)
+lift = lambda A, n: de.Lift(A, lift_basis, n)
 
 ex, ey, ez = coords.unit_vector_fields(dist)
 
@@ -222,8 +228,8 @@ else:
 
 # Stable nonlinear solution
 problem = de.NLBVP([b, q, τb1, τb2, τq1, τq2], namespace=locals())
-problem.add_equation('dt(b) - P*lap(b) + lift(τb1, -1) + lift(τb2, -2) = γ*H(q-qs)*(q-qs)/tau')
-problem.add_equation('dt(q) - S*lap(q) + lift(τq1, -1) + lift(τq2, -2) = - H(q-qs)*(q-qs)/tau')
+problem.add_equation('dt(b) - tau*P*lap(b) + lift(τb1, -1) + lift(τb2, -2) = γ*H(q-qs)*(q-qs)')
+problem.add_equation('dt(q) - tau*S*lap(q) + lift(τq1, -1) + lift(τq2, -2) = - H(q-qs)*(q-qs)')
 problem.add_equation('b(z=0) = 0')
 problem.add_equation('b(z=Lz) = β + ΔT') # technically β*Lz
 problem.add_equation('q(z=0) = q_surface*qs(z=0)')
@@ -240,6 +246,11 @@ while pert_norm > tol:
     solver.newton_iteration()
     pert_norm = sum(pert.allreduce_data_norm('c', 2) for pert in solver.perturbations)
     logger.info("tau = {:.1g}, k = {:.0g}, L2 err = {:.1g}".format(tau['g'][0,0,0], k['g'][0,0,0], pert_norm))
+    τb1_max = np.max(np.abs(τb1['g']))
+    τb2_max = np.max(np.abs(τb2['g']))
+    τq1_max = np.max(np.abs(τq1['g']))
+    τq2_max = np.max(np.abs(τq2['g']))
+    logger.debug("τ L2 errors: τb1={:.1g}, τb2={:.1g}, τq1={:.1g}, τq2={:.1g}".format(τb1_max,τb2_max,τq1_max,τq2_max))
 
 solution = solver.evaluator.add_file_handler(data_dir+'/'+case_dir+'/'+'drizzle_sol', mode='overwrite')
 solution.add_task(b)
