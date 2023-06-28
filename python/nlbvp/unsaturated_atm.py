@@ -24,8 +24,11 @@ Options:
 
     --tau=<tau>          Tau parameter [default: 5e-5]
     --k=<k>              Tanh width of phase change [default: 1e3]
+    --erf                Use erf, not tanh
 
     --tolerance=<t>      Tolerance for convergence [default: 1e-6]
+    --niter=<n>          Max iterations before stopping [default: 15]
+    --damping=<d>        Damping rate for newton iterations [default: 1]
 
     --nz=<nz>            Vertical (z) grid resolution [default: 256]
 """
@@ -39,7 +42,7 @@ import numpy as np
 from dedalus import public as de
 
 from fractions import Fraction
-
+import time
 import os
 
 from docopt import docopt
@@ -64,7 +67,10 @@ S = (Prandtlm/Prandtl)**(-1/2)        #  diffusion on moisture
 
 data_dir = 'unsaturated_atm_alpha{:}_beta{:}_gamma{:}_q{:}'.format(args['--alpha'], args['--beta'], args['--gamma'], args['--q0'])
 case_dir = 'tau_{:}_k{:}_nz{:d}'.format(args['--tau'], args['--k'], nz)
-
+if args['--erf']:
+    case_dir += '_erf'
+if args['--Legendre']:
+    case_dir += '_Legendre'
 import dedalus.tools.logging as dedalus_logging
 dedalus_logging.add_file_handler(data_dir+'/logs/dedalus_log', 'DEBUG')
 
@@ -102,7 +108,12 @@ ex, ey, ez = coords.unit_vector_fields(dist)
 k = dist.Field(name='k')
 k['g'] = k_in
 
-H = lambda A: 0.5*(1+np.tanh(k*A))
+from scipy.special import erf
+if args['--erf']:
+    # go for maximal supression, rather than equivalent width
+    H = lambda A: 0.5*(1+erf(k*A))
+else:
+    H = lambda A: 0.5*(1+np.tanh(k*A))
 
 z_grid = dist.Field(name='z_grid', bases=zb)
 z_grid['g'] = z
@@ -161,8 +172,14 @@ def compute_analytic(z_in, zc, Tc):
 
 
 #0.4832893544084419	-0.4588071140209613
-zc_analytic = 0.4832893544084419
-Tc_analytic = -0.4588071140209613
+if γ == 0.3:
+    zc_analytic = 0.4832893544084419
+    Tc_analytic = -0.4588071140209613
+elif γ == 0.19:
+    zc_analytic = 0.4751621541611023
+    Tc_analytic = -0.4588071140209616
+else:
+    raise ValueError("γ = {:} not yet supported".format(γ))
 
 analytic = compute_analytic(zb.local_grid(dealias), zc_analytic, Tc_analytic)
 
@@ -238,12 +255,15 @@ problem.add_equation('q(z=Lz) = np.exp(α*ΔT)')
 for system in ['subsystems']:
      logging.getLogger(system).setLevel(logging.WARNING)
 
+start_time = time.time()
 tau['g'] = tau_in
 k['g'] = k_in
 solver = problem.build_solver()
 pert_norm = np.inf
-while pert_norm > tol:
-    solver.newton_iteration()
+stop_iteration = int(args['--niter'])
+
+while pert_norm > tol and solver.iteration <= stop_iteration:
+    solver.newton_iteration(damping=float(args['--damping']))
     pert_norm = sum(pert.allreduce_data_norm('c', 2) for pert in solver.perturbations)
     logger.info("tau = {:.1g}, k = {:.0g}, L2 err = {:.1g}".format(tau['g'][0,0,0], k['g'][0,0,0], pert_norm))
     τb1_max = np.max(np.abs(τb1['g']))
@@ -251,20 +271,26 @@ while pert_norm > tol:
     τq1_max = np.max(np.abs(τq1['g']))
     τq2_max = np.max(np.abs(τq2['g']))
     logger.debug("τ L2 errors: τb1={:.1g}, τb2={:.1g}, τq1={:.1g}, τq2={:.1g}".format(τb1_max,τb2_max,τq1_max,τq2_max))
+end_time = time.time()
+logger.info("time to solve: {:.3g}s, with {:d} iterations".format(end_time-start_time, solver.iteration))
 
-solution = solver.evaluator.add_file_handler(data_dir+'/'+case_dir+'/'+'drizzle_sol', mode='overwrite')
-solution.add_task(b)
-solution.add_task(q)
-solution.add_task(b + γ*q, name='m')
-solution.add_task(temp, name='T')
-solution.add_task(rh, name='rh')
-solution.add_task(tau, name='tau')
-solution.add_task(k, name='k')
-solution.add_task(α_f, name='α')
-solution.add_task(β_f, name='β')
-solution.add_task(γ_f, name='γ')
-solver.evaluate_handlers()
-logger.info("wrote solution to {:}/{:}".format(data_dir, case_dir))
+if solver.iteration > stop_iteration or not np.isfinite(pert_norm):
+    logger.info("solution failed to converge")
+else:
+    solution = solver.evaluator.add_file_handler(data_dir+'/'+case_dir+'/'+'drizzle_sol', mode='overwrite')
+    solution.add_task(b)
+    solution.add_task(q)
+    solution.add_task(b + γ*q, name='m')
+    solution.add_task(temp, name='T')
+    solution.add_task(rh, name='rh')
+    solution.add_task(tau, name='tau')
+    solution.add_task(k, name='k')
+    solution.add_task(α_f, name='α')
+    solution.add_task(β_f, name='β')
+    solution.add_task(γ_f, name='γ')
+#    solution.add_metadata(niter, name='number of iterations')
+    solver.evaluate_handlers()
+    logger.info("wrote solution to {:}/{:}".format(data_dir, case_dir))
 
 
 integ = lambda A: de.Integrate(A, 'z')
