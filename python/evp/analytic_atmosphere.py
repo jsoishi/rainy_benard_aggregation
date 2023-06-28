@@ -57,18 +57,30 @@ def saturated_VPT19(dist, zb, β, γ,
     b2 = T0 + β + ΔT
     q1 = K2*np.exp(α*T0)*q0
     q2 = K2*np.exp(α*T0)*np.exp(α*ΔT)
+    M = γ/3.8e-3
+    print('b at bound:', b1, b2)
+    print('q at bound:', q1, q2)
+    print('m at bound:', b1+M*q1, b2+M*q2)
 
-    P = b1 + γ*q1
-    Q = ((b2-b1) + γ*(q2-q1))
+    P = b1 + M*q1
+    Q = ((b2-b1) + M*(q2-q1))
 
     C = P + (Q-β)*z['g']
-
+    print(C.shape)
+    print(C[0,0,0], C[0,0,-1])
     m = (P+Q*z).evaluate()
+    print(m(z=0).evaluate()['g'], m(z=1).evaluate()['g'])
+    # m is correct, T is not
+
     T = dist.Field(bases=zb)
-    T['g'] = C - W(α*γ*np.exp(α*C)).real/α
+    T['g'] = C - W(α*M*np.exp(α*C)).real/α
     b = (T + β*z).evaluate()
-    q = ((m-b)/γ).evaluate()
+    q = ((m-b)/M).evaluate()
     rh = (q*np.exp(-α*T)).evaluate()
+    print('T:', T(z=0).evaluate()['g'], T(z=1).evaluate()['g'])
+    print('b:', b(z=0).evaluate()['g'], b(z=1).evaluate()['g'])
+    print('q:', q(z=0).evaluate()['g'], q(z=1).evaluate()['g'])
+    print('m:', m(z=0).evaluate()['g'], m(z=1).evaluate()['g'])
     return {'b':b, 'q':q, 'm':m, 'T':T, 'rh':rh, 'z':z, 'γ':γ}
 
 def unsaturated(dist, zb, β, γ, zc, Tc,
