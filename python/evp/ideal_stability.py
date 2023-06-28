@@ -46,7 +46,6 @@ dtype = np.float64
 Lz = 1
 coords = de.CartesianCoordinates('x', 'y', 'z')
 dist = de.Distributor(coords, dtype=dtype)
-dealias = 2
 zb = de.ChebyshevT(coords.coords[2], size=nz, bounds=(0, Lz), dealias=dealias)
 z = zb.local_grid(1)
 zd = zb.local_grid(dealias)
@@ -77,7 +76,7 @@ for iβ, β in enumerate(βs):
                 Tc_analytic = -0.4588071140209616
             zc = zc_analytic
             Tc = Tc_analytic
-            analytic_sol = sol(dist, zb, zc, Tc, β, γ, dealias=2, q0=0.6, α=3)
+            analytic_sol = sol(dist, zb, β, γ, zc, Tc, dealias=2, q0=0.6, α=3)
         elif args['--VPT19_IVP']:
             case = 'VPT19'
             sol = analytic_atmosphere.saturated_VPT19

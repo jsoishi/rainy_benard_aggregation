@@ -11,6 +11,11 @@ This script creates analytic solutions unsaturated atmospheres, which correspond
 
 Usage:
     analytic_atmosphere.py [options]
+
+Options:
+    --alpha=<alpha>      Alpha parameter [default: 3]
+    --gamma=<gamma>      Gamma parameter [default: 0.3]
+    --beta=<beta>        Beta parameter  [default: 1.2]
 """
 from scipy.special import lambertw as W
 import numpy as np
@@ -50,7 +55,7 @@ def saturated_VPT19(dist, zb, β, γ,
 
     b1 = T0
     b2 = T0 + β + ΔT
-    q1 = K2*q0
+    q1 = K2*np.exp(α*T0)*q0
     q2 = K2*np.exp(α*T0)*np.exp(α*ΔT)
 
     P = b1 + γ*q1
@@ -66,7 +71,8 @@ def saturated_VPT19(dist, zb, β, γ,
     rh = (q*np.exp(-α*T)).evaluate()
     return {'b':b, 'q':q, 'm':m, 'T':T, 'rh':rh, 'z':z, 'γ':γ}
 
-def unsaturated(dist, zb, zc, Tc, β, γ,
+def unsaturated(dist, zb, β, γ, zc, Tc,
+#                zc=0, Tc=0,
                 dealias=3/2, q0=0.6, α=3):
 
     z = dist.Field(bases=zb)
@@ -86,6 +92,13 @@ def unsaturated(dist, zb, zc, Tc, β, γ,
     bc = Tc + β*zc
     qc = np.exp(α*Tc)
 
+    # if zc > 0:
+    #     bc = Tc + β*zc
+    #     qc = np.exp(α*Tc)
+    # else:
+    #     bc = b1
+    #     qc = q1
+
     P = bc + γ*qc
     Q = ((b2-bc) + γ*(q2-qc))
 
@@ -101,3 +114,87 @@ def unsaturated(dist, zb, zc, Tc, β, γ,
     m = (b + γ*q).evaluate()
     rh = (q*np.exp(-α*T)).evaluate()
     return {'b':b, 'q':q, 'm':m, 'T':T, 'rh':rh, 'z':z, 'γ':γ}
+
+def plot_solution(solution, title=None, mask=None, linestyle=None, ax=None):
+    b = solution['b']['g']
+    q = solution['q']['g']
+    m = solution['m']['g']
+    T = solution['T']['g']
+    rh = solution['rh']['g']
+
+    z = solution['z']['g']
+    γ = solution['γ']
+
+    if mask is None:
+        mask = np.ones_like(z, dtype=bool)
+    if ax is None:
+        fig, ax = plt.subplots(ncols=2, sharey=True)
+        markup = True
+        return_fig = True
+    else:
+        for axi in ax:
+            axi.set_prop_cycle(None)
+        markup = False
+        return_fig = False
+
+    ax[0].plot(b[mask],z[mask], label='$b$', linestyle=linestyle)
+    ax[0].plot(γ*q[mask],z[mask], label='$\gamma q$', linestyle=linestyle)
+    ax[0].plot(m[mask],z[mask], label='$b+\gamma q$', linestyle=linestyle)
+
+    ax[1].plot(T[mask],z[mask], label='$T$', linestyle=linestyle)
+    ax[1].plot(q[mask],z[mask], label='$q$', linestyle=linestyle)
+    ax[1].plot(rh[mask],z[mask], label='$r_h$', linestyle=linestyle)
+    ax[1].axvline(x=1, linestyle='dotted')
+    if markup:
+        ax[1].legend()
+        ax[0].legend()
+        ax[0].set_ylabel('z')
+        if title:
+            ax[0].set_title(title)
+    if return_fig:
+        return fig, ax
+    else:
+        return ax
+
+if __name__=="__main__":
+    import matplotlib.pyplot as plt
+    import dedalus.public as de
+
+    from docopt import docopt
+    args = docopt(__doc__)
+
+    α = float(args['--alpha'])
+    β = float(args['--beta'])
+    γ = float(args['--gamma'])
+
+    dealias = 2
+    nz = 128
+    dtype = np.float64
+    Lz = 1
+
+    coords = de.CartesianCoordinates('x', 'y', 'z')
+    dist = de.Distributor(coords, dtype=dtype)
+    zb = de.ChebyshevT(coords.coords[2], size=nz, bounds=(0, Lz), dealias=dealias)
+
+    sol = saturated_VPT19(dist, zb, β, γ, α=α, dealias=dealias)
+    fig, ax = plot_solution(sol)
+    fig.savefig('analytic_VPT19.png', dpi=300)
+
+    sol = saturated(dist, zb, β, γ, α=α, dealias=dealias)
+    fig, ax = plot_solution(sol)
+    fig.savefig('analytic_saturated.png', dpi=300)
+
+    if γ == 0.3:
+        zc_analytic = 0.4832893544084419
+        Tc_analytic = -0.4588071140209613
+    elif γ == 0.19:
+        zc_analytic = 0.4751621541611023
+        Tc_analytic = -0.4588071140209616
+    else:
+        raise ValueError("γ = {:} not yet supported".format(γ))
+
+    zc = zc_analytic
+    Tc = Tc_analytic
+    sol = unsaturated(dist, zb, β, γ, zc, Tc, α=α, dealias=dealias)
+    fig, ax = plot_solution(sol)
+    fig.savefig('analytic_unsaturated.png', dpi=300)
