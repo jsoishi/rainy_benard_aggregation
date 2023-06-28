@@ -5,17 +5,18 @@ Read more about these equations in:
 
 Vallis, Parker & Tobias, 2019, JFM,
 ``A simple system for moist convection: the Rainy–Bénard model''
+(VPT19)
 
 This script plots the ideal stability diagram for the saturated atmosphere, using Lambert W functions and an analytic solution.
-
-Roberts, G.O., 1972,
-``Dynamo action of fluid motions with two-dimensional periodicity''
 
 Usage:
     saturated_atmosphere_ideal_stability.py [options]
 
 Options:
     --alpha=<alpha>      Alpha parameter [default: 3]
+
+    --VPT19_IVP          Use the VPT19 IVP atmosphere
+    --unsaturated        Use an unsaturated atmosphere with q0=0.6
 
     --nz=<nz>            Vertical resolution [default: 128]
 """
@@ -37,31 +38,9 @@ q_surface = 1
 nz = int(float(args['--nz']))
 
 ΔT = -1
+import analytic_atmosphere
 
-from scipy.special import lambertw as W
-def compute_analytic(z_in, β, γ):
-    z = dist.Field(bases=zb)
-    z['g'] = z_in
-
-    b1 = 0
-    b2 = β + ΔT
-    q1 = q_surface
-    q2 = np.exp(α*ΔT)
-
-    P = b1 + γ*q1
-    Q = ((b2-b1) + γ*(q2-q1))
-
-    C = P + (Q-β)*z['g']
-    
-    m = (P+Q*z).evaluate()
-    T = dist.Field(bases=zb)
-    T['g'] = C - W(α*γ*np.exp(α*C)).real/α
-    b = (T + β*z).evaluate()
-    q = ((m-b)/γ).evaluate()
-    rh = (q*np.exp(-α*T)).evaluate()
-    return {'b':b, 'q':q, 'm':m, 'T':T, 'rh':rh}
-
-dealias = 3/2
+dealias = 2
 dtype = np.float64
 
 Lz = 1
@@ -83,7 +62,30 @@ grad_b = np.zeros((nβ, nγ))
 
 for iβ, β in enumerate(βs):
     for iγ, γ in enumerate(γs):
-        analytic_sol = compute_analytic(z, β, γ)
+        if args['--unsaturated']:
+            case = 'unsaturated'
+            sol = analytic_atmosphere.unsaturated
+            if γ == 0.3:
+                zc_analytic = 0.4832893544084419
+                Tc_analytic = -0.4588071140209613
+            elif γ == 0.19:
+                zc_analytic = 0.4751621541611023
+                Tc_analytic = -0.4588071140209616
+            else:
+                # hack
+                zc_analytic = 0.4751621541611023
+                Tc_analytic = -0.4588071140209616
+            zc = zc_analytic
+            Tc = Tc_analytic
+            analytic_sol = sol(dist, zb, zc, Tc, β, γ, dealias=2, q0=0.6, α=3)
+        elif args['--VPT19_IVP']:
+            case = 'VPT19'
+            sol = analytic_atmosphere.saturated_VPT19
+            analytic_sol = sol(dist, zb, β, γ, dealias=2, q0=1, α=α)
+        else:
+            case = 'saturated'
+            sol = analytic_atmosphere.saturated
+            analytic_sol = sol(dist, zb, β, γ, dealias=2, q0=1, α=α)
         grad_m[iβ,iγ] = dz(analytic_sol['m']).evaluate()['g'][0,0,0]
         grad_b[iβ,iγ] = np.min(dz(analytic_sol['b']).evaluate()['g'][0,0,:]) # get min value
 
@@ -108,4 +110,13 @@ ax.contourf(γs, βs, (grad_m<0)&(grad_b>0), levels=[0.5, 1.5], colors='xkcd:dar
 ax.set_title(r'$\alpha='+'{:}'.format(α)+r'$')
 ax.set_ylabel(r'$\beta$')
 ax.set_xlabel(r'$\gamma$')
-fig.savefig('ideal_stability_alpha{:}_Vallis_figure_3.png'.format(α), dpi=300)
+ax.scatter(0.3, 1.1, alpha=0.5)
+ax.scatter(0.3, 1.15, alpha=0.5)
+ax.scatter(0.3, 1.2, alpha=0.5)
+ax.scatter(0.3, 1.25, alpha=0.5)
+ax.scatter(0.19, 1.1, marker='s', alpha=0.5)
+ax.scatter(0.19, 1.15, marker='s', alpha=0.5)
+ax.scatter(0.19, 1.2, marker='s', alpha=0.5)
+ax.scatter(0.19, 1.25, marker='s', alpha=0.5)
+
+fig.savefig('ideal_stability_alpha{:}_{:s}_figure_3.png'.format(α, case), dpi=300)
