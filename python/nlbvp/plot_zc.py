@@ -108,31 +108,35 @@ if __name__=="__main__":
 
     data = {} #{'tau':[],'k':[],'zc':[]}
     for case in args['<cases>']:
-        f = h5py.File(case+'/drizzle_sol/drizzle_sol_s1.h5', 'r')
-        sol = {}
-        for task in f['tasks']:
-            sol[task] = f['tasks'][task][0,0,0][:]
-        sol['z'] = f['tasks']['b'].dims[3][0][:]
-        zc = find_zc(sol, ε=ε, root_finding=args['--method'])
-        zc_discrete = find_zc(sol, ε=ε, root_finding='discrete')
-        tau = sol['tau'][0]
-        k = sol['k'][0]
-        if tau in data:
-            data[tau]['k'].append(k)
-            data[tau]['zc'].append(zc)
-            data[tau]['zc_discrete'].append(zc_discrete)
-        else:
-            data[tau] = {'k':[k], 'zc':[zc], 'zc_discrete':[zc_discrete]}
-            min_tau = min(tau, min_tau)
-            max_tau = max(tau, max_tau)
-        logger.info('tau = {:.1g}, k = {:.0g}, zc = {:.2g}, {:.2g}'.format(tau, k, zc, zc_discrete))
+        try:
+            f = h5py.File(case+'/drizzle_sol/drizzle_sol_s1.h5', 'r')
+            sol = {}
+            for task in f['tasks']:
+                sol[task] = f['tasks'][task][0,0,0][:]
+            sol['z'] = f['tasks']['b'].dims[3][0][:]
+            zc = find_zc(sol, ε=ε, root_finding=args['--method'])
+            zc_discrete = find_zc(sol, ε=ε, root_finding='discrete')
+            tau = sol['tau'][0]
+            k = sol['k'][0]
+            if tau in data:
+                data[tau]['k'].append(k)
+                data[tau]['zc'].append(zc)
+                data[tau]['zc_discrete'].append(zc_discrete)
+            else:
+                data[tau] = {'k':[k], 'zc':[zc], 'zc_discrete':[zc_discrete]}
+                min_tau = min(tau, min_tau)
+                max_tau = max(tau, max_tau)
+            logger.debug('{:}:'.format(case))
+            logger.info('tau = {:.1g}, k = {:.0g}, zc = {:.2g}, {:.2g}'.format(tau, k, zc, zc_discrete))
+        except:
+            logger.warning('error in case {:}'.format(case))
     for tau in data:
         data[tau]['zc'] = np.array(data[tau]['zc'])
 
     import matplotlib.colors as colors
     norm = colors.LogNorm(vmin=min_tau, vmax=max_tau)
 
-    fig, ax = plt.subplots()
+    fig, ax = plt.subplots(figsize=[6,6/1.6])
     for tau in data:
         p = ax.scatter(data[tau]['k'], data[tau]['zc'], c=tau*np.ones_like(data[tau]['k']), norm=norm)
         if args['--show_discrete']:
@@ -141,12 +145,10 @@ if __name__=="__main__":
     ax.set_ylabel(r'$z_c$')
     fig.colorbar(mappable=p, ax=ax, orientation='horizontal', location='top', label=r'$\tau$', norm=norm)
     fig.tight_layout()
-    fig.savefig(case+'/../zc.png', dpi=300)
     ax.set_xscale('log')
-    fig.tight_layout()
-    fig.savefig(case+'/../zc_log.png', dpi=300)
+    fig.savefig(case+'/../zc.png', dpi=300)
 
-    fig, ax = plt.subplots()
+    fig, ax = plt.subplots(figsize=[6,6/1.6])
     for tau in data:
         p = ax.scatter(data[tau]['k'], data[tau]['zc']-zc_analytic, c=tau*np.ones_like(data[tau]['k']), norm=norm)
     ax.set_xlabel(r'$k$')
@@ -156,11 +158,11 @@ if __name__=="__main__":
     fig.tight_layout()
     fig.savefig(case+'/../delta_zc_log.png', dpi=300)
 
-    fig, ax = plt.subplots()
+    fig, ax = plt.subplots(figsize=[6,6/1.6])
     for tau in data:
         p = ax.scatter(data[tau]['k'], np.abs(data[tau]['zc']-zc_analytic)/zc_analytic, c=tau*np.ones_like(data[tau]['k']), norm=norm)
     ax.set_xlabel(r'$k$')
-    ax.set_ylabel(r'$|z_c - z_{c,a}|z_{c,a}$')
+    ax.set_ylabel(r'$|z_c - z_{c,a}|/z_{c,a}$')
     fig.colorbar(mappable=p, ax=ax, orientation='horizontal', location='top', label=r'$\tau$', norm=norm)
     ax.set_xscale('log')
     ax.set_yscale('log')
