@@ -18,6 +18,9 @@ Options:
     --VPT19_IVP          Use the VPT19 IVP atmosphere
     --unsaturated        Use an unsaturated atmosphere with q0=0.6
 
+    --mark_VPT19
+    --no_mark
+
     --nz=<nz>            Vertical resolution [default: 128]
 """
 import logging
@@ -97,7 +100,7 @@ def fmt(x):
     return rf"{s}"
 
 fig, ax = plt.subplots()
-nlev = 11
+nlev = 17
 b_mag = m_mag = (nlev-1)/2*0.3
 grad_m_levels = np.linspace(-m_mag, m_mag, num=nlev)
 grad_b_levels = np.linspace(-b_mag, b_mag, num=nlev)
@@ -105,17 +108,21 @@ csm = ax.contour(γs, βs, grad_m, grad_m_levels, colors='xkcd:dark blue')
 ax.clabel(csm, csm.levels, fmt=fmt)
 csb = ax.contour(γs, βs, grad_b, grad_b_levels, colors='xkcd:brick red')
 ax.clabel(csb, csb.levels, fmt=fmt)
-ax.contourf(γs, βs, (grad_m<0)&(grad_b>0), levels=[0.5, 1.5], colors='xkcd:dark green', alpha=0.5)
+ax.contourf(γs, βs, (grad_m<0)&(grad_b>0), levels=[0.5, 1.5], colors='xkcd:dark green', alpha=0.25)
+ax.contourf(γs, βs, (grad_m>0)&(grad_b>0), levels=[0.5, 1.5], colors='xkcd:grey', alpha=0.25)
 ax.set_title(r'$\alpha='+'{:}'.format(α)+r'$')
 ax.set_ylabel(r'$\beta$')
 ax.set_xlabel(r'$\gamma$')
-ax.scatter(0.3, 1.1, alpha=0.5)
-ax.scatter(0.3, 1.15, alpha=0.5)
-ax.scatter(0.3, 1.2, alpha=0.5)
-ax.scatter(0.3, 1.25, alpha=0.5)
-ax.scatter(0.19, 1.1, marker='s', alpha=0.5)
-ax.scatter(0.19, 1.15, marker='s', alpha=0.5)
-ax.scatter(0.19, 1.2, marker='s', alpha=0.5)
-ax.scatter(0.19, 1.25, marker='s', alpha=0.5)
+if args['--mark_VPT19']:
+    ax.scatter(0.19, 1.2, marker='*', alpha=0.5, s=100)
+elif not args['--no_mark']:
+    ax.scatter(0.3, 1.1, alpha=0.5)
+    ax.scatter(0.3, 1.15, alpha=0.5)
+    ax.scatter(0.3, 1.2, alpha=0.5)
+    ax.scatter(0.3, 1.25, alpha=0.5)
+    ax.scatter(0.19, 1.1, marker='s', alpha=0.5)
+    ax.scatter(0.19, 1.15, marker='s', alpha=0.5)
+    ax.scatter(0.19, 1.2, marker='s', alpha=0.5)
+    ax.scatter(0.19, 1.25, marker='s', alpha=0.5)
 
 fig.savefig('ideal_stability_alpha{:}_{:s}_figure_3.png'.format(α, case), dpi=300)
