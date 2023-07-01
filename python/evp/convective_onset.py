@@ -8,9 +8,6 @@ Vallis, Parker & Tobias, 2019, JFM,
 
 This script solves EVPs for an existing atmospheres, solved for by scripts in the nlbvp section.
 
-Roberts, G.O., 1972,
-``Dynamo action of fluid motions with two-dimensional periodicity''
-
 Usage:
     convective_onset.py <cases>... [options]
 
@@ -31,6 +28,10 @@ Options:
     --nz=<nz>         Number of coeffs to use in eigenvalue search; if not set, uses resolution of background
     --target=<targ>   Target value for sparse eigenvalue search [default: 0]
     --eigs=<eigs>     Target number of eigenvalues to search for [default: 20]
+
+    --erf             Use an erf rather than a tanh for the phase transition
+    --Legendre        Use Legendre polynomials
+
 
     --dense           Solve densely for all eigenvalues (slow)
 
@@ -82,7 +83,10 @@ Lz = 1
 coords = de.CartesianCoordinates('x', 'y', 'z')
 dist = de.Distributor(coords, dtype=dtype)
 dealias = 2
-zb = de.ChebyshevT(coords.coords[2], size=nz, bounds=(0, Lz), dealias=dealias)
+if args['--Legendre']:
+    zb = de.Legendre(coords.coords[2], size=nz, bounds=(0, Lz), dealias=dealias)
+else:
+    zb = de.ChebyshevT(coords.coords[2], size=nz, bounds=(0, Lz), dealias=dealias)
 z = zb.local_grid(1)
 zd = zb.local_grid(2)
 
@@ -115,13 +119,20 @@ lift = lambda A, n: de.Lift(A, zb, n)
 
 ex, ey, ez = coords.unit_vector_fields(dist)
 
-H = lambda A: 0.5*(1+np.tanh(k*A))
-
 z_grid = dist.Field(name='z_grid', bases=zb)
 z_grid['g'] = z
 
 T0 = b0 - β*z_grid
 qs0 = np.exp(α*T0).evaluate()
+
+from scipy.special import erf
+if args['--erf']:
+    H = lambda A: 0.5*(1+erf(k*A))
+    scrN = (H(q0 - qs0) + 1/2*(q0 - qs0)*k*2*(np.pi)**(-1/2)*np.exp(-k**2*(q0 - qs0)**2)).evaluate()
+else:
+    H = lambda A: 0.5*(1+np.tanh(k*A))
+    scrN = (H(q0 - qs0) + 1/2*(q0 - qs0)*k*(1-(np.tanh(k*(q0 - qs0)))**2)).evaluate()
+scrN.name='scrN'
 
 tau = dist.Field(name='tau')
 kx = dist.Field(name='kx')
@@ -160,12 +171,6 @@ else:
 
 tau['g'] = tau_in
 
-# sech = lambda A: 1/np.cosh(A)
-# scrN = (H(q0 - qs0) + 1/2*(q0 - qs0)*k**2*sech(k*(q0 - qs0))**2).evaluate()
-scrN = (H(q0 - qs0) + 1/2*(q0 - qs0)*k*(1-(np.tanh(k*(q0 - qs0)))**2)).evaluate()
-# scrN = dist.Field(bases=zb)
-# scrN['g'] = 0.5
-scrN.name='scrN'
 grad_b0 = grad(b0).evaluate()
 grad_q0 = grad(q0).evaluate()
 #
