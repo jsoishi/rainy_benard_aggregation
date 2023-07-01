@@ -9,12 +9,13 @@ Vallis, Parker & Tobias, 2019, JFM,
 This script solves EVPs for an existing atmospheres, solved for by scripts in the nlbvp section.
 
 Usage:
-    convective_onset.py <cases>... [options]
+    convective_onset.py <case> [options]
 
 Options:
     <cases>           Case (or cases) to calculate onset for
 
     --tau=<tau>       If set, override value of tau
+    --k=<k>           If set, override value of k
 
     --nondim=<n>      Non-Nondimensionalization [default: buoyancy]
 
@@ -52,27 +53,6 @@ args = docopt(__doc__)
 N_evals = int(float(args['--eigs']))
 target = float(args['--target'])
 
-for case in args['<cases>']:
-    f = h5py.File(case+'/drizzle_sol/drizzle_sol_s1.h5', 'r')
-    sol = {}
-    for task in f['tasks']:
-        sol[task] = f['tasks'][task][0,0,0][:]
-    sol['z'] = f['tasks']['b'].dims[3][0][:]
-    tau_in = sol['tau'][0]
-    k = sol['k'][0]
-    α = sol['α'][0]
-    β = sol['β'][0]
-    γ = sol['γ'][0]
-logger.info('α={:}, β={:}, γ={:}, tau={:}, k={:}'.format(α,β,γ,tau_in, k))
-nz_sol = sol['z'].shape[0]
-if args['--nz']:
-    nz = int(float(args['--nz']))
-else:
-    nz = nz_sol
-
-if args['--tau']:
-    tau_in = float(args['--tau'])
-
 dealias = 3/2
 dtype = np.complex128
 
@@ -83,6 +63,63 @@ Lz = 1
 coords = de.CartesianCoordinates('x', 'y', 'z')
 dist = de.Distributor(coords, dtype=dtype)
 dealias = 2
+
+case = args['<case>']
+if case == 'analytic':
+    import analytic_atmosphere
+    α = 3
+    β = 1.1
+    γ = 0.19
+    case += '_unsaturated'
+    sol = analytic_atmosphere.unsaturated
+    if γ == 0.3:
+        zc_analytic = 0.4832893544084419
+        Tc_analytic = -0.4588071140209613
+    elif γ == 0.19:
+        zc_analytic = 0.4751621541611023
+        Tc_analytic = -0.4588071140209616
+    else:
+        # hack
+        zc_analytic = 0.4751621541611023
+        Tc_analytic = -0.4588071140209616
+    zc = zc_analytic
+    Tc = Tc_analytic
+    nz = int(float(args['--nz']))
+    if args['--Legendre']:
+        zb = de.Legendre(coords.coords[2], size=nz, bounds=(0, Lz), dealias=dealias)
+    else:
+        zb = de.ChebyshevT(coords.coords[2], size=nz, bounds=(0, Lz), dealias=dealias)
+
+    sol = sol(dist, zb, β, γ, zc, Tc, dealias=2, q0=0.6, α=3)
+    sol['b'].change_scales(1)
+    sol['q'].change_scales(1)
+    sol['b'] = sol['b']['g']
+    sol['q'] = sol['q']['g']
+    sol['z'].change_scales(1)
+    nz_sol = sol['z']['g'].shape[-1]
+else:
+    f = h5py.File(case+'/drizzle_sol/drizzle_sol_s1.h5', 'r')
+    sol = {}
+    for task in f['tasks']:
+        sol[task] = f['tasks'][task][0,0,0][:]
+    sol['z'] = f['tasks']['b'].dims[3][0][:]
+    tau_in = sol['tau'][0]
+    k = sol['k'][0]
+    α = sol['α'][0]
+    β = sol['β'][0]
+    γ = sol['γ'][0]
+    nz_sol = sol['z'].shape[0]
+if args['--nz']:
+    nz = int(float(args['--nz']))
+else:
+    nz = nz_sol
+
+if args['--tau']:
+    tau_in = float(args['--tau'])
+if args['--k']:
+    k = float(args['--k'])
+logger.info('α={:}, β={:}, γ={:}, tau={:}, k={:}'.format(α,β,γ,tau_in, k))
+
 if args['--Legendre']:
     zb = de.Legendre(coords.coords[2], size=nz, bounds=(0, Lz), dealias=dealias)
 else:
