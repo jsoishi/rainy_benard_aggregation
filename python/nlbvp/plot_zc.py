@@ -68,7 +68,7 @@ def plot_solution(solution, title=None, mask=None, linestyle=None, ax=None):
 from scipy.optimize import newton
 from scipy.interpolate import interp1d
 
-def find_zc(sol, ε=1e-3, root_finding = 'inverse'):
+def find_zc(sol, ε=1e-3, root_finding = 'log_newton'):
     rh = sol['rh']
     z = sol['z']
     nz = z.shape[0]
@@ -104,8 +104,6 @@ if __name__=="__main__":
     min_tau = np.inf
     max_tau = 0
 
-    zc_analytic = 0.48329 # Jeff's value for gamma=0.3, rh=0.6
-
     data = {} #{'tau':[],'k':[],'zc':[]}
     for case in args['<cases>']:
         try:
@@ -118,6 +116,7 @@ if __name__=="__main__":
             zc_discrete = find_zc(sol, ε=ε, root_finding='discrete')
             tau = sol['tau'][0]
             k = sol['k'][0]
+            γ = sol['γ'][0]
             if tau in data:
                 data[tau]['k'].append(k)
                 data[tau]['zc'].append(zc)
@@ -132,6 +131,17 @@ if __name__=="__main__":
             logger.warning('error in case {:}'.format(case))
     for tau in data:
         data[tau]['zc'] = np.array(data[tau]['zc'])
+
+
+    if γ == 0.3:
+        zc_analytic = 0.4832893544084419
+        Tc_analytic = -0.4588071140209613
+    elif γ == 0.19:
+        zc_analytic = 0.4751621541611023
+        Tc_analytic = -0.4588071140209616
+    else:
+        raise ValueError("γ = {:} not yet supported".format(γ))
+
 
     import matplotlib.colors as colors
     norm = colors.LogNorm(vmin=min_tau, vmax=max_tau)
