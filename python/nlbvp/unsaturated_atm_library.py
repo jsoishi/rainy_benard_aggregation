@@ -18,8 +18,6 @@ Options:
     --gamma=<gamma>      Gamma parameter [default: 0.3]
     --beta=<beta>        Beta parameter  [default: 1.2]
 
-    --use_analytic       Use an analytic solution as the beginning guess
-
     --Legendre
 
     --erf                Use erf, not tanh
@@ -219,23 +217,10 @@ def plot_solution(z, solution, title=None, mask=None, linestyle=None, ax=None):
 fig, ax = plot_solution(zb.local_grid(dealias), analytic)
 fig.savefig(data_dir+'/analytic_solution.png', dpi=300)
 
-if args['--use_analytic']:
-    b.change_scales(dealias)
-    q.change_scales(dealias)
-    b['g'] = analytic['b']['g']
-    q['g'] = analytic['q']['g']
-else:
-    # Stable linear solution as an intial guess
-    problem = de.LBVP([b, q, τb1, τb2, τq1, τq2], namespace=locals())
-    problem.add_equation('dt(b) - P*lap(b) + lift(τb1, -1) + lift(τb2, -2) = 0')
-    problem.add_equation('dt(q) - S*lap(q) + lift(τq1, -1) + lift(τq2, -2) = 0')
-    problem.add_equation('b(z=0) = 0')
-    problem.add_equation('b(z=Lz) = β + ΔT') # technically β*Lz
-    problem.add_equation('q(z=0) = q_surface')
-    problem.add_equation('q(z=Lz) = np.exp(α*ΔT)')
-    solver = problem.build_solver()
-    solver.solve()
-
+b.change_scales(dealias)
+q.change_scales(dealias)
+b['g'] = analytic['b']['g']
+q['g'] = analytic['q']['g']
 
 # Stable nonlinear solution
 problem = de.NLBVP([b, q, τb1, τb2, τq1, τq2], namespace=locals())
@@ -250,8 +235,8 @@ for system in ['subsystems']:
      logging.getLogger(system).setLevel(logging.WARNING)
 
 start_time = time.time()
-# for first tau loop, use LBVP or linear solution as first guess
-need_guess = False
+# for first tau loop, use analytic solution as first guess
+need_guess = True
 
 # on later tau loops, start with the highest k solution as the first guess, stored in sol
 sol = {}
@@ -272,13 +257,11 @@ for i, tau_i in enumerate(taus):
             os.mkdir('{:s}/'.format(data_dir+'/'+case_dir))
 
         if need_guess:
-            logger.info('solving tau={:}, k={:}, starting from guess'.format(tau_i, k_j))
-            b.change_scales(1)
-            q.change_scales(1)
-            sol['b'].change_scales(1)
-            sol['q'].change_scales(1)
-            b['g'] = sol['b']['g']
-            q['g'] = sol['q']['g']
+            logger.info('solving tau={:}, k={:}, starting from analytic'.format(tau_i, k_j))
+            b.change_scales(dealias)
+            q.change_scales(dealias)
+            b['g'] = analytic['b']['g']
+            q['g'] = analytic['q']['g']
             need_guess = False
         else:
             logger.info('solving tau={:}, k={:}, continuing from previous solution'.format(tau_i, k_j))
@@ -302,10 +285,7 @@ for i, tau_i in enumerate(taus):
         if solver.iteration > stop_iteration or not np.isfinite(pert_norm):
             logger.info("solution failed to converge")
             logger.info("reverting to analytic solution as guess for next iteration")
-            b.change_scales(dealias)
-            q.change_scales(dealias)
-            b['g'] = analytic['b']['g']
-            q['g'] = analytic['q']['g']
+            need_guess = True
         else:
             solution = solver.evaluator.add_file_handler(data_dir+'/'+case_dir+'/'+'drizzle_sol', mode='overwrite')
             solution.add_task(b)
@@ -315,24 +295,13 @@ for i, tau_i in enumerate(taus):
             solution.add_task(rh, name='rh')
             solution.add_task(tau, name='tau')
             solution.add_task(k, name='k')
+            # these are basically asking for add_metadata
             solution.add_task(α_f, name='α')
             solution.add_task(β_f, name='β')
             solution.add_task(γ_f, name='γ')
         #    solution.add_metadata(niter, name='number of iterations')
             solver.evaluate_handlers()
             logger.info("wrote solution to {:}/{:}".format(data_dir, case_dir))
-
-        if j == 0:
-            need_guess = False
-            if i != 0:
-                logger.info('saving first solution as first guess for next loop')
-                sol['b'] = b.copy()
-                sol['q'] = q.copy()
-
-    if i == 0:
-        logger.info('saving last solution as first guess for next loop')
-        sol['b'] = b.copy()
-        sol['q'] = q.copy()
 
     need_guess = True
 end_time = time.time()
