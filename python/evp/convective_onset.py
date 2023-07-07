@@ -43,6 +43,7 @@ logger = logging.getLogger(__name__)
 for system in ['h5py._conv', 'matplotlib', 'PIL']:
      logging.getLogger(system).setLevel(logging.WARNING)
 
+import os
 import numpy as np
 import dedalus.public as de
 import h5py
@@ -70,7 +71,9 @@ if case == 'analytic':
     α = 3
     β = 1.1
     γ = 0.19
-    case += '_unsaturated'
+    case += '_unsaturated/alpha{:}_beta{:}_gamma{:}/tau{:}_k{:}'.format(α,β,γ,args['--tau'],args['--k'])
+    if args['--erf']:
+        case += '_erf'
     sol = analytic_atmosphere.unsaturated
     if γ == 0.3:
         zc_analytic = 0.4832893544084419
@@ -87,6 +90,7 @@ if case == 'analytic':
     nz = int(float(args['--nz']))
     if args['--Legendre']:
         zb = de.Legendre(coords.coords[2], size=nz, bounds=(0, Lz), dealias=dealias)
+        case += '_Legendre'
     else:
         zb = de.ChebyshevT(coords.coords[2], size=nz, bounds=(0, Lz), dealias=dealias)
 
@@ -97,6 +101,8 @@ if case == 'analytic':
     sol['q'] = sol['q']['g']
     sol['z'].change_scales(1)
     nz_sol = sol['z']['g'].shape[-1]
+    if not os.path.exists('{:s}/'.format(case)):
+        os.makedirs('{:s}/'.format(case))
 else:
     f = h5py.File(case+'/drizzle_sol/drizzle_sol_s1.h5', 'r')
     sol = {}
@@ -341,7 +347,7 @@ if nondim == 'diffusion':
     ax2.set_ylabel(r'$\omega_I$ (dashed)')
 elif nondim == 'buoyancy':
     ax2 = ax
-    ax.set_ylim(-0.1, 0.1)
+    ax.set_ylim(-0.05, 0.025)
     ax.set_ylabel(r'$\omega_R$ (solid), $\omega_I$ (dashed)')
 
 for Ra in growth_rates:
