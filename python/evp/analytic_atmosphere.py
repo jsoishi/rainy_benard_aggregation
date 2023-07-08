@@ -65,7 +65,7 @@ def saturated_VPT19(dist, zb, β, γ,
     C = P + (Q-β)*z['g']
 
     m = (P+Q*z).evaluate()
-    
+
     T = dist.Field(bases=zb)
     T['g'] = C - W(α*M*K2*np.exp(α*C)).real/α
     b = (T + β*z).evaluate()
@@ -188,17 +188,11 @@ if __name__=="__main__":
     fig, ax = plot_solution(sol)
     fig.savefig('analytic_saturated.png', dpi=300)
 
-    if γ == 0.3:
-        zc_analytic = 0.4832893544084419
-        Tc_analytic = -0.4588071140209613
-    elif γ == 0.19:
-        zc_analytic = 0.4751621541611023
-        Tc_analytic = -0.4588071140209616
-    else:
-        raise ValueError("γ = {:} not yet supported".format(γ))
+    from analytic_zc import f_zc as zc_analytic
+    from analytic_zc import f_Tc as Tc_analytic
+    zc = zc_analytic()
+    Tc = Tc_analytic()
 
-    zc = zc_analytic
-    Tc = Tc_analytic
-    sol = unsaturated(dist, zb, β, γ, zc, Tc, α=α, dealias=dealias)
+    sol = unsaturated(dist, zb, β, γ, zc(γ), Tc(γ), α=α, dealias=dealias)
     fig, ax = plot_solution(sol)
     fig.savefig('analytic_unsaturated.png', dpi=300)
