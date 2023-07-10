@@ -21,6 +21,8 @@ Options:
     --mark_VPT19
     --no_mark
 
+    --zoom
+
     --nz=<nz>            Vertical resolution [default: 128]
 """
 import logging
@@ -43,6 +45,9 @@ nz = int(float(args['--nz']))
 ΔT = -1
 import analytic_atmosphere
 
+from analytic_zc import f_zc as zc_analytic
+from analytic_zc import f_Tc as Tc_analytic
+
 dealias = 2
 dtype = np.float64
 
@@ -59,27 +64,29 @@ nβ = 200
 nγ = 100
 grad_m = np.zeros((nβ, nγ))
 grad_b = np.zeros((nβ, nγ))
-βs = np.linspace(0, 2, num=nβ)
-γs = np.linspace(0, 1, num=nγ)
+if args['--zoom']:
+    β0 = 1
+    β1 = 1.3
+    γ0 = 0.15
+    γ1 = 0.35
+else:
+    β0 = 0
+    β1 = 2
+    γ0 = 0
+    γ1 = 1
+
+βs = np.linspace(β0, β1, num=nβ)
+γs = np.linspace(γ0, γ1, num=nγ)
 
 for iβ, β in enumerate(βs):
     for iγ, γ in enumerate(γs):
         if args['--unsaturated']:
             case = 'unsaturated'
             sol = analytic_atmosphere.unsaturated
-            if γ == 0.3:
-                zc_analytic = 0.4832893544084419
-                Tc_analytic = -0.4588071140209613
-            elif γ == 0.19:
-                zc_analytic = 0.4751621541611023
-                Tc_analytic = -0.4588071140209616
-            else:
-                # hack
-                zc_analytic = 0.4751621541611023
-                Tc_analytic = -0.4588071140209616
-            zc = zc_analytic
-            Tc = Tc_analytic
-            analytic_sol = sol(dist, zb, β, γ, zc, Tc, dealias=2, q0=0.6, α=3)
+
+            zc = zc_analytic()
+            Tc = Tc_analytic()
+            analytic_sol = sol(dist, zb, β, γ, zc(γ), Tc(γ), dealias=2, q0=0.6, α=3)
         elif args['--VPT19_IVP']:
             case = 'VPT19'
             sol = analytic_atmosphere.saturated_VPT19
@@ -124,5 +131,9 @@ elif not args['--no_mark']:
     ax.scatter(0.19, 1.15, marker='s', alpha=0.5)
     ax.scatter(0.19, 1.2, marker='s', alpha=0.5)
     ax.scatter(0.19, 1.25, marker='s', alpha=0.5)
+    ax.plot(0.19, 1.1, marker='.', color='black')
 
-fig.savefig('ideal_stability_alpha{:}_{:s}_figure_3.png'.format(α, case), dpi=300)
+filename = 'ideal_stability_alpha{:}_{:s}_figure_3'.format(α, case)
+if args['--zoom']:
+    filename += '_zoom'
+fig.savefig(filename +'.png', dpi=300)
