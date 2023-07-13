@@ -106,7 +106,7 @@ def fmt(x):
         s = f"{x:.0f}"
     return rf"{s}"
 
-fig, ax = plt.subplots()
+fig, ax = plt.subplots(figsize=[4,4/1.6])
 nlev = 17
 b_mag = m_mag = (nlev-1)/2*0.3
 grad_m_levels = np.linspace(-m_mag, m_mag, num=nlev)
