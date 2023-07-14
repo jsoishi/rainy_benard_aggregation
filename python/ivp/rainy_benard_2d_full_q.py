@@ -15,8 +15,15 @@ Options:
     <case>            Case to build IVP around
 
     --Rayleigh=<Ra>   Rayleigh number [default: 1e5]
-    --tau=<tau>       Tau to solve; if not set, use tau of background
+
     --aspect=<a>      Aspect ratio of domain, Lx/Lz [default: 10]
+
+    --tau=<tau>       If set, override value of tau
+    --k=<k>           If set, override value of k
+
+    --erf             Use an erf rather than a tanh for the phase transition
+    --Legendre        Use Legendre polynomials
+
 
     --nondim=<n>      Non-Nondimensionalization [default: buoyancy]
 
@@ -45,8 +52,58 @@ import h5py
 from docopt import docopt
 args = docopt(__doc__)
 
+import dedalus.public as de
+from dedalus.extras import flow_tools
+
+aspect = float(args['--aspect'])
+
+dealias = 3/2
+dtype = np.float64
+
+Lz = 1
+Lx = aspect
+
+coords = de.CartesianCoordinates('x', 'y', 'z')
+dist = de.Distributor(coords, dtype=dtype)
+
 case = args['<case>']
-with h5py.File(case+'/drizzle_sol/drizzle_sol_s1.h5', 'r') as f:
+if case == 'analytic':
+    import os
+    import analytic_atmosphere
+
+    from analytic_zc import f_zc as zc_analytic
+    from analytic_zc import f_Tc as Tc_analytic
+    α = 3
+    β = 1.1
+    γ = 0.19
+    k = float(args['--k'])
+    tau = float(args['--tau'])
+
+    case += '_unsaturated/alpha{:}_beta{:}_gamma{:}/tau{:}_k{:}'.format(α,β,γ,args['--tau'],args['--k'])
+    if args['--erf']:
+        case += '_erf'
+    sol = analytic_atmosphere.unsaturated
+    zc = zc_analytic()(γ)
+    Tc = Tc_analytic()(γ)
+
+    nz = int(float(args['--nz']))
+    if args['--Legendre']:
+        zb = de.Legendre(coords.coords[2], size=nz, bounds=(0, Lz), dealias=dealias)
+        case += '_Legendre'
+    else:
+        zb = de.ChebyshevT(coords.coords[2], size=nz, bounds=(0, Lz), dealias=dealias)
+
+    sol = sol(dist, zb, β, γ, zc, Tc, dealias=dealias, q0=0.6, α=α)
+    sol['b'].change_scales(1)
+    sol['q'].change_scales(1)
+    sol['b'] = sol['b']['g']
+    sol['q'] = sol['q']['g']
+    sol['z'].change_scales(1)
+    nz_sol = sol['z']['g'].shape[-1]
+    if not os.path.exists('{:s}/'.format(case)):
+        os.makedirs('{:s}/'.format(case))
+else:
+    f = h5py.File(case+'/drizzle_sol/drizzle_sol_s1.h5', 'r')
     sol = {}
     for task in f['tasks']:
         sol[task] = f['tasks'][task][0,0,0][:]
@@ -56,10 +113,13 @@ with h5py.File(case+'/drizzle_sol/drizzle_sol_s1.h5', 'r') as f:
     α = sol['α'][0]
     β = sol['β'][0]
     γ = sol['γ'][0]
+    f.close()
+    if args['--tau']:
+        tau = float(args['--tau'])
+    else:
+        tau = tau_in
+    nz_sol = sol['z'].shape[0]
 
-aspect = float(args['--aspect'])
-
-nz_sol = sol['z'].shape[0]
 if args['--nz']:
     nz = int(float(args['--nz']))
 else:
@@ -69,11 +129,6 @@ if args['--nx']:
 else:
     nx = int(aspect)*nz
 
-if args['--tau']:
-    tau = float(args['--tau'])
-else:
-    tau = tau_in
-
 data_dir = case+'/rainy_benard_Ra{:}_tau{:.2g}_k{:.2g}_nz{:d}_nx{:d}'.format(args['--Rayleigh'], tau, k, nz, nx)
 
 if args['--label']:
@@ -82,10 +137,7 @@ if args['--label']:
 import dedalus.tools.logging as dedalus_logging
 dedalus_logging.add_file_handler(data_dir+'/logs/dedalus_log', 'DEBUG')
 
-import dedalus.public as de
-from dedalus.extras import flow_tools
-
-logger.info('α={:}, β={:}, γ={:}, tau={:}, k={:}'.format(α,β,γ,tau_in, k))
+logger.info('α={:}, β={:}, γ={:}, tau={:}, k={:}'.format(α,β,γ,tau, k))
 
 Prandtlm = 1
 Prandtl = 1
@@ -103,17 +155,13 @@ if run_time_iter != None:
 else:
     run_time_iter = np.inf
 
-
-dealias = 3/2
-dtype = np.float64
-
-Lz = 1
-Lx = aspect
-
-coords = de.CartesianCoordinates('x', 'y', 'z')
-dist = de.Distributor(coords, dtype=dtype)
 xb = de.RealFourier(coords.coords[0], size=nx, bounds=(0, Lx), dealias=dealias)
-zb = de.ChebyshevT(coords.coords[2], size=nz, bounds=(0, Lz), dealias=dealias)
+if not zb:
+    if args['--Legendre']:
+        zb = de.Legendre(coords.coords[2], size=nz, bounds=(0, Lz), dealias=dealias)
+        case += '_Legendre'
+    else:
+        zb = de.ChebyshevT(coords.coords[2], size=nz, bounds=(0, Lz), dealias=dealias)
 x = xb.local_grid(1)
 z = zb.local_grid(1)
 
