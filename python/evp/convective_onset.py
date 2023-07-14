@@ -68,6 +68,9 @@ dealias = 2
 case = args['<case>']
 if case == 'analytic':
     import analytic_atmosphere
+
+    from analytic_zc import f_zc as zc_analytic
+    from analytic_zc import f_Tc as Tc_analytic
     α = 3
     β = 1.1
     γ = 0.19
@@ -75,18 +78,9 @@ if case == 'analytic':
     if args['--erf']:
         case += '_erf'
     sol = analytic_atmosphere.unsaturated
-    if γ == 0.3:
-        zc_analytic = 0.4832893544084419
-        Tc_analytic = -0.4588071140209613
-    elif γ == 0.19:
-        zc_analytic = 0.4751621541611023
-        Tc_analytic = -0.4588071140209616
-    else:
-        # hack
-        zc_analytic = 0.4751621541611023
-        Tc_analytic = -0.4588071140209616
-    zc = zc_analytic
-    Tc = Tc_analytic
+    zc = zc_analytic()(γ)
+    Tc = Tc_analytic()(γ)
+
     nz = int(float(args['--nz']))
     if args['--Legendre']:
         zb = de.Legendre(coords.coords[2], size=nz, bounds=(0, Lz), dealias=dealias)
@@ -94,7 +88,7 @@ if case == 'analytic':
     else:
         zb = de.ChebyshevT(coords.coords[2], size=nz, bounds=(0, Lz), dealias=dealias)
 
-    sol = sol(dist, zb, β, γ, zc, Tc, dealias=2, q0=0.6, α=3)
+    sol = sol(dist, zb, β, γ, zc, Tc, dealias=2, q0=0.6, α=α)
     sol['b'].change_scales(1)
     sol['q'].change_scales(1)
     sol['b'] = sol['b']['g']
