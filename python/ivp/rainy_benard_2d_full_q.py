@@ -198,7 +198,11 @@ lift = lambda A, n: de.Lift(A, zb2, n)
 
 ex, ey, ez = coords.unit_vector_fields(dist)
 
-H = lambda A: 0.5*(1+np.tanh(k*A))
+from scipy.special import erf
+if args['--erf']:
+    H = lambda A: 0.5*(1+erf(k*A))
+else:
+    H = lambda A: 0.5*(1+np.tanh(k*A))
 
 z_grid = dist.Field(name='z_grid', bases=zb)
 z_grid['g'] = z
