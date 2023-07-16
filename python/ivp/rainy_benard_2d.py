@@ -15,8 +15,15 @@ Options:
     <case>            Case to build IVP around
 
     --Rayleigh=<Ra>   Rayleigh number [default: 1e5]
-    --tau=<tau>       Tau to solve; if not set, use tau of background
+
     --aspect=<a>      Aspect ratio of domain, Lx/Lz [default: 10]
+
+    --tau=<tau>       If set, override value of tau
+    --k=<k>           If set, override value of k
+
+    --erf             Use an erf rather than a tanh for the phase transition
+    --Legendre        Use Legendre polynomials
+
 
     --nondim=<n>      Non-Nondimensionalization [default: buoyancy]
 
@@ -26,13 +33,13 @@ Options:
     --nz=<nz>         Number z coeffs to use in IVP; if not set, uses resolution of background solution
     --nx=<nx>         Number of x coeffs to use in IVP; if not set, scales nz by aspect
 
-    --max_dt=<dt>     Largest timestep to use; should be set by oscillation timescales of waves (Brunt) [default: 1e-2]
+    --max_dt=<dt>     Largest timestep to use; should be set by oscillation timescales of waves (Brunt) [default: 1]
 
     --run_time_diff=<rtd>      Run time, in diffusion times [default: 1]
     --run_time_buoy=<rtb>      Run time, in buoyancy times
     --run_time_iter=<rti>      Run time, number of iterations; if not set, n_iter=np.inf
 
-    --verbose         Show plots on screen
+    --label=<label>   Label to add to output directory
 """
 import logging
 logger = logging.getLogger(__name__)
@@ -45,8 +52,58 @@ import h5py
 from docopt import docopt
 args = docopt(__doc__)
 
+import dedalus.public as de
+from dedalus.extras import flow_tools
+
+aspect = float(args['--aspect'])
+
+dealias = 3/2
+dtype = np.float64
+
+Lz = 1
+Lx = aspect
+
+coords = de.CartesianCoordinates('x', 'y', 'z')
+dist = de.Distributor(coords, dtype=dtype)
+
 case = args['<case>']
-with h5py.File(case+'/drizzle_sol/drizzle_sol_s1.h5', 'r') as f:
+if case == 'analytic':
+    import os
+    import analytic_atmosphere
+
+    from analytic_zc import f_zc as zc_analytic
+    from analytic_zc import f_Tc as Tc_analytic
+    α = 3
+    β = 1.1
+    γ = 0.19
+    k = float(args['--k'])
+    tau = float(args['--tau'])
+
+    case += '_unsaturated/alpha{:}_beta{:}_gamma{:}/tau{:}_k{:}'.format(α,β,γ,args['--tau'],args['--k'])
+    if args['--erf']:
+        case += '_erf'
+    sol = analytic_atmosphere.unsaturated
+    zc = zc_analytic()(γ)
+    Tc = Tc_analytic()(γ)
+
+    nz = int(float(args['--nz']))
+    if args['--Legendre']:
+        zb = de.Legendre(coords.coords[2], size=nz, bounds=(0, Lz), dealias=dealias)
+        case += '_Legendre'
+    else:
+        zb = de.ChebyshevT(coords.coords[2], size=nz, bounds=(0, Lz), dealias=dealias)
+
+    sol = sol(dist, zb, β, γ, zc, Tc, dealias=dealias, q0=0.6, α=α)
+    sol['b'].change_scales(1)
+    sol['q'].change_scales(1)
+    sol['b'] = sol['b']['g']
+    sol['q'] = sol['q']['g']
+    sol['z'].change_scales(1)
+    nz_sol = sol['z']['g'].shape[-1]
+    if not os.path.exists('{:s}/'.format(case)):
+        os.makedirs('{:s}/'.format(case))
+else:
+    f = h5py.File(case+'/drizzle_sol/drizzle_sol_s1.h5', 'r')
     sol = {}
     for task in f['tasks']:
         sol[task] = f['tasks'][task][0,0,0][:]
@@ -56,12 +113,13 @@ with h5py.File(case+'/drizzle_sol/drizzle_sol_s1.h5', 'r') as f:
     α = sol['α'][0]
     β = sol['β'][0]
     γ = sol['γ'][0]
+    f.close()
+    if args['--tau']:
+        tau = float(args['--tau'])
+    else:
+        tau = tau_in
+    nz_sol = sol['z'].shape[0]
 
-logger.info('α={:}, β={:}, γ={:}, tau={:}, k={:}'.format(α,β,γ,tau_in, k))
-
-aspect = float(args['--aspect'])
-
-nz_sol = sol['z'].shape[0]
 if args['--nz']:
     nz = int(float(args['--nz']))
 else:
@@ -71,18 +129,15 @@ if args['--nx']:
 else:
     nx = int(aspect)*nz
 
-if args['--tau']:
-    tau = float(args['--tau'])
-else:
-    tau = tau_in
+data_dir = case+'/rainy_benard_Ra{:}_tau{:.2g}_k{:.2g}_nz{:d}_nx{:d}'.format(args['--Rayleigh'], tau, k, nz, nx)
 
-data_dir = 'rainy_benard_Ra{:}_tau{:.2g}_k{:.2g}_nz{:d}_nx{:d}'.format(args['--Rayleigh'], tau, k, nz, nx)
+if args['--label']:
+    data_dir += '_{:s}'.format(args['--label'])
 
 import dedalus.tools.logging as dedalus_logging
 dedalus_logging.add_file_handler(data_dir+'/logs/dedalus_log', 'DEBUG')
 
-import dedalus.public as de
-from dedalus.extras import flow_tools
+logger.info('α={:}, β={:}, γ={:}, tau={:}, k={:}'.format(α,β,γ,tau, k))
 
 Prandtlm = 1
 Prandtl = 1
@@ -100,17 +155,13 @@ if run_time_iter != None:
 else:
     run_time_iter = np.inf
 
-
-dealias = 3/2
-dtype = np.float64
-
-Lz = 1
-Lx = aspect
-
-coords = de.CartesianCoordinates('x', 'y', 'z')
-dist = de.Distributor(coords, dtype=dtype)
 xb = de.RealFourier(coords.coords[0], size=nx, bounds=(0, Lx), dealias=dealias)
-zb = de.ChebyshevT(coords.coords[2], size=nz, bounds=(0, Lz), dealias=dealias)
+if not zb:
+    if args['--Legendre']:
+        zb = de.Legendre(coords.coords[2], size=nz, bounds=(0, Lz), dealias=dealias)
+        case += '_Legendre'
+    else:
+        zb = de.ChebyshevT(coords.coords[2], size=nz, bounds=(0, Lz), dealias=dealias)
 x = xb.local_grid(1)
 z = zb.local_grid(1)
 
@@ -152,22 +203,18 @@ H = lambda A: 0.5*(1+np.tanh(k*A))
 z_grid = dist.Field(name='z_grid', bases=zb)
 z_grid['g'] = z
 
-T0 = b0 - β*z_grid
-qs0 = np.exp(α*T0)
+T = b - β*z_grid
+qs = np.exp(α*T)
+rh = q*np.exp(-α*T)
 
-T = b
-qs = q0*np.expm1(α*T)
-
-dx = lambda A: de.Differentiate(A, coords['x'])
-dy = lambda A: 0*A #1j*kx*A # try 2-d mode onset
-dz = lambda A: de.Differentiate(A, coords['z'])
+ΔT = -1
+q_surface = dist.Field(name='q_surface')
+if q0['g'].size > 0 :
+    q_surface['g'] = q0(z=0).evaluate()['g']
 
 grad = lambda A: de.Gradient(A, coords)
-div = lambda A:  dx(A@ex) + dy(A@ey) + dz(A@ez)
-grad = lambda A: dx(A)*ex + dy(A)*ey + dz(A)*ez
-curl = lambda A: (dy(A@ez)-dz(A@ey))*ex + (dz(A@ex)-dx(A@ez))*ey + (dx(A@ey)-dy(A@ex))*ez
-lap = lambda A: dx(dx(A)) + dy(dy(A)) + dz(dz(A))
 trans = lambda A: de.TransposeComponents(A)
+curl = lambda A: de.Curl(A)
 
 e = grad(u) + trans(grad(u))
 ω = curl(u)
@@ -190,25 +237,17 @@ elif nondim == 'buoyancy':
 else:
     raise ValueError('nondim {:} not in valid set [diffusion, buoyancy]'.format(nondim))
 
-sech = lambda A: 1/np.cosh(A)
-scrN = (H(q0 - qs0) + (q0 - qs0)*k/2*sech(k*(q0 - qs0))**2).evaluate()
-scrN.name='scrN'
-scrN_g = de.Grid(scrN).evaluate()
-
-H_q0 = ((q0 - qs0)*H(q0 - qs0)).evaluate()
-H_q0.name='((q0-qs0)*H(q0-qs0))'
-H_q0_g = de.Grid(H_q0).evaluate()
 
 problem.add_equation('div(u) + τp + 1/PdR*dot(lift(τu2,-1),ez) = 0')
-problem.add_equation('dt(u) - PdR*lap(u) + grad(p) - PtR*b*ez + lift(τu1, -1) + lift(τu2, -2) = -(u@grad(u))')
+problem.add_equation('dt(u) - PdR*lap(u) + grad(p) - PtR*b*ez + lift(τu1, -1) + lift(τu2, -2) = cross(u, ω)')
 # problem.add_equation('dt(b) - P*lap(b) + u@grad(b0) - γ/tau*(q-α*qs0*b)*scrN + lift(τb1, -1) + lift(τb2, -2) = - (u@grad(b)) + γ/tau*((q-qs)*H(q-qs) - (q-α*qs0*b)*scrN_g)')
 # problem.add_equation('dt(q) - S*lap(q) + u@grad(q0) + 1/tau*(q-α*qs0*b)*scrN + lift(τq1, -1) + lift(τq2, -2) = - (u@grad(q)) - 1/tau*((q-qs)*H(q-qs) - (q-α*qs0*b)*scrN_g)')
-problem.add_equation('dt(b) - P*lap(b) + u@grad(b0) + lift(τb1, -1) + lift(τb2, -2) = - (u@grad(b)) + γ/tau*((q+q0-qs-qs0)*H(q+q0-qs-qs0)-H_q0_g)')
-problem.add_equation('dt(q) - S*lap(q) + u@grad(q0) + lift(τq1, -1) + lift(τq2, -2) = - (u@grad(q)) - 1/tau*((q+q0-qs-qs0)*H(q+q0-qs-qs0)-H_q0_g)')
+problem.add_equation('dt(b) - P*lap(b) + lift(τb1, -1) + lift(τb2, -2) = - (u@grad(b)) + γ/tau*((q-qs)*H(q-qs))')
+problem.add_equation('dt(q) - S*lap(q) + lift(τq1, -1) + lift(τq2, -2) = - (u@grad(q)) - 1/tau*((q-qs)*H(q-qs))')
 problem.add_equation('b(z=0) = 0')
-problem.add_equation('b(z=Lz) = 0')
-problem.add_equation('q(z=0) = 0')
-problem.add_equation('q(z=Lz) = 0')
+problem.add_equation('b(z=Lz) = β + ΔT') # technically β*Lz
+problem.add_equation('q(z=0) = q_surface*qs(z=0)')
+problem.add_equation('q(z=Lz) = np.exp(α*ΔT)')
 if args['--stress-free']:
     problem.add_equation('ez@u(z=0) = 0')
     problem.add_equation('ez@(ex@e(z=0)) = 0')
@@ -230,7 +269,11 @@ noise = dist.Field(name='noise', bases=bases)
 noise.fill_random('g', seed=42, distribution='normal', scale=amp) # Random noise
 noise.low_pass_filter(scales=0.75)
 
-# noise ICs in buoyancy
+# noise ICs in moisture
+b0.change_scales(1)
+q0.change_scales(1)
+b['g'] = b0['g']
+q['g'] = q0['g']
 b['g'] += noise['g']*np.cos(np.pi/2*z/Lz)
 
 ts = de.SBDF2
@@ -242,11 +285,11 @@ solver.stop_iteration = run_time_iter
 
 Δt = max_Δt = min(float(args['--max_dt']), tau/4)
 logger.info('setting Δt = min(--max_dt={:.2g}, tau/4={:.2g})'.format(float(args['--max_dt']), tau/4))
-# cfl = flow_tools.CFL(solver, Δt, safety=cfl_safety_factor, cadence=1, threshold=0.1,
-#                      max_change=1.5, min_change=0.5, max_dt=max_Δt)
-# cfl.add_velocity(u)
+cfl = flow_tools.CFL(solver, Δt, safety=cfl_safety_factor, cadence=1, threshold=0.1,
+                      max_change=1.5, min_change=0.5, max_dt=max_Δt)
+cfl.add_velocity(u)
 
-report_cadence = 10
+report_cadence = 1e2
 
 integ = lambda A: de.Integrate(de.Integrate(A, 'x'), 'z')
 avg = lambda A: integ(A)/(Lx*Lz)
@@ -254,14 +297,41 @@ x_avg = lambda A: de.Integrate(A, 'x')/(Lx)
 
 Re = np.sqrt(u@u)/PdR
 KE = 0.5*u@u
-PE = PtR*(b+b0)
-QE = ((q+q0)-(qs+qs0))*H((q+q0)-(qs+qs0))
+PE = PtR*b
+QE = PtR*γ*q
+ME = PE + QE # moist static energy
+Q_eq = (q-qs)*H(q - qs)
 
-trace_dt = 0.1
+snapshots = solver.evaluator.add_file_handler(data_dir+'/snapshots', sim_dt=2, max_writes=20)
+snapshots.add_task(b, name='b')
+snapshots.add_task(q, name='q')
+snapshots.add_task(b-x_avg(b), name='b_fluc')
+snapshots.add_task(q-x_avg(q), name='q_fluc')
+snapshots.add_task(rh, name='rh')
+snapshots.add_task(rh-x_avg(rh), name='rh_fluc')
+snapshots.add_task(ex@u, name='ux')
+snapshots.add_task(ez@u, name='uz')
+snapshots.add_task(ey@ω, name='vorticity')
+snapshots.add_task(ω@ω, name='enstrophy')
+snapshots.add_task(x_avg(b), name='b_avg')
+snapshots.add_task(x_avg(q), name='q_avg')
+snapshots.add_task(x_avg(b+γ*q), name='m_avg')
+snapshots.add_task(x_avg(rh), name='rh_avg')
+snapshots.add_task(x_avg(Q_eq), name='Q_eq_avg')
+snapshots.add_task(x_avg(ez@u*q), name='uq_avg')
+snapshots.add_task(x_avg(ez@u*b), name='ub_avg')
+snapshots.add_task(x_avg(ex@u), name='ux_avg')
+snapshots.add_task(x_avg(ez@u), name='uz_avg')
+snapshots.add_task(x_avg(np.sqrt((u-x_avg(u))@(u-x_avg(u)))), name='u_rms')
+
+
+trace_dt = 0.5
 traces = solver.evaluator.add_file_handler(data_dir+'/traces', sim_dt=trace_dt, max_writes=None)
 traces.add_task(avg(KE), name='KE')
 traces.add_task(avg(PE), name='PE')
 traces.add_task(avg(QE), name='QE')
+traces.add_task(avg(ME), name='ME')
+traces.add_task(avg(Q_eq), name='Q_eq')
 traces.add_task(avg(Re), name='Re')
 traces.add_task(avg(ω@ω), name='enstrophy')
 traces.add_task(x_avg(np.sqrt(τu1@τu1)), name='τu1')
@@ -288,17 +358,23 @@ vol = Lx*Lz
 
 good_solution = True
 KE_avg = 0
-while solver.proceed and good_solution:
-    # advance
-    solver.step(Δt)
-    if solver.iteration % report_cadence == 0:
-        τ_max = np.max([flow.max('|τu1|'),flow.max('|τu2|'),flow.max('|τb1|'),flow.max('|τb2|'),flow.max('|τq1|'),flow.max('|τq2|'),flow.max('|τp|')])
-        Re_max = flow.max('Re')
-        Re_avg = flow.volume_integral('Re')/vol
-        KE_avg = flow.volume_integral('KE')/vol
-        log_string = 'Iteration: {:5d}, Time: {:8.3e}, dt: {:5.1e}'.format(solver.iteration, solver.sim_time, Δt)
-        log_string += ', KE: {:.2g}, Re: {:.2g} ({:.2g})'.format(KE_avg, Re_avg, Re_max)
-        log_string += ', τ: {:.2g}'.format(τ_max)
-        logger.info(log_string)
-    #Δt = cfl.compute_timestep()
-    good_solution = np.isfinite(Δt)*np.isfinite(KE_avg)
+try:
+    while solver.proceed and good_solution:
+        # advance
+        solver.step(Δt)
+        if solver.iteration % report_cadence == 0:
+            τ_max = np.max([flow.max('|τu1|'),flow.max('|τu2|'),flow.max('|τb1|'),flow.max('|τb2|'),flow.max('|τq1|'),flow.max('|τq2|'),flow.max('|τp|')])
+            Re_max = flow.max('Re')
+            Re_avg = flow.volume_integral('Re')/vol
+            KE_avg = flow.volume_integral('KE')/vol
+            log_string = 'Iteration: {:5d}, Time: {:8.3e}, dt: {:5.1e}'.format(solver.iteration, solver.sim_time, Δt)
+            log_string += ', KE: {:.2g}, Re: {:.2g} ({:.2g})'.format(KE_avg, Re_avg, Re_max)
+            log_string += ', τ: {:.2g}'.format(τ_max)
+            logger.info(log_string)
+        Δt = cfl.compute_timestep()
+        good_solution = np.isfinite(Δt)*np.isfinite(KE_avg)
+except:
+    logger.error('Exception raised, triggering end of main loop.')
+    raise
+finally:
+    solver.log_stats()
