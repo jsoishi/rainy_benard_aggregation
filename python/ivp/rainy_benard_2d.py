@@ -129,7 +129,7 @@ if args['--nx']:
 else:
     nx = int(aspect)*nz
 
-data_dir = case+'/rainy_benard_Ra{:}_tau{:.2g}_k{:.2g}_nz{:d}_nx{:d}'.format(args['--Rayleigh'], tau, k, nz, nx)
+data_dir = case+'/rainy_benard_implicit_Ra{:}_tau{:.2g}_k{:.2g}_nz{:d}_nx{:d}'.format(args['--Rayleigh'], tau, k, nz, nx)
 
 if args['--label']:
     data_dir += '_{:s}'.format(args['--label'])
@@ -198,14 +198,23 @@ lift = lambda A, n: de.Lift(A, zb2, n)
 
 ex, ey, ez = coords.unit_vector_fields(dist)
 
-H = lambda A: 0.5*(1+np.tanh(k*A))
-
 z_grid = dist.Field(name='z_grid', bases=zb)
 z_grid['g'] = z
 
-T = b - β*z_grid
+T0 = b0 - β*z_grid
+T = b + T0
 qs = np.exp(α*T)
-rh = q*np.exp(-α*T)
+qs0 = np.exp(α*T0)
+
+from scipy.special import erf
+if args['--erf']:
+    H = lambda A: 0.5*(1+erf(k*A))
+    scrN = (H(q0 - qs0) + 1/2*(q0 - qs0)*k*2*(np.pi)**(-1/2)*np.exp(-k**2*(q0 - qs0)**2)).evaluate()
+else:
+    H = lambda A: 0.5*(1+np.tanh(k*A))
+    scrN = (H(q0 - qs0) + 1/2*(q0 - qs0)*k*(1-(np.tanh(k*(q0 - qs0)))**2)).evaluate()
+scrN.name='scrN'
+scrN_g = de.Grid(scrN).evaluate()
 
 ΔT = -1
 q_surface = dist.Field(name='q_surface')
@@ -240,14 +249,12 @@ else:
 
 problem.add_equation('div(u) + τp + 1/PdR*dot(lift(τu2,-1),ez) = 0')
 problem.add_equation('dt(u) - PdR*lap(u) + grad(p) - PtR*b*ez + lift(τu1, -1) + lift(τu2, -2) = cross(u, ω)')
-# problem.add_equation('dt(b) - P*lap(b) + u@grad(b0) - γ/tau*(q-α*qs0*b)*scrN + lift(τb1, -1) + lift(τb2, -2) = - (u@grad(b)) + γ/tau*((q-qs)*H(q-qs) - (q-α*qs0*b)*scrN_g)')
-# problem.add_equation('dt(q) - S*lap(q) + u@grad(q0) + 1/tau*(q-α*qs0*b)*scrN + lift(τq1, -1) + lift(τq2, -2) = - (u@grad(q)) - 1/tau*((q-qs)*H(q-qs) - (q-α*qs0*b)*scrN_g)')
-problem.add_equation('dt(b) - P*lap(b) + lift(τb1, -1) + lift(τb2, -2) = - (u@grad(b)) + γ/tau*((q-qs)*H(q-qs))')
-problem.add_equation('dt(q) - S*lap(q) + lift(τq1, -1) + lift(τq2, -2) = - (u@grad(q)) - 1/tau*((q-qs)*H(q-qs))')
+problem.add_equation('dt(b) - P*lap(b) + u@grad(b0) - γ/tau*(q-α*qs0*b)*scrN + lift(τb1, -1) + lift(τb2, -2) = - (u@grad(b)) + γ/tau*((q-qs)*H(q-qs) - (q0-qs0)*H(q0-qs0) - (q-α*qs0*b)*scrN_g)')
+problem.add_equation('dt(q) - S*lap(q) + u@grad(q0) + 1/tau*(q-α*qs0*b)*scrN + lift(τq1, -1) + lift(τq2, -2) = - (u@grad(q)) - 1/tau*((q-qs)*H(q-qs) - (q0-qs0)*H(q0-qs0) - (q-α*qs0*b)*scrN_g)')
 problem.add_equation('b(z=0) = 0')
-problem.add_equation('b(z=Lz) = β + ΔT') # technically β*Lz
-problem.add_equation('q(z=0) = q_surface*qs(z=0)')
-problem.add_equation('q(z=Lz) = np.exp(α*ΔT)')
+problem.add_equation('b(z=Lz) = 0')
+problem.add_equation('q(z=0) = 0')
+problem.add_equation('q(z=Lz) = 0')
 if args['--stress-free']:
     problem.add_equation('ez@u(z=0) = 0')
     problem.add_equation('ez@(ex@e(z=0)) = 0')
@@ -272,8 +279,6 @@ noise.low_pass_filter(scales=0.75)
 # noise ICs in moisture
 b0.change_scales(1)
 q0.change_scales(1)
-b['g'] = b0['g']
-q['g'] = q0['g']
 b['g'] += noise['g']*np.cos(np.pi/2*z/Lz)
 
 ts = de.SBDF2
@@ -283,8 +288,8 @@ solver = problem.build_solver(ts)
 solver.stop_sim_time = run_time_buoy
 solver.stop_iteration = run_time_iter
 
-Δt = max_Δt = min(float(args['--max_dt']), tau/4)
-logger.info('setting Δt = min(--max_dt={:.2g}, tau/4={:.2g})'.format(float(args['--max_dt']), tau/4))
+Δt = max_Δt = float(args['--max_dt'])
+logger.info('setting Δt = --max_dt={:.2g} vs tau/4={:.2g}'.format(float(args['--max_dt']), tau/4))
 cfl = flow_tools.CFL(solver, Δt, safety=cfl_safety_factor, cadence=1, threshold=0.1,
                       max_change=1.5, min_change=0.5, max_dt=max_Δt)
 cfl.add_velocity(u)
@@ -297,14 +302,17 @@ x_avg = lambda A: de.Integrate(A, 'x')/(Lx)
 
 Re = np.sqrt(u@u)/PdR
 KE = 0.5*u@u
-PE = PtR*b
-QE = PtR*γ*q
+PE = PtR*(b+b0)
+QE = PtR*γ*(q+q0)
 ME = PE + QE # moist static energy
-Q_eq = (q-qs)*H(q - qs)
+Q_eq = (q+q0-qs-qs0)*H(q+q0 - qs - qs0)
+rh = (q+q0)*np.exp(-α*T)
 
-snapshots = solver.evaluator.add_file_handler(data_dir+'/snapshots', sim_dt=2, max_writes=20)
-snapshots.add_task(b, name='b')
-snapshots.add_task(q, name='q')
+
+snap_dt = 10
+snapshots = solver.evaluator.add_file_handler(data_dir+'/snapshots', sim_dt=snap_dt, max_writes=20)
+snapshots.add_task(b+b0, name='b')
+snapshots.add_task(q+q0, name='q')
 snapshots.add_task(b-x_avg(b), name='b_fluc')
 snapshots.add_task(q-x_avg(q), name='q_fluc')
 snapshots.add_task(rh, name='rh')
@@ -313,9 +321,9 @@ snapshots.add_task(ex@u, name='ux')
 snapshots.add_task(ez@u, name='uz')
 snapshots.add_task(ey@ω, name='vorticity')
 snapshots.add_task(ω@ω, name='enstrophy')
-snapshots.add_task(x_avg(b), name='b_avg')
-snapshots.add_task(x_avg(q), name='q_avg')
-snapshots.add_task(x_avg(b+γ*q), name='m_avg')
+snapshots.add_task(x_avg(b+b0), name='b_avg')
+snapshots.add_task(x_avg(q+q0), name='q_avg')
+snapshots.add_task(x_avg(b+b0+γ*(q+q0)), name='m_avg')
 snapshots.add_task(x_avg(rh), name='rh_avg')
 snapshots.add_task(x_avg(Q_eq), name='Q_eq_avg')
 snapshots.add_task(x_avg(ez@u*q), name='uq_avg')
@@ -325,7 +333,7 @@ snapshots.add_task(x_avg(ez@u), name='uz_avg')
 snapshots.add_task(x_avg(np.sqrt((u-x_avg(u))@(u-x_avg(u)))), name='u_rms')
 
 
-trace_dt = 0.5
+trace_dt = 5
 traces = solver.evaluator.add_file_handler(data_dir+'/traces', sim_dt=trace_dt, max_writes=None)
 traces.add_task(avg(KE), name='KE')
 traces.add_task(avg(PE), name='PE')
