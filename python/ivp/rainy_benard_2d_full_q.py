@@ -100,7 +100,7 @@ if case == 'analytic':
     sol['q'] = sol['q']['g']
     sol['z'].change_scales(1)
     nz_sol = sol['z']['g'].shape[-1]
-    if not os.path.exists('{:s}/'.format(case)):
+    if not os.path.exists('{:s}/'.format(case)) and dist.comm.rank == 0:
         os.makedirs('{:s}/'.format(case))
 else:
     f = h5py.File(case+'/drizzle_sol/drizzle_sol_s1.h5', 'r')
