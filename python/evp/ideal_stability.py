@@ -65,8 +65,8 @@ nγ = 100
 grad_m = np.zeros((nβ, nγ))
 grad_b = np.zeros((nβ, nγ))
 if args['--zoom']:
-    β0 = 1
-    β1 = 1.3
+    β0 = 0.95
+    β1 = 1.2
     γ0 = 0.15
     γ1 = 0.35
 else:
@@ -123,15 +123,13 @@ ax.set_xlabel(r'$\gamma$')
 if args['--mark_VPT19']:
     ax.scatter(0.19, 1.2, marker='*', alpha=0.5, s=100)
 elif not args['--no_mark']:
-    ax.scatter(0.3, 1.1, alpha=0.5)
     ax.scatter(0.3, 1.15, alpha=0.5)
-    ax.scatter(0.3, 1.2, alpha=0.5)
-    ax.scatter(0.3, 1.25, alpha=0.5)
+    ax.scatter(0.19, 1., marker='s', alpha=0.5)
+    ax.scatter(0.19, 1.05, marker='s', alpha=0.5)
     ax.scatter(0.19, 1.1, marker='s', alpha=0.5)
     ax.scatter(0.19, 1.15, marker='s', alpha=0.5)
-    ax.scatter(0.19, 1.2, marker='s', alpha=0.5)
-    ax.scatter(0.19, 1.25, marker='s', alpha=0.5)
     ax.plot(0.19, 1.1, marker='.', color='black')
+fig.tight_layout()
 
 filename = 'ideal_stability_alpha{:}_{:s}_figure_3'.format(α, case)
 if args['--zoom']:
