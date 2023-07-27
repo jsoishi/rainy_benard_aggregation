@@ -25,6 +25,7 @@ Options:
     --alpha=<alpha>   alpha value [default: 3]
     --beta=<beta>     beta value  [default: 1.1]
     --gamma=<gamma>   gamma value [default: 0.19]
+    --q0=<q0>         basal q value [default: 0.6]
 
     --erf             Use an erf rather than a tanh for the phase transition
     --Legendre        Use Legendre polynomials
@@ -84,14 +85,21 @@ if case == 'analytic':
     β = float(args['--beta'])
     γ = float(args['--gamma'])
     k = float(args['--k'])
+    q0 = float(args['--q0'])
     tau = float(args['--tau'])
 
-    case += '_unsaturated/alpha{:}_beta{:}_gamma{:}/tau{:}_k{:}'.format(args['--alpha'],args['--beta'],args['--gamma'],args['--tau'],args['--k'])
+    if q0 < 1:
+        atm_name = 'unsaturated'
+    elif q0 == 1:
+        atm_name = 'saturated'
+    else:
+        raise ValueError("q0 has invalid value, q0 = {:}".format(q0))
+
+    case += '_{:s}/alpha{:}_beta{:}_gamma{:}_q{:}'.format(atm_name, args['--alpha'],args['--beta'],args['--gamma'], args['--q0'])
+
+    case += '/tau{:}_k{:}'.format(args['--tau'],args['--k'])
     if args['--erf']:
         case += '_erf'
-    sol = analytic_atmosphere.unsaturated
-    zc = zc_analytic()(γ)
-    Tc = Tc_analytic()(γ)
 
     nz = int(float(args['--nz']))
     if args['--Legendre']:
@@ -100,7 +108,16 @@ if case == 'analytic':
     else:
         zb = de.ChebyshevT(coords.coords[2], size=nz, bounds=(0, Lz), dealias=dealias)
 
-    sol = sol(dist, zb, β, γ, zc, Tc, dealias=dealias, q0=0.6, α=α)
+    if atm_name == 'unsaturated':
+        sol = analytic_atmosphere.unsaturated
+        zc = zc_analytic()(γ)
+        Tc = Tc_analytic()(γ)
+
+        sol = sol(dist, zb, β, γ, zc, Tc, dealias=dealias, q0=q0, α=α)
+    elif atm_name == 'saturated':
+        sol = analytic_atmosphere.saturated
+        sol = sol(dist, zb, β, γ, dealias=dealias, q0=q0, α=α)
+
     sol['b'].change_scales(1)
     sol['q'].change_scales(1)
     sol['b'] = sol['b']['g']
