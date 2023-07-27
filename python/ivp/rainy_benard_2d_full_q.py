@@ -21,6 +21,11 @@ Options:
     --tau=<tau>       If set, override value of tau
     --k=<k>           If set, override value of k
 
+                      Properties of analytic atmosphere, if used
+    --alpha=<alpha>   alpha value [default: 3]
+    --beta=<beta>     beta value  [default: 1.1]
+    --gamma=<gamma>   gamma value [default: 0.19]
+
     --erf             Use an erf rather than a tanh for the phase transition
     --Legendre        Use Legendre polynomials
 
@@ -38,6 +43,8 @@ Options:
     --run_time_diff=<rtd>      Run time, in diffusion times [default: 1]
     --run_time_buoy=<rtb>      Run time, in buoyancy times
     --run_time_iter=<rti>      Run time, number of iterations; if not set, n_iter=np.inf
+
+    --no-output       Suppress disk writing output, for timing
 
     --label=<label>   Label to add to output directory
 """
@@ -73,13 +80,13 @@ if case == 'analytic':
 
     from analytic_zc import f_zc as zc_analytic
     from analytic_zc import f_Tc as Tc_analytic
-    α = 3
-    β = 1.1
-    γ = 0.19
+    α = float(args['--alpha'])
+    β = float(args['--beta'])
+    γ = float(args['--gamma'])
     k = float(args['--k'])
     tau = float(args['--tau'])
 
-    case += '_unsaturated/alpha{:}_beta{:}_gamma{:}/tau{:}_k{:}'.format(α,β,γ,args['--tau'],args['--k'])
+    case += '_unsaturated/alpha{:}_beta{:}_gamma{:}/tau{:}_k{:}'.format(args['--alpha'],args['--beta'],args['--gamma'],args['--tau'],args['--k'])
     if args['--erf']:
         case += '_erf'
     sol = analytic_atmosphere.unsaturated
@@ -306,46 +313,47 @@ QE = PtR*γ*q
 ME = PE + QE # moist static energy
 Q_eq = (q-qs)*H(q - qs)
 
-snap_dt = 10
-snapshots = solver.evaluator.add_file_handler(data_dir+'/snapshots', sim_dt=snap_dt, max_writes=20)
-snapshots.add_task(b, name='b')
-snapshots.add_task(q, name='q')
-snapshots.add_task(b-x_avg(b), name='b_fluc')
-snapshots.add_task(q-x_avg(q), name='q_fluc')
-snapshots.add_task(rh, name='rh')
-snapshots.add_task(rh-x_avg(rh), name='rh_fluc')
-snapshots.add_task(ex@u, name='ux')
-snapshots.add_task(ez@u, name='uz')
-snapshots.add_task(ey@ω, name='vorticity')
-snapshots.add_task(ω@ω, name='enstrophy')
-snapshots.add_task(x_avg(b), name='b_avg')
-snapshots.add_task(x_avg(q), name='q_avg')
-snapshots.add_task(x_avg(b+γ*q), name='m_avg')
-snapshots.add_task(x_avg(rh), name='rh_avg')
-snapshots.add_task(x_avg(Q_eq), name='Q_eq_avg')
-snapshots.add_task(x_avg(ez@u*q), name='uq_avg')
-snapshots.add_task(x_avg(ez@u*b), name='ub_avg')
-snapshots.add_task(x_avg(ex@u), name='ux_avg')
-snapshots.add_task(x_avg(ez@u), name='uz_avg')
-snapshots.add_task(x_avg(np.sqrt((u-x_avg(u))@(u-x_avg(u)))), name='u_rms')
+if not args['--no-output']:
+    snap_dt = 10
+    snapshots = solver.evaluator.add_file_handler(data_dir+'/snapshots', sim_dt=snap_dt, max_writes=20)
+    snapshots.add_task(b, name='b')
+    snapshots.add_task(q, name='q')
+    snapshots.add_task(b-x_avg(b), name='b_fluc')
+    snapshots.add_task(q-x_avg(q), name='q_fluc')
+    snapshots.add_task(rh, name='rh')
+    snapshots.add_task(rh-x_avg(rh), name='rh_fluc')
+    snapshots.add_task(ex@u, name='ux')
+    snapshots.add_task(ez@u, name='uz')
+    snapshots.add_task(ey@ω, name='vorticity')
+    snapshots.add_task(ω@ω, name='enstrophy')
+    snapshots.add_task(x_avg(b), name='b_avg')
+    snapshots.add_task(x_avg(q), name='q_avg')
+    snapshots.add_task(x_avg(b+γ*q), name='m_avg')
+    snapshots.add_task(x_avg(rh), name='rh_avg')
+    snapshots.add_task(x_avg(Q_eq), name='Q_eq_avg')
+    snapshots.add_task(x_avg(ez@u*q), name='uq_avg')
+    snapshots.add_task(x_avg(ez@u*b), name='ub_avg')
+    snapshots.add_task(x_avg(ex@u), name='ux_avg')
+    snapshots.add_task(x_avg(ez@u), name='uz_avg')
+    snapshots.add_task(x_avg(np.sqrt((u-x_avg(u))@(u-x_avg(u)))), name='u_rms')
 
 
-trace_dt = snap_dt/5
-traces = solver.evaluator.add_file_handler(data_dir+'/traces', sim_dt=trace_dt, max_writes=None)
-traces.add_task(avg(KE), name='KE')
-traces.add_task(avg(PE), name='PE')
-traces.add_task(avg(QE), name='QE')
-traces.add_task(avg(ME), name='ME')
-traces.add_task(avg(Q_eq), name='Q_eq')
-traces.add_task(avg(Re), name='Re')
-traces.add_task(avg(ω@ω), name='enstrophy')
-traces.add_task(x_avg(np.sqrt(τu1@τu1)), name='τu1')
-traces.add_task(x_avg(np.sqrt(τu2@τu2)), name='τu2')
-traces.add_task(x_avg(np.abs(τb1)), name='τb1')
-traces.add_task(x_avg(np.abs(τb2)), name='τb2')
-traces.add_task(x_avg(np.abs(τq1)), name='τq1')
-traces.add_task(x_avg(np.abs(τq2)), name='τq2')
-traces.add_task(np.abs(τp), name='τp')
+    trace_dt = snap_dt/5
+    traces = solver.evaluator.add_file_handler(data_dir+'/traces', sim_dt=trace_dt, max_writes=None)
+    traces.add_task(avg(KE), name='KE')
+    traces.add_task(avg(PE), name='PE')
+    traces.add_task(avg(QE), name='QE')
+    traces.add_task(avg(ME), name='ME')
+    traces.add_task(avg(Q_eq), name='Q_eq')
+    traces.add_task(avg(Re), name='Re')
+    traces.add_task(avg(ω@ω), name='enstrophy')
+    traces.add_task(x_avg(np.sqrt(τu1@τu1)), name='τu1')
+    traces.add_task(x_avg(np.sqrt(τu2@τu2)), name='τu2')
+    traces.add_task(x_avg(np.abs(τb1)), name='τb1')
+    traces.add_task(x_avg(np.abs(τb2)), name='τb2')
+    traces.add_task(x_avg(np.abs(τq1)), name='τq1')
+    traces.add_task(x_avg(np.abs(τq2)), name='τq2')
+    traces.add_task(np.abs(τp), name='τp')
 
 
 flow = flow_tools.GlobalFlowProperty(solver, cadence=report_cadence)
