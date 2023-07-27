@@ -196,3 +196,9 @@ if __name__=="__main__":
     sol = unsaturated(dist, zb, β, γ, zc(γ), Tc(γ), α=α, dealias=dealias)
     fig, ax = plot_solution(sol)
     fig.savefig('analytic_unsaturated.png', dpi=300)
+
+    m = (sol['b'] + γ*sol['q']).evaluate()
+    m_bot = m(z=0).evaluate()['g'][0,0,0]
+    m_top = m(z=1).evaluate()['g'][0,0,0]
+    print("unsaturated atmosphere properties:")
+    print("m_bot = {:.2g}, m_top = {:.2g}, Δm = {:.2g}".format(m_bot, m_top, m_top-m_bot))
