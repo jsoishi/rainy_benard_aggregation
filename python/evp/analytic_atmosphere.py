@@ -14,8 +14,8 @@ Usage:
 
 Options:
     --alpha=<alpha>      Alpha parameter [default: 3]
-    --gamma=<gamma>      Gamma parameter [default: 0.3]
-    --beta=<beta>        Beta parameter  [default: 1.2]
+    --gamma=<gamma>      Gamma parameter [default: 0.19]
+    --beta=<beta>        Beta parameter  [default: 1.15]
 """
 from scipy.special import lambertw as W
 import numpy as np
@@ -187,6 +187,13 @@ if __name__=="__main__":
     sol = saturated(dist, zb, β, γ, α=α, dealias=dealias)
     fig, ax = plot_solution(sol)
     fig.savefig('analytic_saturated.png', dpi=300)
+
+    m = (sol['b'] + γ*sol['q']).evaluate()
+    m_bot = m(z=0).evaluate()['g'][0,0,0]
+    m_top = m(z=1).evaluate()['g'][0,0,0]
+    print("saturated atmosphere properties:")
+    print("m_bot = {:.2g}, m_top = {:.2g}, Δm = {:.2g}".format(m_bot, m_top, m_top-m_bot))
+
 
     from analytic_zc import f_zc as zc_analytic
     from analytic_zc import f_Tc as Tc_analytic
