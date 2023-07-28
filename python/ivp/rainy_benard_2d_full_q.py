@@ -14,6 +14,12 @@ Usage:
 Options:
     <case>            Case to build IVP around
 
+                      Properties of analytic atmosphere, if used
+    --alpha=<alpha>   alpha value [default: 3]
+    --beta=<beta>     beta value  [default: 1.1]
+    --gamma=<gamma>   gamma value [default: 0.19]
+    --q0=<q0>         basal q value [default: 0.6]
+
     --Rayleigh=<Ra>   Rayleigh number [default: 1e5]
 
     --aspect=<a>      Aspect ratio of domain, Lx/Lz [default: 10]
@@ -21,15 +27,8 @@ Options:
     --tau=<tau>       If set, override value of tau
     --k=<k>           If set, override value of k
 
-                      Properties of analytic atmosphere, if used
-    --alpha=<alpha>   alpha value [default: 3]
-    --beta=<beta>     beta value  [default: 1.1]
-    --gamma=<gamma>   gamma value [default: 0.19]
-    --q0=<q0>         basal q value [default: 0.6]
-
     --erf             Use an erf rather than a tanh for the phase transition
     --Legendre        Use Legendre polynomials
-
 
     --nondim=<n>      Non-Nondimensionalization [default: buoyancy]
 
@@ -161,6 +160,7 @@ if args['--label']:
 import dedalus.tools.logging as dedalus_logging
 dedalus_logging.add_file_handler(data_dir+'/logs/dedalus_log', 'DEBUG')
 
+logger.info('saving data to: {:}'.format(data_dir))
 logger.info('α={:}, β={:}, γ={:}, tau={:}, k={:}'.format(α,β,γ,tau, k))
 
 Prandtlm = 1
