@@ -421,9 +421,13 @@ if not args['--no-output']:
     traces.add_task(xy_avg(np.abs(τq2)), name='τq2')
     traces.add_task(np.abs(τp), name='τp')
 
-    #checkpoint_wall_dt = 3.9*3600 # trigger slightly before a 4 hour interval
-    #checkpoints = solver.evaluator.add_file_handler(data_dir+'/checkpoints', wall_dt=checkpoint_wall_dt, max_writes=1)
+    checkpoint_wall_dt = 3.9*3600 # trigger slightly before a 4 hour interval
+    checkpoints = solver.evaluator.add_file_handler(data_dir+'/checkpoints', wall_dt=checkpoint_wall_dt, max_writes=1)
     #checkpoints.add_system(solver.state)
+    checkpoints.add_task(p, layout='c')
+    checkpoints.add_task(b, layout='c')
+    checkpoints.add_task(q, layout='c')
+    checkpoints.add_task(u, layout='c')
 
 
 flow = flow_tools.GlobalFlowProperty(solver, cadence=report_cadence)
