@@ -297,7 +297,7 @@ noise = dist.Field(name='noise', bases=bases)
 noise.fill_random('g', seed=42, distribution='normal', scale=amp) # Random noise
 noise.low_pass_filter(scales=0.75)
 
-# noise ICs in moisture
+# noise ICs in buoyancy
 b0.change_scales(1)
 q0.change_scales(1)
 b['g'] = b0['g']
@@ -319,8 +319,9 @@ cfl.add_velocity(u)
 
 report_cadence = 1e2
 
+vol = Lx*Lz
 integ = lambda A: de.Integrate(de.Integrate(A, 'x'), 'z')
-avg = lambda A: integ(A)/(Lx*Lz)
+avg = lambda A: integ(A)/vol
 x_avg = lambda A: de.Integrate(A, 'x')/(Lx)
 
 Re = np.sqrt(u@u)/PdR
@@ -388,8 +389,6 @@ flow.add_property(np.abs(τb2), name='|τb2|')
 flow.add_property(np.abs(τq1), name='|τq1|')
 flow.add_property(np.abs(τq2), name='|τq2|')
 flow.add_property(np.abs(τp), name='|τp|')
-
-vol = Lx*Lz
 
 good_solution = True
 KE_avg = 0
