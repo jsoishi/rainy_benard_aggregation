@@ -14,6 +14,12 @@ Usage:
 Options:
     <cases>           Case (or cases) to calculate onset for
 
+                      Properties of analytic atmosphere, if used
+    --alpha=<alpha>   alpha value [default: 3]
+    --beta=<beta>     beta value  [default: 1.1]
+    --gamma=<gamma>   gamma value [default: 0.19]
+    --q0=<q0>         basal q value [default: 0.6]
+
     --tau=<tau>       If set, override value of tau
     --k=<k>           If set, override value of k
 
@@ -67,19 +73,30 @@ dealias = 2
 
 case = args['<case>']
 if case == 'analytic':
+    import os
     import analytic_atmosphere
 
     from analytic_zc import f_zc as zc_analytic
     from analytic_zc import f_Tc as Tc_analytic
-    α = 3
-    β = 1.1
-    γ = 0.19
-    case += '_unsaturated/alpha{:}_beta{:}_gamma{:}/tau{:}_k{:}'.format(α,β,γ,args['--tau'],args['--k'])
+    α = float(args['--alpha'])
+    β = float(args['--beta'])
+    γ = float(args['--gamma'])
+    k = float(args['--k'])
+    q0 = float(args['--q0'])
+    tau = float(args['--tau'])
+
+    if q0 < 1:
+        atm_name = 'unsaturated'
+    elif q0 == 1:
+        atm_name = 'saturated'
+    else:
+        raise ValueError("q0 has invalid value, q0 = {:}".format(q0))
+
+    case += '_{:s}/alpha{:}_beta{:}_gamma{:}_q{:}'.format(atm_name, args['--alpha'],args['--beta'],args['--gamma'], args['--q0'])
+
+    case += '/tau{:}_k{:}'.format(args['--tau'],args['--k'])
     if args['--erf']:
         case += '_erf'
-    sol = analytic_atmosphere.unsaturated
-    zc = zc_analytic()(γ)
-    Tc = Tc_analytic()(γ)
 
     nz = int(float(args['--nz']))
     if args['--Legendre']:
@@ -88,14 +105,23 @@ if case == 'analytic':
     else:
         zb = de.ChebyshevT(coords.coords[2], size=nz, bounds=(0, Lz), dealias=dealias)
 
-    sol = sol(dist, zb, β, γ, zc, Tc, dealias=2, q0=0.6, α=α)
+    if atm_name == 'unsaturated':
+        sol = analytic_atmosphere.unsaturated
+        zc = zc_analytic()(γ)
+        Tc = Tc_analytic()(γ)
+
+        sol = sol(dist, zb, β, γ, zc, Tc, dealias=dealias, q0=q0, α=α)
+    elif atm_name == 'saturated':
+        sol = analytic_atmosphere.saturated
+        sol = sol(dist, zb, β, γ, dealias=dealias, q0=q0, α=α)
+
     sol['b'].change_scales(1)
     sol['q'].change_scales(1)
     sol['b'] = sol['b']['g']
     sol['q'] = sol['q']['g']
     sol['z'].change_scales(1)
     nz_sol = sol['z']['g'].shape[-1]
-    if not os.path.exists('{:s}/'.format(case)):
+    if not os.path.exists('{:s}/'.format(case)) and dist.comm.rank == 0:
         os.makedirs('{:s}/'.format(case))
 else:
     f = h5py.File(case+'/drizzle_sol/drizzle_sol_s1.h5', 'r')
@@ -109,6 +135,7 @@ else:
     β = sol['β'][0]
     γ = sol['γ'][0]
     nz_sol = sol['z'].shape[0]
+    f.close()
 if args['--nz']:
     nz = int(float(args['--nz']))
 else:
