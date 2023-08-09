@@ -19,7 +19,7 @@ import pathlib
 import h5py
 
 from docopt import docopt
-plt.style.use('prl')
+plt.style.use('../../prl.mplstyle')
 
 def plot_hov(df, task_name, output_path, aspect_ratio = 4, fig_W = 13, t_avg_start=1000):
     fig_H = fig_W/aspect_ratio
