@@ -1,0 +1,11 @@
+font.family : serif
+font.serif  : STIX Two Text
+
+mathtext.fontset : stix
+axes.labelsize : 20
+axes.titlesize : 18
+legend.fontsize : 18
+lines.linewidth : 2
+lines.markersize : 6
+xtick.labelsize : 16
+ytick.labelsize : 16
