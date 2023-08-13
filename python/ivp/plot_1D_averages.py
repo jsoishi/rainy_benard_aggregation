@@ -6,6 +6,8 @@ Usage:
 
 Options:
     --output=<output>    Output directory; if blank a guess based on likely case name will be made
+    --tag=<tag>          Adds a label tag to the tasks [default: _avg]
+
 """
 import logging
 logger = logging.getLogger(__name__.split('.')[-1])
@@ -24,7 +26,7 @@ plt.style.use('../../prl.mplstyle')
 def plot_hov(df, task_name, output_path, aspect_ratio = 4, fig_W = 13, t_avg_start=1000):
     fig_H = fig_W/aspect_ratio
     fig = plt.figure(figsize=[fig_W,fig_H])
-    hov_ax = fig.add_axes([0.1,0.2,0.8,0.6])
+    hov_ax = fig.add_axes([0.1,0.2,0.7,0.6])
     hov_cb_ax = fig.add_axes([0.1,0.8,0.2,0.04])
     plot_z_ax = fig.add_axes([0.8,0.2,0.1,0.6])
 
@@ -42,7 +44,12 @@ def plot_hov(df, task_name, output_path, aspect_ratio = 4, fig_W = 13, t_avg_sta
     hov_cb_ax.xaxis.tick_top()
     hov_cb_ax.xaxis.set_label_position('top')
     hov_cb_ax.tick_params(axis='x', which='major',labelsize=10, pad=2)
-    task_tavg = task[t_avg_start:,0,0,0:].mean(axis=0)
+    if t[-1] > 1.5*t_avg_start:
+        i_avg_start = np.argmin(np.abs(t-t_avg_start))
+    else:
+        i_avg_start = int(len(t)/2)
+    print(i_avg_start)
+    task_tavg = task[i_avg_start:,0,0,0:].mean(axis=0)
     task_ic = task[0,0,0,0:]
     plot_z_ax.plot(task_tavg,z)
     plot_z_ax.plot(task_ic, z)
@@ -51,7 +58,7 @@ def plot_hov(df, task_name, output_path, aspect_ratio = 4, fig_W = 13, t_avg_sta
     plot_z_ax.set_xlabel(f"{task_label}")
 
     fig.savefig(output_path/pathlib.Path(f"{task_name}_hov.png"), dpi=300)
-    
+
 args = docopt(__doc__)
 df_name = args['<file>']
 case = df_name.split('snapshots')[0]
@@ -59,8 +66,11 @@ if args['--output'] is not None:
     output_path = pathlib.Path(args['--output']).absolute()
 else:
     data_dir = case +'/'
-    output_path = pathlib.Path(data_dir).absolute()
-tasks = ['b_avg', 'q_avg', 'rh_avg', 'ub_avg', 'uq_avg', 'ux_avg']
+    output_path = pathlib.Path(data_dir.split('averages/averages_s1.h5')[0]).absolute()
+
+tasks = ['b', 'q', 'm', 'Q_eq', 'rh', 'ub', 'uq', 'ux']
+if args['--tag']:
+    tasks = [task + args['--tag'] for task in tasks]
 
 with h5py.File(df_name,'r') as df:
     for task in tasks:
