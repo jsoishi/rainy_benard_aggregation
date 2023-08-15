@@ -21,20 +21,25 @@ import h5py
 from docopt import docopt
 plt.style.use('../../prl.mplstyle')
 
-def plot_hov(df, task_name, output_path, aspect_ratio = 4, fig_W = 13, t_avg_start=1000):
+def plot_hov(df, task_name, output_path, zrange=None, aspect_ratio = 4, fig_W = 13, t_avg_start=1000, eps=0.05):
     fig_H = fig_W/aspect_ratio
     fig = plt.figure(figsize=[fig_W,fig_H])
-    hov_ax = fig.add_axes([0.1,0.2,0.8,0.6])
-    hov_cb_ax = fig.add_axes([0.1,0.8,0.2,0.04])
-    plot_z_ax = fig.add_axes([0.8,0.2,0.1,0.6])
+    hov_ax = fig.add_axes([0.07,0.2,0.8,0.6])
+    hov_cb_ax = fig.add_axes([0.07,0.8,0.2,0.04])
+    plot_z_ax = fig.add_axes([0.87,0.2,0.1,0.6])
 
     task_label = task_name.replace("_"," ")
     task = df['tasks'][task_name]
     t = df['scales/sim_time'][:]
     z = task.dims[3][0][:]
     xx,yy = np.meshgrid(t, z)
-    print(f"task {task} (min,max) = {task[:].min(), task[:].max()}")
-    hov_img = hov_ax.pcolormesh(xx, yy, task[:-1,0,0,:-1].T, rasterized=True)
+
+    if zrange:
+        zmin, zmax = zrange
+    else:
+        zmin = zmax = None
+
+    hov_img = hov_ax.pcolormesh(xx, yy, task[:-1,0,0,:-1].T, rasterized=True, vmin=zmin, vmax=zmax)
     hov_ax.set_xlabel(r"$t$")
     hov_ax.set_ylabel(r"$z$")
     cb = fig.colorbar(hov_img, orientation='horizontal',cax=hov_cb_ax)
@@ -47,6 +52,10 @@ def plot_hov(df, task_name, output_path, aspect_ratio = 4, fig_W = 13, t_avg_sta
     plot_z_ax.plot(task_tavg,z)
     plot_z_ax.plot(task_ic, z)
     plot_z_ax.set_ylim(0,1)
+    if zmin is not None:
+        if zmax == 1:
+            zmax += eps
+        plot_z_ax.set_xlim(zmin, zmax)
     plot_z_ax.get_yaxis().set_visible(False)
     plot_z_ax.set_xlabel(f"{task_label}")
 
@@ -61,7 +70,7 @@ else:
     data_dir = case +'/'
     output_path = pathlib.Path(data_dir).absolute()
 tasks = ['b_avg', 'q_avg', 'rh_avg', 'ub_avg', 'uq_avg', 'ux_avg']
-
+zranges = [None, None, (0,1), None, None, None]
 with h5py.File(df_name,'r') as df:
-    for task in tasks:
-        plot_hov(df, task, output_path)
+    for zr, task in zip(zranges, tasks):
+        plot_hov(df, task, output_path,zrange=zr)
