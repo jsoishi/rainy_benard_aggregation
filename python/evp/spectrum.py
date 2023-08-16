@@ -150,9 +150,6 @@ def build_rbc_problem(nz, coords, dist, Ra, tau_in, kx_in, γ, α, β, sol, k, P
     kx = dist.Field(name='kx')
     Rayleigh = dist.Field(name='Ra')
     tau = dist.Field(name='tau')
-    Rayleigh['g'] = Ra
-    kx['g'] = kx_in
-    tau['g'] = tau_in
 
     ex, ey, ez = coords.unit_vector_fields(dist)
     dx = lambda A: 1j*kx*A # 1-d mode onset
@@ -284,6 +281,9 @@ def build_rbc_problem(nz, coords, dist, Ra, tau_in, kx_in, γ, α, β, sol, k, P
     #     problem.add_equation((u(z=Lz),0))
     # problem.add_equation((de.integ(p), 0))
     solver = problem.build_solver()
+    Rayleigh['g'] = Ra
+    kx['g'] = kx_in
+    tau['g'] = tau_in
 
     if plot_background:
         fig, ax = plt.subplots(ncols=2, figsize=[6,6/2])
@@ -318,8 +318,8 @@ def build_rbc_problem(nz, coords, dist, Ra, tau_in, kx_in, γ, α, β, sol, k, P
     return solver, variables
 
 # build solvers
-lo_res_sol, lo_res_vars = build_rbc_problem(    nz, coords, dist, Rayleigh, tau, kx, γ, α, β, sol, k, dealias=dealias,Lz=1)#,plot_background=True)
-hi_res_sol, hi_res_vars = build_rbc_problem(3*nz/2, coords, dist, Rayleigh, tau, kx, γ, α, β, sol, k, dealias=dealias,Lz=1,plot_background=True)
+lo_res_sol, lo_res_vars = build_rbc_problem(    nz, coords, dist, Rayleigh, tau, kx, γ, α, β, sol, k, dealias=dealias,Lz=1)
+hi_res_sol, hi_res_vars = build_rbc_problem(3*nz/2, coords, dist, Rayleigh, tau, kx, γ, α, β, sol, k, dealias=dealias,Lz=1)
 
 dlog = logging.getLogger('subsystems')
 dlog.setLevel(logging.WARNING)
@@ -363,8 +363,8 @@ fig_filename=f"Ra_{Rayleigh:.4e}_nz_{nz}_kx_{kx}_spectrum"
 #plt.scatter(hi_res_sol.eigenvalues.real, hi_res_sol.eigenvalues.imag, marker='x', label='high res')
 plt.scatter(lo_res_sol.eigenvalues.real, lo_res_sol.eigenvalues.imag, marker='x', alpha=0.4,label='low res')
 plt.scatter(evals_good.real, evals_good.imag, marker='o',label='good modes')
-plt.xlim(-0.5,0.5)
-plt.ylim(-0.5,0.5)
+plt.xlim(-10,0.5)
+plt.ylim(-1,1)
 plt.legend()
 plt.axvline(0,alpha=0.4, color='k')
 plt.xlabel(r"$\Re{\sigma}$")
