@@ -4,7 +4,11 @@ python/profiles/*
 python/ra1e6_run1/*
 python/slices/*
 python/snapshots/*
-
+*.h5
+*.mp4
+*.png
+*.pdf
+*.pyc
 *.aux
 *.glo
 *.idx
