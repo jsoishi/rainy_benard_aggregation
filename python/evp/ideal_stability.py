@@ -17,11 +17,14 @@ Options:
 
     --VPT19_IVP          Use the VPT19 IVP atmosphere
     --unsaturated        Use an unsaturated atmosphere with q0=0.6
+    --saturated          Use saturated atmosphere (default)
 
     --mark_VPT19
     --no_mark
 
     --zoom
+
+    --grad_b_max         Also mark maximum grad b
 
     --nz=<nz>            Vertical resolution [default: 128]
 """
@@ -64,6 +67,8 @@ nβ = 200
 nγ = 100
 grad_m = np.zeros((nβ, nγ))
 grad_b = np.zeros((nβ, nγ))
+grad_b_max = np.zeros((nβ, nγ))
+
 if args['--zoom']:
     β0 = 0.95
     β1 = 1.2
@@ -97,7 +102,7 @@ for iβ, β in enumerate(βs):
             analytic_sol = sol(dist, zb, β, γ, dealias=2, q0=1, α=α)
         grad_m[iβ,iγ] = dz(analytic_sol['m']).evaluate()['g'][0,0,0]
         grad_b[iβ,iγ] = np.min(dz(analytic_sol['b']).evaluate()['g'][0,0,:]) # get min value
-
+        grad_b_max[iβ,iγ] = np.max(dz(analytic_sol['b']).evaluate()['g'][0,0,:])
 import matplotlib.pyplot as plt
 import matplotlib.ticker as ticker
 def fmt(x):
@@ -115,6 +120,10 @@ csm = ax.contour(γs, βs, grad_m, grad_m_levels, colors='xkcd:dark blue')
 ax.clabel(csm, csm.levels, fmt=fmt)
 csb = ax.contour(γs, βs, grad_b, grad_b_levels, colors='xkcd:brick red')
 ax.clabel(csb, csb.levels, fmt=fmt)
+if args['--grad_b_max']:
+    csbm = ax.contour(γs, βs, grad_b_max, grad_b_levels, colors='xkcd:forest green')
+    ax.clabel(csbm, csbm.levels, fmt=fmt)
+
 ax.contourf(γs, βs, (grad_m<0)&(grad_b>0), levels=[0.5, 1.5], colors='xkcd:dark green', alpha=0.25)
 ax.contourf(γs, βs, (grad_m>0)&(grad_b>0), levels=[0.5, 1.5], colors='xkcd:grey', alpha=0.25)
 ax.set_title(r'$\alpha='+'{:}'.format(α)+r'$')
@@ -128,6 +137,7 @@ elif not args['--no_mark']:
     ax.scatter(0.19, 1.05, marker='s', alpha=0.5)
     ax.scatter(0.19, 1.1, marker='s', alpha=0.5)
     ax.scatter(0.19, 1.15, marker='s', alpha=0.5)
+    ax.scatter(0.19, 1.175, marker='*', alpha=0.5)
     ax.plot(0.19, 1.1, marker='.', color='black')
 fig.tight_layout()
 

@@ -7,6 +7,7 @@ Usage:
 Options:
     --output=<dir>     Output directory; defaults to 'frames' subdir within the case dir
     --tasks=<tasks>    Tasks to plot [default: b,q,b_fluc,q_fluc,rh,rh_fluc,vorticity]
+    --3D_default       plots default 3-D fields
 """
 
 import h5py
@@ -18,13 +19,12 @@ import matplotlib.pyplot as plt
 import logging
 logger = logging.getLogger(__name__)
 
+# Plot settings
+dpi = 300
 
 def main(filename, start, count, tasks, output):
     """Save plot of specified tasks for given range of analysis writes."""
 
-    # Plot settings
-    dpi = 300
-    title_func = lambda sim_time: 't = {:.3f}'.format(sim_time)
     # Plot writes
     with h5py.File(filename, mode='r') as f:
         t = np.array(f['scales/sim_time'])
@@ -47,7 +47,8 @@ def main(filename, start, count, tasks, output):
             z = task.dims[3][0][:]
             Lz = np.max(z)-np.min(z)
             Lx = np.max(x)-np.min(x)
-            figsize = (6.4, 1.2*Lz/Lx*6.4)
+            height = 1.6
+            figsize = (height*(Lx/Lz), height+0.32)
             for k in range(len(t)):
                 time = t[k]
                 fig, ax = plt.subplots(1, figsize=figsize)
@@ -82,7 +83,7 @@ def main(filename, start, count, tasks, output):
                 if title is not None:
                     ax_cb.text(0.5, 1.75, title, horizontalalignment='center', verticalalignment='center', transform=ax_cb.transAxes)
                 if time is not None:
-                    ax_cb.text(0.25, -0.5, "t = {:.0f}".format(time), horizontalalignment='left', verticalalignment='center', transform=ax_cb.transAxes)
+                    ax.text(0.975, -0.15, "t = {:.0f}".format(time), horizontalalignment='left', verticalalignment='center', transform=ax.transAxes)
                 savename = savename_func(f['scales/write_number'][k])
                 savepath = output.joinpath(savename)
                 fig.savefig(str(savepath), dpi=dpi)
@@ -99,6 +100,8 @@ if __name__ == "__main__":
 
     args = docopt(__doc__)
     tasks = args['--tasks'].split(',')
+    if args['--3D_default']:
+        tasks = ['rh mid y','enstrophy mid y']
     if args['--output']:
         output_path = pathlib.Path(args['--output']).absolute()
     else:

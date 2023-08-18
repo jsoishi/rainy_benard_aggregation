@@ -330,6 +330,22 @@ def compute_growth_rate(kx_i, Ra_i, target=0):
         peak_eval = np.conj(peak_eval)
     # set solver state to peak eigenmode, in case we wish to plot it
     solver.set_state(i_evals[-1],0)
+
+    fig, ax = plt.subplots(figsize=[6,6/1.6])
+    fig_filename=f"Ra_{Ra_i:.4e}_nz_{nz}_kx_{kx_i:.2e}_spectrum"
+    #plt.scatter(hi_res_sol.eigenvalues.real, hi_res_sol.eigenvalues.imag, marker='x', label='high res')
+    ax.scatter(evals.real, evals.imag, alpha=0.3, marker='o',label='good modes')
+    ax.set_xlim(-0.5,0.5)
+    ax.set_ylim(-0.5,0.5)
+    ax.legend()
+    ax.axvline(0,alpha=0.4, color='k')
+    ax.set_xlabel(r"$\Re{\sigma}$")
+    ax.set_ylabel(r"$\Im{\sigma}$")
+    fig.tight_layout()
+    print('spectrum at: {:s}'.format(case+'/'+fig_filename+'.png'))
+    fig.savefig(case+'/'+fig_filename+'.png', dpi=300)
+    plt.close(fig)
+
     return peak_eval
 
 def peak_growth_rate(*args):

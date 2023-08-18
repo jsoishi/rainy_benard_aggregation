@@ -53,7 +53,6 @@ def plot_hov(df, task_name, output_path, zrange=None, aspect_ratio = 4, fig_W = 
         i_avg_start = np.argmin(np.abs(t-t_avg_start))
     else:
         i_avg_start = int(len(t)/2)
-    print(i_avg_start)
     task_tavg = task[i_avg_start:,0,0,0:].mean(axis=0)
     task_ic = task[0,0,0,0:]
     plot_z_ax.plot(task_tavg,z)
@@ -76,14 +75,12 @@ if args['--output'] is not None:
 else:
     data_dir = case +'/'
     output_path = pathlib.Path(data_dir).absolute()
-tasks = ['b_avg', 'q_avg', 'rh_avg', 'ub_avg', 'uq_avg', 'ux_avg']
-zranges = [None, None, (0,1), None, None, None]
-
 # need to fix this later...
-# tasks = ['b', 'q', 'm', 'Q_eq', 'rh', 'ub', 'uq', 'ux']
-# if args['--tag']:
-#     tasks = [task + args['--tag'] for task in tasks]
-# 
+tasks = ['b', 'q', 'm', 'rh', 'ub', 'uq', 'ux']
+if args['--tag']:
+    tasks = [task + args['--tag'] for task in tasks]
+zranges = [None, None, None, (0,1), None, None, None]
+
 with h5py.File(df_name,'r') as df:
     for zr, task in zip(zranges, tasks):
         plot_hov(df, task, output_path,zrange=zr)

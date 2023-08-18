@@ -47,13 +47,13 @@ if args['--times']:
 else:
     subrange = False
 
-energy_keys = ['KE','PE','QE']
+energy_keys = ['KE','PE','QE','ME']
 
 fig_E, ax_E = plt.subplots(nrows=2, sharex=True)
 for key in energy_keys:
     ax_E[0].plot(t, data[key], label=key)
-for key in energy_keys[::2]: # skip PE
-    ax_E[1].plot(t, data[key], label=key)
+for key in ['KE', 'ME']:
+    ax_E[1].plot(t, data[key]-data[key][0], label=key+"'")
 
 for ax in ax_E:
     if subrange:
