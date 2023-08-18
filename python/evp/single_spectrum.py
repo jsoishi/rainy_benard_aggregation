@@ -26,10 +26,7 @@ Options:
     --nondim=<n>           Non-Nondimensionalization [default: buoyancy]
  
     --Ra=<Ra>              Minimum Rayleigh number to sample [default: 1e4]
-    --kx_min=<kx_min>      min x wavenumber [default: 0.1]
-    --kx_max=<kx_max>      max x wavenumber [default: 10]
-    --Lx=<Lx>              x box length. If specified, interpret kx_min,max as multiples of fundamental
-    --n_kx=<n_kx>          number of x wavenumbers [default: 20]
+    --kx=<kx>              x wavenumber [default: 0.1]
     --top-stress-free      Stress-free upper boundary
     --stress-free          Stress-free both boundaries
  
@@ -62,7 +59,6 @@ args = docopt(__doc__)
 N_evals = int(float(args['--eigs']))
 target = float(args['--target'])
 Rayleigh = float(args['--Ra'])
-n_kx = int(args['--n_kx'])
 tau_in = float(args['--tau'])
 if args['--stress-free']:
     bc_type = 'stress-free'
@@ -70,16 +66,7 @@ elif args['--top-stress-free']:
     bc_type = 'top-stress-free'
 else:
     bc_type = None # default no-slip
-if args['--Lx']:
-    Lx = float(args['--Lx'])
-    logger.info(f'Lx = {Lx}. Ignoring kx_min and kx_max')
-    kx_min = 2*np.pi/Lx
-    kx_max = n_kx*kx_min
-else:
-    logger.info('Using kx_min and kx_max as wavenumbers')
-    kx_min = float(args['--kx_min'])
-    kx_max = float(args['--kx_max'])
-    Lx = None
+kx = float(args['--kx'])
 
 Prandtlm = 1
 Prandtl = 1
@@ -88,7 +75,7 @@ dealias = 2
 import os
 
 def mode_reject(lo_res, hi_res):
-    ep = Eigenproblem(None)
+    ep = Eigenproblem(None,use_ordinal=False, drift_threshold=1e3)
     ep.evalues_low   = lo_res.eigenvalues
     ep.evalues_high  = hi_res.eigenvalues
     evals_good, indx = ep.discard_spurious_eigenvalues()
@@ -129,45 +116,35 @@ if __name__ == "__main__":
 
     if args['--tau']:
         tau_in = float(args['--tau'])
-    if Lx:
-        kxs = 2*np.pi/Lx * np.arange(n_kx)
-    else:
-        kxs = np.linspace(kx_min, kx_max, n_kx)
     # build solvers
-    lo_res = RainyBenardEVP(nz, Rayleigh, tau, kxs[0], γ, α, β, lower_q0, k, Legendre=Legendre, erf=erf, bc_type=bc_type, nondim=nondim, dealias=dealias,Lz=1)
-    hi_res = RainyBenardEVP(3*nz/2, Rayleigh, tau, kxs[0], γ, α, β, lower_q0, k, Legendre=Legendre, erf=erf, bc_type=bc_type, nondim=nondim, dealias=dealias,Lz=1)
+    lo_res = RainyBenardEVP(nz, Rayleigh, tau, kx, γ, α, β, lower_q0, k, Legendre=Legendre, erf=erf, bc_type=bc_type, nondim=nondim, dealias=dealias,Lz=1)
+    hi_res = RainyBenardEVP(3*nz/2, Rayleigh, tau, kx, γ, α, β, lower_q0, k, Legendre=Legendre, erf=erf, bc_type=bc_type, nondim=nondim, dealias=dealias,Lz=1)
 
     dlog = logging.getLogger('subsystems')
     dlog.setLevel(logging.WARNING)
     spectra = []
     fig = plt.figure(figsize=[6,6/2])
-    fig_filename=f"Ra_{Rayleigh:.2e}_nz_{nz}_kx_min_{kx_min:.3f}_kx_max_{kx_max:.3f}_bc_{bc_type}_spectrum"
-    re_ax = fig.add_axes([0.14,0.2,0.35,0.7])
-    im_ax = fig.add_axes([0.64,0.2,0.35,0.7])
-    max_growth = []
-    for kx in kxs:
-        for solver in [lo_res, hi_res]:
-            if args['--dense']:
-                solver.solve(Rayleigh, kx, dense=True)
-            else:
-                solver.solve(Rayleigh, kx, dense=False, N_evals=N_evals, target=target)
-        evals_good, indx = mode_reject(lo_res, hi_res)
-        max_growth.append(evals_good[indx][-1])
-        eps = 1e-7
-        col = np.where(np.abs(evals_good.imag) > eps, 'g',np.where(evals_good.real > 0, 'r','k'))
-        re_ax.scatter(np.repeat(kx, evals_good.size),evals_good.real,marker='o', c=col)
-        re_ax.set_prop_cycle(None)
-        im_ax.scatter(np.repeat(kx, evals_good.size),evals_good.imag,marker='o', c=col)
-        im_ax.set_prop_cycle(None)
-    max_growth = np.array(max_growth)
-    logger.info(f"maximum growth rate = {max_growth.max()}")
-    re_ax.set_xlabel(r"$k_x$")
-    re_ax.set_ylabel(r"$\Re{\sigma}$")
-
-    im_ax.set_xlabel(r"$k_x$")
-    im_ax.set_ylabel(r"$\Im{\sigma}$")
-
+    fig_filename=f"Ra_{Rayleigh:.2e}_nz_{nz}_kx_{kx:.3f}_bc_{bc_type}_spectrum"
+    spec_ax = fig.add_axes([0.15,0.2,0.85,0.7])
+    for solver in [lo_res, hi_res]:
+        if args['--dense']:
+            solver.solve(Rayleigh, kx, dense=True)
+        else:
+            solver.solve(Rayleigh, kx, dense=False, N_evals=N_evals, target=target)
+    evals_good, indx = mode_reject(lo_res, hi_res)
+    logger.info(f"good modes:    max growth rate = {evals_good[-1]}")
+    lo_indx = np.argsort(lo_res.eigenvalues.real)
+    logger.info(f"low res modes: max growth rate = {lo_res.eigenvalues[lo_indx][-1]}")
+    eps = 1e-7
+    col = np.where(np.abs(evals_good.imag) > eps, 'g',np.where(evals_good.real > 0, 'r','k'))
+    spec_ax.scatter(evals_good.real,evals_good.imag,marker='o', c=col, label='good modes')
+    spec_ax.scatter(lo_res.eigenvalues.real, lo_res.eigenvalues.imag, marker='x',label='low res', alpha=0.4)
+    spec_ax.scatter(hi_res.eigenvalues.real, hi_res.eigenvalues.imag, marker='+',label='hi res', alpha=0.4)
+    spec_ax.legend()
+    spec_ax.set_xlabel(r"$\Re{\sigma}$")
+    spec_ax.set_ylabel(r"$\Im{\sigma}$")
+    spec_ax.set_xlim(-10,1)
     spec_filename = lo_res.case_name+'/'+fig_filename+'.png'
     logger.info(f"saving file to {spec_filename}")
     fig.savefig(spec_filename, dpi=300)
-
+    lo_res.plot_background()
