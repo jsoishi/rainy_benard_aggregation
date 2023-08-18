@@ -140,30 +140,30 @@ if __name__ == "__main__":
     dlog = logging.getLogger('subsystems')
     dlog.setLevel(logging.WARNING)
     spectra = []
-    fig, ax = plt.subplots(figsize=[6,6/1.6])
-    fig_filename=f"Ra_{Rayleigh:.4e}_nz_{nz}_kx_min_{kx_min}_kx_max_{kx_max}_bc_{bc_type}_spectrum"
-
+    fig = plt.figure(figsize=[6,6/2])
+    fig_filename=f"Ra_{Rayleigh:.2e}_nz_{nz}_kx_min_{kx_min:.3f}_kx_max_{kx_max:.3f}_bc_{bc_type}_spectrum"
+    re_ax = fig.add_axes([0.14,0.2,0.35,0.7])
+    im_ax = fig.add_axes([0.64,0.2,0.35,0.7])
     for kx in kxs:
         for solver in [lo_res, hi_res]:
             if args['--dense']:
                 solver.solve(Rayleigh, kx, dense=True)
             else:
-                solver.solve(Rayleigh, kx, dense=False, N=N_evals, target=target)
+                solver.solve(Rayleigh, kx, dense=False, N_evals=N_evals, target=target)
         evals_good, indx = mode_reject(lo_res, hi_res)
         #spectra.append(good_evals[indx])
-        plt.subplot(121)
-        plt.scatter(np.repeat(kx, evals_good.size),evals_good.real,marker='o')
-        plt.gca().set_prop_cycle(None)
-        plt.subplot(122)
-        plt.scatter(np.repeat(kx, evals_good.size),evals_good.imag,marker='o')
-        plt.gca().set_prop_cycle(None)
-    plt.subplot(121)
-    plt.xlabel(r"$k_x$")
-    plt.ylabel(r"$\Re{\sigma}$")
-    plt.subplot(122)
-    plt.xlabel(r"$k_x$")
-    plt.ylabel(r"$\Im{\sigma}$")
-    plt.tight_layout()
+        eps = 1e-7
+        col = np.where(np.abs(evals_good.imag) > eps, 'g',np.where(evals_good.real > 0, 'r','k'))
+        re_ax.scatter(np.repeat(kx, evals_good.size),evals_good.real,marker='o', c=col)
+        re_ax.set_prop_cycle(None)
+        im_ax.scatter(np.repeat(kx, evals_good.size),evals_good.imag,marker='o', c=col)
+        im_ax.set_prop_cycle(None)
+
+    re_ax.set_xlabel(r"$k_x$")
+    re_ax.set_ylabel(r"$\Re{\sigma}$")
+
+    im_ax.set_xlabel(r"$k_x$")
+    im_ax.set_ylabel(r"$\Im{\sigma}$")
 
     spec_filename = lo_res.case_name+'/'+fig_filename+'.png'
     logger.info(f"saving file to {spec_filename}")
