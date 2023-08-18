@@ -10,28 +10,31 @@ Vallis, Parker & Tobias, 2019, JFM,
 This script plots the ideal stability diagram for the saturated atmosphere, using Lambert W functions and an analytic solution.
 
 Usage:
-    saturated_atmosphere_ideal_stability.py [options]
+    ideal_stability.py <atmosphere> [options]
+
+where <atmosphere> is one of:
+    VPT19              Use the VPT19 IVP atmosphere
+    unsaturated        Use an unsaturated atmosphere with q0=0.6
+    saturated          Use saturated atmosphere (default)
 
 Options:
     --alpha=<alpha>      Alpha parameter [default: 3]
 
-    --VPT19_IVP          Use the VPT19 IVP atmosphere
-    --unsaturated        Use an unsaturated atmosphere with q0=0.6
-    --saturated          Use saturated atmosphere (default)
+    --no_mark            Suppress all markings
 
-    --mark_VPT19
-    --no_mark
-
-    --zoom
+    --zoom               Zoom on an atmosphere-specific subsection of the range
+    --one_contour
 
     --grad_b_max         Also mark maximum grad b
+
+    --low_res
 
     --nz=<nz>            Vertical resolution [default: 128]
 """
 import logging
 logger = logging.getLogger(__name__)
 for system in ['h5py._conv', 'matplotlib', 'PIL']:
-     logging.getLogger(system).setLevel(logging.WARNING)
+    logging.getLogger(system).setLevel(logging.WARNING)
 
 import numpy as np
 import dedalus.public as de
@@ -63,15 +66,50 @@ zd = zb.local_grid(dealias)
 
 dz = lambda A: de.Differentiate(A, coords['z'])
 
-nβ = 200
-nγ = 100
+if args['--low_res']:
+    nβ = 20
+    nγ = 10
+else:
+    nβ = 200
+    nγ = 100
+
 grad_m = np.zeros((nβ, nγ))
 grad_b = np.zeros((nβ, nγ))
 grad_b_max = np.zeros((nβ, nγ))
 
+case = args['<atmosphere>']
+if args['<atmosphere>'] == 'saturated':
+    cases_2d = [(0.19, 1.2), (0.19, 1.175), (0.19, 1.15), (0.19, 1.1),
+                (0.3, 1.15), (0.3, 1.25)]
+    cases_3d = [(0.19, 1.1)]
+    if args['--zoom']:
+         β0 = 1.05
+         β1 = 1.3
+    label_stable = (0.25, 1.275)
+    label_moist = (0.25, 1.2125)
+    label_unstable = (0.25, 1.125)
+    label_rot = 20
+elif args['<atmosphere>'] == 'unsaturated':
+    cases_2d = [(0.19, 1.1), (0.19, 1.05), (0.19, 1.0),
+                (0.3, 1.15)]
+    cases_3d = [(None, None)]
+    if args['--zoom']:
+         β0 = 0.95
+         β1 = 1.2
+    label_stable = (0.25, 1.175)
+    label_moist = (0.25, 1.1125)
+    label_unstable = (0.25, 1.0)
+    label_rot = 10
+elif args['<atmosphere>'] == 'VPT19':
+    cases_2d = [(0.19, 1.2)]
+    cases_3d = [(None, None)]
+    if args['--zoom']:
+         β0 = 0.95
+         β1 = 1.3
+else:
+    raise ValueError("<atmosphere>]{:s} not in valid set of choices".format(args['<atmosphere>']))
+
 if args['--zoom']:
-    β0 = 0.95
-    β1 = 1.2
     γ0 = 0.15
     γ1 = 0.35
 else:
@@ -85,21 +123,18 @@ else:
 
 for iβ, β in enumerate(βs):
     for iγ, γ in enumerate(γs):
-        if args['--unsaturated']:
-            case = 'unsaturated'
+        if case == 'unsaturated':
             sol = analytic_atmosphere.unsaturated
-
             zc = zc_analytic()
             Tc = Tc_analytic()
             analytic_sol = sol(dist, zb, β, γ, zc(γ), Tc(γ), dealias=2, q0=0.6, α=3)
-        elif args['--VPT19_IVP']:
-            case = 'VPT19'
-            sol = analytic_atmosphere.saturated_VPT19
-            analytic_sol = sol(dist, zb, β, γ, dealias=2, q0=1, α=α)
-        else:
-            case = 'saturated'
+        elif case == 'saturated':
             sol = analytic_atmosphere.saturated
             analytic_sol = sol(dist, zb, β, γ, dealias=2, q0=1, α=α)
+        elif case == 'VPT19':
+            sol = analytic_atmosphere.saturated_VPT19
+            analytic_sol = sol(dist, zb, β, γ, dealias=2, q0=1, α=α)
+
         grad_m[iβ,iγ] = dz(analytic_sol['m']).evaluate()['g'][0,0,0]
         grad_b[iβ,iγ] = np.min(dz(analytic_sol['b']).evaluate()['g'][0,0,:]) # get min value
         grad_b_max[iβ,iγ] = np.max(dz(analytic_sol['b']).evaluate()['g'][0,0,:])
@@ -110,38 +145,54 @@ def fmt(x):
     if s.endswith("0"):
         s = f"{x:.0f}"
     return rf"{s}"
+def fmt_m(x):
+    return r"$\nabla m = "+rf"{fmt(x)}"+r"$"
+def fmt_b_min(x):
+    return r"$\nabla b_\mathrm{min} = "+rf"{fmt(x)}"+r"$"
+def fmt_b_max(x):
+    return r"$\nabla b_\mathrm{max} = "+rf"{fmt(x)}"+r"$"
 
 fig, ax = plt.subplots(figsize=[4,4/1.6])
-nlev = 17
-b_mag = m_mag = (nlev-1)/2*0.3
+if args['--one_contour']:
+    nlev = 1
+    mag = 0
+elif args['--zoom']:
+    nlev = 7
+    mag = 0.05
+else:
+    nlev = 17
+    mag = 0.3
+b_mag = m_mag = (nlev-1)/2*mag
 grad_m_levels = np.linspace(-m_mag, m_mag, num=nlev)
 grad_b_levels = np.linspace(-b_mag, b_mag, num=nlev)
 csm = ax.contour(γs, βs, grad_m, grad_m_levels, colors='xkcd:dark blue')
-ax.clabel(csm, csm.levels, fmt=fmt)
 csb = ax.contour(γs, βs, grad_b, grad_b_levels, colors='xkcd:brick red')
-ax.clabel(csb, csb.levels, fmt=fmt)
 if args['--grad_b_max']:
     csbm = ax.contour(γs, βs, grad_b_max, grad_b_levels, colors='xkcd:forest green')
-    ax.clabel(csbm, csbm.levels, fmt=fmt)
+    ax.clabel(csbm, csbm.levels, fmt=fmt_b_max)
 
-ax.contourf(γs, βs, (grad_m<0)&(grad_b>0), levels=[0.5, 1.5], colors='xkcd:dark green', alpha=0.25)
-ax.contourf(γs, βs, (grad_m>0)&(grad_b>0), levels=[0.5, 1.5], colors='xkcd:grey', alpha=0.25)
-ax.set_title(r'$\alpha='+'{:}'.format(α)+r'$')
+ax.contourf(γs, βs, (grad_m<0)&(grad_b>0), levels=[0.5, 1.5], colors='xkcd:grey', alpha=0.5)
+ax.contourf(γs, βs, (grad_m>0)&(grad_b>0), levels=[0.5, 1.5], colors='xkcd:dark grey', alpha=0.75)
+#ax.set_title(r'$\alpha='+'{:}'.format(α)+r'$')
 ax.set_ylabel(r'$\beta$')
 ax.set_xlabel(r'$\gamma$')
-if args['--mark_VPT19']:
-    ax.scatter(0.19, 1.2, marker='*', alpha=0.5, s=100)
-elif not args['--no_mark']:
-    ax.scatter(0.3, 1.15, alpha=0.5)
-    ax.scatter(0.19, 1., marker='s', alpha=0.5)
-    ax.scatter(0.19, 1.05, marker='s', alpha=0.5)
-    ax.scatter(0.19, 1.1, marker='s', alpha=0.5)
-    ax.scatter(0.19, 1.15, marker='s', alpha=0.5)
-    ax.scatter(0.19, 1.175, marker='*', alpha=0.5)
-    ax.plot(0.19, 1.1, marker='.', color='black')
+if not args['--no_mark']:
+    color = 'xkcd:forest green'
+    for gamma, beta in cases_2d:
+        ax.scatter(gamma, beta, marker='s', alpha=0.5, color=color)
+    for gamma, beta in cases_3d:
+        ax.scatter(gamma, beta, marker='.', color='black')
+    ax.text(*label_stable, 'stable', fontsize='small',
+            horizontalalignment='center', verticalalignment='center', rotation=0)
+    ax.text(*label_moist, 'dry stable, moist unstable', fontsize='small',
+            horizontalalignment='center', verticalalignment='center', rotation=label_rot)
+    ax.text(*label_unstable, 'unstable', fontsize='small',
+            horizontalalignment='center', verticalalignment='center', rotation=0)
+ax.clabel(csm, csm.levels, fmt=fmt_m, fontsize='small')
+ax.clabel(csb, csb.levels, fmt=fmt_b_min, fontsize='small')
 fig.tight_layout()
 
-filename = 'ideal_stability_alpha{:}_{:s}_figure_3'.format(α, case)
+filename = 'ideal_stability_{:s}_alpha{:}'.format(case, α)
 if args['--zoom']:
     filename += '_zoom'
 fig.savefig(filename +'.png', dpi=300)
