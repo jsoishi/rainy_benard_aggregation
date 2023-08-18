@@ -28,7 +28,7 @@ class RainyBenardEVP():
 
         self.Prandtl = Prandtl
         self.Prandtlm = Prandtlm
-        
+
         self.coords = de.CartesianCoordinates('x', 'y', 'z')
         self.dist = de.Distributor(self.coords, dtype=dtype)
         self.erf = erf
@@ -46,7 +46,7 @@ class RainyBenardEVP():
         self.Rayleigh['g'] = Ra
         self.tau = self.dist.Field(name='tau')
         self.tau['g'] = tau_in
-        
+
         if self.atmosphere:
             self.load_atmosphere()
         else:
@@ -89,17 +89,13 @@ class RainyBenardEVP():
             os.makedirs('{:s}/'.format(self.case_name))
 
     def plot_background(self):
-        fig, ax = plt.subplots(ncols=2, figsize=[12,12/2])
+        fig, ax = plt.subplots(ncols=2, figsize=[6,6/2])
         qs0 = self.qs0.evaluate()
         qs0.change_scales(1)
-        logger.info(f"when plotting b0 = {self.b0['g']}")
-        logger.info(f"b0(z=0),b0(z=Lz) = ({self.b0(z=0).evaluate()['g'][0,0,0]},{self.b0(z=self.Lz).evaluate()['g'][0,0,0]})")
-        logger.info(f"q0(z=0),q0(z=Lz) = ({self.q0(z=0).evaluate()['g'][0,0,0]},{self.q0(z=self.Lz).evaluate()['g'][0,0,0]})")
         self.b0.change_scales(1)
         self.q0.change_scales(1)
         z = self.zb.local_grid(1)
         zd = self.zb.local_grid(self.dealias)
-        
         p0 = ax[0].plot(self.b0['g'][0,0,:], z[0,0,:], label=r'$b$')
         p1 = ax[0].plot(self.γ*self.q0['g'][0,0,:], z[0,0,:], label=r'$\gamma q$')
         p2 = ax[0].plot(self.b0['g'][0,0,:]+self.γ*self.q0['g'][0,0,:], z[0,0,:], label=r'$m = b + \gamma q$')
@@ -125,7 +121,7 @@ class RainyBenardEVP():
         fig.savefig(self.case_name+f'/nz_{self.nz}_evp_background.png', dpi=300)
 
 
-    def build_solver(self):
+    def build_solver(self, relaxation_method = 'IVP'):
         ex, ey, ez = self.coords.unit_vector_fields(self.dist)
         dx = lambda A: 1j*kx*A # 1-d mode onset
         dy = lambda A: 0*A # flexibility to add 2-d mode if desired
@@ -153,7 +149,8 @@ class RainyBenardEVP():
         varnames = [v.name for v in variables]
         self.fields = {k:v for k, v in zip(varnames, variables)}
 
-        lift = lambda A, n: de.Lift(A, self.zb, n)
+        lift_basis = self.zb #.derivative_basis(2)
+        lift = lambda A, n: de.Lift(A, lift_basis, n)
 
         z_grid = self.dist.Field(name='z_grid', bases=self.zb)
         z_grid['g'] = z
@@ -169,7 +166,7 @@ class RainyBenardEVP():
         α = self.α
         β = self.β
         tau = self.tau
-        
+
         T0 = self.b0 - β*z_grid
         qs0 = np.exp(α*T0)#.evaluate()
         self.qs0 = qs0
@@ -199,25 +196,39 @@ class RainyBenardEVP():
         b0_upper = b0(z=Lz).evaluate()['g'][0,0,0]
         q0_lower = q0(z=0).evaluate()['g'][0,0,0]
         q0_upper = q0(z=Lz).evaluate()['g'][0,0,0]
-        nlbvp = de.NLBVP([q0, b0, τb1, τb2, τq1, τq2], namespace=locals())
-        nlbvp.add_equation('-tau*P*lap(b0) + lift(τb1, -1) + lift(τb2, -2) = γ*(q0-qs0)*H(q0-qs0)')
-        nlbvp.add_equation('-tau*S*lap(q0) + lift(τq1, -1) + lift(τq2, -2) = -(q0-qs0)*H(q0-qs0)')
-        nlbvp.add_equation('b0(z=0) = b0_lower')
-        nlbvp.add_equation('b0(z=Lz) = b0_upper')
-        nlbvp.add_equation('q0(z=0) = q0_lower')
-        nlbvp.add_equation('q0(z=Lz) = q0_upper')
-        nlbvp_solver = nlbvp.build_solver()
-        pert_norm = np.inf
-        tol = 1e-5
+        lap0 = lambda A: de.lap(A)
+        logger.info("relaxing atmosphere via {:s}".format(relaxation_method))
         for system in ['subsystems']:
             logging.getLogger(system).setLevel(logging.WARNING)
-        while pert_norm > tol:
-            nlbvp_solver.newton_iteration(damping=0.95)
-            pert_norm = sum(pert.allreduce_data_norm('c', 2) for pert in nlbvp_solver.perturbations)
-            logger.info("L2 err = {:.1g}".format(pert_norm))
-        logger.info(f"b0(z=0),b0(z=Lz) = ({b0(z=0).evaluate()['g'][0,0,0]},{b0(z=Lz).evaluate()['g'][0,0,0]})")
-        logger.info(f"q0(z=0),q0(z=Lz) = ({q0(z=0).evaluate()['g'][0,0,0]},{q0(z=Lz).evaluate()['g'][0,0,0]})")
-        logger.info(f"when solving b0 = {b0['g']}")
+        if relaxation_method == 'NLBVP':
+            nlbvp = de.NLBVP([q0, b0, τb1, τb2, τq1, τq2], namespace=locals())
+            nlbvp.add_equation('-P*lap0(b0) + lift(τb1, -1) + lift(τb2, -2) = γ/tau*(q0-qs0)*H(q0-qs0)')
+            nlbvp.add_equation('-S*lap0(q0) + lift(τq1, -1) + lift(τq2, -2) = -1/tau*(q0-qs0)*H(q0-qs0)')
+            nlbvp.add_equation('b0(z=0) = b0_lower')
+            nlbvp.add_equation('b0(z=Lz) = b0_upper')
+            nlbvp.add_equation('q0(z=0) = q0_lower')
+            nlbvp.add_equation('q0(z=Lz) = q0_upper')
+            nlbvp_solver = nlbvp.build_solver()
+            pert_norm = np.inf
+            tol = 1e-5
+            while pert_norm > tol:
+                nlbvp_solver.newton_iteration(damping=0.95)
+                pert_norm = sum(pert.allreduce_data_norm('c', 2) for pert in nlbvp_solver.perturbations)
+                logger.info("L2 err = {:.1g}".format(pert_norm))
+        elif relaxation_method == 'IVP':
+            ivp = de.IVP([q0, b0, τb1, τb2, τq1, τq2], namespace=locals())
+            ivp.add_equation('dt(b0) - P*lap0(b0) + lift(τb1, -1) + lift(τb2, -2) = γ/tau*(q0-qs0)*H(q0-qs0)')
+            ivp.add_equation('dt(q0) - S*lap0(q0) + lift(τq1, -1) + lift(τq2, -2) = -1/tau*(q0-qs0)*H(q0-qs0)')
+            ivp.add_equation('b0(z=0) = b0_lower')
+            ivp.add_equation('b0(z=Lz) = b0_upper')
+            ivp.add_equation('q0(z=0) = q0_lower')
+            ivp.add_equation('q0(z=Lz) = q0_upper')
+            ivp_solver = ivp.build_solver(de.SBDF2)
+            Δt = tau['g'][0,0,0].real/4
+            end_time = (1/P).evaluate()['g'][0,0,0].real
+            while ivp_solver.sim_time < end_time:
+                ivp_solver.step(Δt)
+            logger.info(f"evolved atmosphere to t={ivp_solver.sim_time:.2g} using Δt={Δt} and {ivp_solver.iteration} steps")
         if self.erf:
             scrN = (H(q0 - qs0) + 1/2*(q0 - qs0)*self.k*2*(np.pi)**(-1/2)*np.exp(-self.k**2*(q0 - qs0)**2)).evaluate()
         else:
