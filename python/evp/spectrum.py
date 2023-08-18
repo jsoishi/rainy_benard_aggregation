@@ -144,6 +144,7 @@ if __name__ == "__main__":
     fig_filename=f"Ra_{Rayleigh:.2e}_nz_{nz}_kx_min_{kx_min:.3f}_kx_max_{kx_max:.3f}_bc_{bc_type}_spectrum"
     re_ax = fig.add_axes([0.14,0.2,0.35,0.7])
     im_ax = fig.add_axes([0.64,0.2,0.35,0.7])
+    max_growth = []
     for kx in kxs:
         for solver in [lo_res, hi_res]:
             if args['--dense']:
@@ -151,14 +152,15 @@ if __name__ == "__main__":
             else:
                 solver.solve(Rayleigh, kx, dense=False, N_evals=N_evals, target=target)
         evals_good, indx = mode_reject(lo_res, hi_res)
-        #spectra.append(good_evals[indx])
+        max_growth.append(evals_good[indx][-1])
         eps = 1e-7
         col = np.where(np.abs(evals_good.imag) > eps, 'g',np.where(evals_good.real > 0, 'r','k'))
         re_ax.scatter(np.repeat(kx, evals_good.size),evals_good.real,marker='o', c=col)
         re_ax.set_prop_cycle(None)
         im_ax.scatter(np.repeat(kx, evals_good.size),evals_good.imag,marker='o', c=col)
         im_ax.set_prop_cycle(None)
-
+    max_growth = np.array(max_growth)
+    logger.info(f"maximum growth rate = {max_growth.max()}")
     re_ax.set_xlabel(r"$k_x$")
     re_ax.set_ylabel(r"$\Re{\sigma}$")
 

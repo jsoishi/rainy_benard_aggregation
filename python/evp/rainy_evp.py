@@ -78,13 +78,52 @@ class RainyBenardEVP():
             sol = analytic_atmosphere.saturated(self.dist, self.zb, self.β, self.γ, dealias=self.dealias, q0=self.lower_q0, α=self.α)
 
         self.b0 = sol['b']
+        self.b0.name = 'b0'
         self.q0 = sol['q']
+        self.q0.name = 'q0'
         # use only gradient in z direction.
         self.grad_b0 = de.grad(self.b0).evaluate()
         self.grad_q0 = de.grad(self.q0).evaluate()
 
         if not os.path.exists('{:s}/'.format(self.case_name)) and self.dist.comm.rank == 0:
             os.makedirs('{:s}/'.format(self.case_name))
+
+    def plot_background(self):
+        fig, ax = plt.subplots(ncols=2, figsize=[12,12/2])
+        qs0 = self.qs0.evaluate()
+        qs0.change_scales(1)
+        logger.info(f"when plotting b0 = {self.b0['g']}")
+        logger.info(f"b0(z=0),b0(z=Lz) = ({self.b0(z=0).evaluate()['g'][0,0,0]},{self.b0(z=self.Lz).evaluate()['g'][0,0,0]})")
+        logger.info(f"q0(z=0),q0(z=Lz) = ({self.q0(z=0).evaluate()['g'][0,0,0]},{self.q0(z=self.Lz).evaluate()['g'][0,0,0]})")
+        self.b0.change_scales(1)
+        self.q0.change_scales(1)
+        z = self.zb.local_grid(1)
+        zd = self.zb.local_grid(self.dealias)
+        
+        p0 = ax[0].plot(self.b0['g'][0,0,:], z[0,0,:], label=r'$b$')
+        p1 = ax[0].plot(self.γ*self.q0['g'][0,0,:], z[0,0,:], label=r'$\gamma q$')
+        p2 = ax[0].plot(self.b0['g'][0,0,:]+self.γ*self.q0['g'][0,0,:], z[0,0,:], label=r'$m = b + \gamma q$')
+        p3 = ax[0].plot(self.γ*qs0['g'][0,0,:], z[0,0,:], linestyle='dashed', alpha=0.3, label=r'$\gamma q_s$')
+        ax2 = ax[0].twiny()
+        self.scrN.change_scales(1)
+        p4 = ax2.plot(self.scrN['g'][0,0,:], z[0,0,:], color='xkcd:purple grey', label=r'$\mathcal{N}(z)$')
+        ax2.set_xlabel(r'$\mathcal{N}(z)$')
+        ax2.xaxis.label.set_color('xkcd:purple grey')
+        lines = p0 + p1 + p2 + p3 + p4
+        labels = [l.get_label() for l in lines]
+        ax[0].legend(lines, labels)
+        ax[0].set_xlabel(r'$b$, $\gamma q$, $m$')
+        ax[0].set_ylabel(r'$z$')
+        #ax[1].plot(q0['g'][0,0,:]-qs0['g'][0,0,:], z[0,0,:])
+        ax[1].plot(de.grad(self.b0).evaluate()['g'][-1][0,0,:], zd[0,0,:], label=r'$\nabla b$')
+        ax[1].plot(de.grad(self.γ*self.q0).evaluate()['g'][-1][0,0,:], zd[0,0,:], label=r'$\gamma \nabla q$')
+        ax[1].plot(de.grad(self.b0+self.γ*self.q0).evaluate()['g'][-1][0,0,:], zd[0,0,:], label=r'$\nabla m$')
+        ax[1].set_xlabel(r'$\nabla b$, $\gamma \nabla q$, $\nabla m$')
+        ax[1].legend()
+        ax[1].axvline(x=0, linestyle='dashed', color='xkcd:dark grey', alpha=0.5)
+        fig.tight_layout()
+        fig.savefig(self.case_name+f'/nz_{self.nz}_evp_background.png', dpi=300)
+
 
     def build_solver(self):
         ex, ey, ez = self.coords.unit_vector_fields(self.dist)
@@ -132,22 +171,11 @@ class RainyBenardEVP():
         tau = self.tau
         
         T0 = self.b0 - β*z_grid
-        qs0 = np.exp(α*T0).evaluate()
-
+        qs0 = np.exp(α*T0)#.evaluate()
+        self.qs0 = qs0
         e = grad(u) + trans(grad(u))
 
         from scipy.special import erf
-        if self.erf:
-            H = lambda A: 0.5*(1+erf(self.k*A))
-            scrN = (H(q0 - qs0) + 1/2*(q0 - qs0)*self.k*2*(np.pi)**(-1/2)*np.exp(-self.k**2*(q0 - qs0)**2)).evaluate()
-        else:
-            H = lambda A: 0.5*(1+np.tanh(self.k*A))
-            scrN = (H(self.q0 - qs0) + 1/2*(q0 - qs0)*k*(1-(np.tanh(k*(q0 - qs0)))**2)).evaluate()
-        scrN.name='scrN'
-
-        ω = self.dist.Field(name='ω')
-        dt = lambda A: ω*A
-
         if self.nondim == 'diffusion':
             P = 1                      #  diffusion on buoyancy. Always = 1 in this scaling.
             S = self.Prandtlm               #  diffusion on moisture  k_q / k_b
@@ -161,6 +189,48 @@ class RainyBenardEVP():
             #tau_in /=                     # think through what this should be
         else:
             raise ValueError('nondim {:} not in valid set [diffusion, buoyancy]'.format(nondim))
+
+        if self.erf:
+            H = lambda A: 0.5*(1+erf(self.k*A))
+        else:
+            H = lambda A: 0.5*(1+np.tanh(self.k*A))
+        # solve NLBVP for smoothing background
+        b0_lower = b0(z=0).evaluate()['g'][0,0,0]
+        b0_upper = b0(z=Lz).evaluate()['g'][0,0,0]
+        q0_lower = q0(z=0).evaluate()['g'][0,0,0]
+        q0_upper = q0(z=Lz).evaluate()['g'][0,0,0]
+        nlbvp = de.NLBVP([q0, b0, τb1, τb2, τq1, τq2], namespace=locals())
+        nlbvp.add_equation('-tau*P*lap(b0) + lift(τb1, -1) + lift(τb2, -2) = γ*(q0-qs0)*H(q0-qs0)')
+        nlbvp.add_equation('-tau*S*lap(q0) + lift(τq1, -1) + lift(τq2, -2) = -(q0-qs0)*H(q0-qs0)')
+        nlbvp.add_equation('b0(z=0) = b0_lower')
+        nlbvp.add_equation('b0(z=Lz) = b0_upper')
+        nlbvp.add_equation('q0(z=0) = q0_lower')
+        nlbvp.add_equation('q0(z=Lz) = q0_upper')
+        nlbvp_solver = nlbvp.build_solver()
+        pert_norm = np.inf
+        tol = 1e-5
+        for system in ['subsystems']:
+            logging.getLogger(system).setLevel(logging.WARNING)
+        while pert_norm > tol:
+            nlbvp_solver.newton_iteration(damping=0.95)
+            pert_norm = sum(pert.allreduce_data_norm('c', 2) for pert in nlbvp_solver.perturbations)
+            logger.info("L2 err = {:.1g}".format(pert_norm))
+        logger.info(f"b0(z=0),b0(z=Lz) = ({b0(z=0).evaluate()['g'][0,0,0]},{b0(z=Lz).evaluate()['g'][0,0,0]})")
+        logger.info(f"q0(z=0),q0(z=Lz) = ({q0(z=0).evaluate()['g'][0,0,0]},{q0(z=Lz).evaluate()['g'][0,0,0]})")
+        logger.info(f"when solving b0 = {b0['g']}")
+        if self.erf:
+            scrN = (H(q0 - qs0) + 1/2*(q0 - qs0)*self.k*2*(np.pi)**(-1/2)*np.exp(-self.k**2*(q0 - qs0)**2)).evaluate()
+        else:
+            scrN = (H(self.q0 - qs0) + 1/2*(q0 - qs0)*k*(1-(np.tanh(k*(q0 - qs0)))**2)).evaluate()
+        scrN.name='scrN'
+        self.scrN = scrN
+        # use only gradient in z direction.
+        grad_b0 = de.grad(b0).evaluate()
+        grad_q0 = de.grad(q0).evaluate()
+
+        ω = self.dist.Field(name='ω')
+        dt = lambda A: ω*A
+
         self.problem = de.EVP(variables, eigenvalue=ω, namespace=locals())
         self.problem.add_equation('div(u) + τp + 1/PdR*dot(lift(τu2,-1),ez) = 0')
         self.problem.add_equation('dt(u) - PdR*lap(u) + grad(p) - PtR*b*ez + lift(τu1, -1) + lift(τu2, -2) = 0')
@@ -187,13 +257,14 @@ class RainyBenardEVP():
             logger.info("BCs: top no-slip")
             self.problem.add_equation('u(z=Lz) = 0')
         self.problem.add_equation('integ(p) = 0')
-        self.solver = self.problem.build_solver()
+        self.solver = self.problem.build_solver(ncc_cutoff=1e-10)
 
     def solve(self, Ra, kx, dense=True, N_evals=20, target=0):
         self.kx['g'] = kx
         self.Rayleigh['g'] = Ra
         if dense:
             self.solver.solve_dense(self.solver.subproblems[0], rebuild_matrices=True)
+            self.solver.eigenvalues = self.solver.eigenvalues[np.isfinite(self.solver.eigenvalues)]
         else:
             self.solver.solve_sparse(self.solver.subproblems[0], N=N_evals, target=target, rebuild_matrices=True)
         self.eigenvalues = self.solver.eigenvalues
