@@ -62,7 +62,7 @@ class RainyBenardEVP():
         else:
             raise ValueError("lower q0 has invalid value, q0 = {:}".format(self.lower_q0))
 
-        self.case_name = 'analytic_{:s}/alpha{:1.0f}_beta{:}_gamma{:}_q{:1.0f}'.format(atm_name, self.α,self.β,self.γ, self.lower_q0)
+        self.case_name = 'analytic_{:s}/alpha{:1.0f}_beta{:}_gamma{:}_q{:1.1f}'.format(atm_name, self.α,self.β,self.γ, self.lower_q0)
 
         self.case_name += '/tau{:}_k{:.3e}'.format(self.tau['g'][0,0,0].real,self.k)
         if self.erf:
@@ -171,16 +171,20 @@ class RainyBenardEVP():
         self.problem.add_equation('q(z=0) = 0')
         self.problem.add_equation('q(z=Lz) = 0')
         if self.bc_type=='stress-free':
+            logger.info("BCs: bottom stress-free")
             self.problem.add_equation('ez@u(z=0) = 0')
             self.problem.add_equation('ez@(ex@e(z=0)) = 0')
             self.problem.add_equation('ez@(ey@e(z=0)) = 0')
         else:
+            logger.info("BCs: bottom no-slip")
             self.problem.add_equation('u(z=0) = 0')
         if self.bc_type == 'top-stress-free' or self.bc_type == 'stress-free':
+            logger.info("BCs: top stress-free")
             self.problem.add_equation('ez@u(z=Lz) = 0')
             self.problem.add_equation('ez@(ex@e(z=Lz)) = 0')
             self.problem.add_equation('ez@(ey@e(z=Lz)) = 0')
         else:
+            logger.info("BCs: top no-slip")
             self.problem.add_equation('u(z=Lz) = 0')
         self.problem.add_equation('integ(p) = 0')
         self.solver = self.problem.build_solver()

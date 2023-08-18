@@ -52,6 +52,7 @@ import numpy as np
 import dedalus.public as de
 import h5py
 import matplotlib.pyplot as plt
+plt.style.use("../../prl.mplstyle")
 
 from rainy_evp import RainyBenardEVP
 from etools import Eigenproblem
@@ -133,14 +134,14 @@ if __name__ == "__main__":
     else:
         kxs = np.linspace(kx_min, kx_max, n_kx)
     # build solvers
-    lo_res = RainyBenardEVP(nz, Rayleigh, tau, kxs[0], γ, α, β, lower_q0, k, Legendre=Legendre, erf=erf, nondim=nondim, dealias=dealias,Lz=1)
-    hi_res = RainyBenardEVP(3*nz/2, Rayleigh, tau, kxs[0], γ, α, β, lower_q0, k, Legendre=Legendre, erf=erf, nondim=nondim, dealias=dealias,Lz=1)
+    lo_res = RainyBenardEVP(nz, Rayleigh, tau, kxs[0], γ, α, β, lower_q0, k, Legendre=Legendre, erf=erf, bc_type=bc_type, nondim=nondim, dealias=dealias,Lz=1)
+    hi_res = RainyBenardEVP(3*nz/2, Rayleigh, tau, kxs[0], γ, α, β, lower_q0, k, Legendre=Legendre, erf=erf, bc_type=bc_type, nondim=nondim, dealias=dealias,Lz=1)
 
     dlog = logging.getLogger('subsystems')
     dlog.setLevel(logging.WARNING)
     spectra = []
     fig, ax = plt.subplots(figsize=[6,6/1.6])
-    fig_filename=f"Ra_{Rayleigh:.4e}_nz_{nz}_kx_min_{kx_min}_kx_max_{kx_max}_spectrum"
+    fig_filename=f"Ra_{Rayleigh:.4e}_nz_{nz}_kx_min_{kx_min}_kx_max_{kx_max}_bc_{bc_type}_spectrum"
 
     for kx in kxs:
         for solver in [lo_res, hi_res]:
