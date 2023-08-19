@@ -85,7 +85,7 @@ class Eigenproblem():
         self.grow_func = grow_func
         self.freq_func = freq_func
 
-    
+
     def discard_spurious_eigenvalues(self):
         """ Solves the linear eigenvalue problem for two different
         resolutions.  Returns trustworthy eigenvalues using nearest delta,
@@ -95,7 +95,7 @@ class Eigenproblem():
         eval_hi = self.evalues_high
 
         # Reverse engineer correct indices to make unsorted list from sorted
-        reverse_eval_low_indx = np.arange(len(eval_low)) 
+        reverse_eval_low_indx = np.arange(len(eval_low))
         reverse_eval_hi_indx = np.arange(len(eval_hi))
 
         eval_low_and_indx = np.asarray(list(zip(eval_low, reverse_eval_low_indx)))
@@ -138,3 +138,40 @@ class Eigenproblem():
         indx = eval_low_and_indx[:, 1].real.astype(int)
 
         return eval_low, indx
+
+    def plot_drift_ratios(self, axes=None):
+        """Plot drift ratios (both ordinal and nearest) vs. mode number.
+
+        The drift ratios give a measure of how good a given eigenmode is;
+        this can help set thresholds.
+
+        Returns
+        -------
+        matplotlib.figure.Figure
+
+        """
+        if self.reject is False:
+            raise NotImplementedError("Can't plot drift ratios unless eigenvalue rejection is True.")
+
+        if axes is None:
+            fig = plt.figure()
+            ax = fig.add_subplot(111)
+        else:
+            ax = axes
+            fig = axes.figure
+
+        mode_numbers = np.arange(len(self.delta_near))
+        ax.semilogy(mode_numbers,1/self.delta_near,'o',alpha=0.4)
+        ax.semilogy(mode_numbers,1/self.delta_ordinal,'x',alpha=0.4)
+
+        ax.set_prop_cycle(None)
+        good_near = 1/self.delta_near > self.drift_threshold
+        good_ordinal = 1/self.delta_ordinal > self.drift_threshold
+        ax.semilogy(mode_numbers[good_near],1/self.delta_near[good_near],'o', label='nearest')
+        ax.semilogy(mode_numbers[good_ordinal],1/self.delta_ordinal[good_ordinal],'x',label='ordinal')
+        ax.axhline(self.drift_threshold,alpha=0.4, color='black')
+        ax.set_xlabel("mode number")
+        ax.set_ylabel(r"$1/\delta$")
+        ax.legend()
+
+        return ax
