@@ -37,6 +37,8 @@ Options:
     --erf                  Use an erf rather than a tanh for the phase transition
     --Legendre             Use Legendre polynomials
 
+    --relaxation_method=<re>      Method for relaxing the background [default: IVP]
+
     --dense                Solve densely for all eigenvalues (slow)
 """
 import logging
@@ -75,11 +77,14 @@ dealias = 2
 import os
 
 def mode_reject(lo_res, hi_res):
-    ep = Eigenproblem(None,use_ordinal=False, drift_threshold=1e3)
+    ep = Eigenproblem(None,use_ordinal=False, drift_threshold=1e6)
     ep.evalues_low   = lo_res.eigenvalues
     ep.evalues_high  = hi_res.eigenvalues
     evals_good, indx = ep.discard_spurious_eigenvalues()
 
+    fig, ax = plt.subplots()
+    ep.plot_drift_ratios(axes=ax)
+    fig.savefig('./drift_ratios.png', dpi=300)
     indx = np.argsort(evals_good.real)
     return evals_good, indx
 
@@ -88,6 +93,7 @@ if __name__ == "__main__":
     erf = args['--erf']
     case = args['<case>']
     nondim = args['--nondim']
+    relaxation_method = args['--relaxation_method']
     if case == 'analytic':
         α = float(args['--alpha'])
         β = float(args['--beta'])
@@ -117,9 +123,9 @@ if __name__ == "__main__":
     if args['--tau']:
         tau_in = float(args['--tau'])
     # build solvers
-    lo_res = RainyBenardEVP(nz, Rayleigh, tau, kx, γ, α, β, lower_q0, k, Legendre=Legendre, erf=erf, bc_type=bc_type, nondim=nondim, dealias=dealias,Lz=1)
+    lo_res = RainyBenardEVP(nz, Rayleigh, tau, kx, γ, α, β, lower_q0, k, relaxation_method=relaxation_method, Legendre=Legendre, erf=erf, bc_type=bc_type, nondim=nondim, dealias=dealias,Lz=1)
     lo_res.plot_background()
-    hi_res = RainyBenardEVP(int(3*nz/2), Rayleigh, tau, kx, γ, α, β, lower_q0, k, Legendre=Legendre, erf=erf, bc_type=bc_type, nondim=nondim, dealias=dealias,Lz=1)
+    hi_res = RainyBenardEVP(int(3*nz/2), Rayleigh, tau, kx, γ, α, β, lower_q0, k, relaxation_method=relaxation_method, Legendre=Legendre, erf=erf, bc_type=bc_type, nondim=nondim, dealias=dealias,Lz=1)
     hi_res.plot_background()
     dlog = logging.getLogger('subsystems')
     dlog.setLevel(logging.WARNING)
@@ -148,5 +154,10 @@ if __name__ == "__main__":
     spec_ax.set_xlim(-10,1)
     spec_filename = lo_res.case_name+'/'+fig_filename+'.png'
     logger.info(f"saving file to {spec_filename}")
+    fig.tight_layout()
+    fig.savefig(spec_filename, dpi=300)
+    spec_ax.set_xlim(-1,0.1)
+    spec_filename = lo_res.case_name+'/'+fig_filename+'_zoom.png'
+    logger.info(f"saving zoomed file to {spec_filename}")
     fig.tight_layout()
     fig.savefig(spec_filename, dpi=300)

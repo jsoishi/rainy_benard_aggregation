@@ -14,7 +14,7 @@ from analytic_zc import f_zc as zc_analytic
 from analytic_zc import f_Tc as Tc_analytic
 
 class RainyBenardEVP():
-    def __init__(self, nz, Ra, tau_in, kx_in, γ, α, β, lower_q0, k, atmosphere=None, Legendre=True, erf=True, nondim='buoyancy', bc_type=None, Prandtl=1, Prandtlm=1, Lz=1, dealias=3/2, dtype=np.complex128):
+    def __init__(self, nz, Ra, tau_in, kx_in, γ, α, β, lower_q0, k, atmosphere=None, relaxation_method=None, Legendre=True, erf=True, nondim='buoyancy', bc_type=None, Prandtl=1, Prandtlm=1, Lz=1, dealias=3/2, dtype=np.complex128):
         logger.info('Ra = {:}, kx = {:}, α={:}, β={:}, γ={:}, tau={:}, k={:}'.format(Ra,kx_in,α,β,γ,tau_in, k))
         self.nz = nz
         self.Lz = Lz
@@ -51,7 +51,7 @@ class RainyBenardEVP():
             self.load_atmosphere()
         else:
             self.build_atmosphere()
-        self.build_solver()
+        self.build_solver(relaxation_method=relaxation_method)
 
     def build_atmosphere(self):
         logger.info("Building atmosphere")
