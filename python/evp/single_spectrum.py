@@ -76,17 +76,18 @@ dealias = 2
 
 import os
 
-def mode_reject(lo_res, hi_res):
-    ep = Eigenproblem(None,use_ordinal=False, drift_threshold=1e6)
+def mode_reject(lo_res, hi_res, drift_threshold=1e6):
+    ep = Eigenproblem(None,use_ordinal=False, drift_threshold=drift_threshold)
     ep.evalues_low   = lo_res.eigenvalues
     ep.evalues_high  = hi_res.eigenvalues
     evals_good, indx = ep.discard_spurious_eigenvalues()
 
     fig, ax = plt.subplots()
     ep.plot_drift_ratios(axes=ax)
-    fig.savefig('./drift_ratios.png', dpi=300)
+    nz = lo_res.nz
+    fig.savefig(f'{lo_res.case_name}/nz_{nz}_drift_ratios.png', dpi=300)
     indx = np.argsort(evals_good.real)
-    return evals_good, indx
+    return evals_good, indx, ep
 
 if __name__ == "__main__":
     Legendre = args['--Legendre']
@@ -138,14 +139,14 @@ if __name__ == "__main__":
             solver.solve(Rayleigh, kx, dense=True)
         else:
             solver.solve(Rayleigh, kx, dense=False, N_evals=N_evals, target=target)
-    evals_good, indx = mode_reject(lo_res, hi_res)
-    logger.info(f"good modes:    max growth rate = {evals_good[-1]}")
+    evals_good, indx,ep = mode_reject(lo_res, hi_res)
+    logger.info(f"good modes ($\delta_t$ = {ep.drift_threshold:.1e}):    max growth rate = {evals_good[-1]}")
     lo_indx = np.argsort(lo_res.eigenvalues.real)
     logger.info(f"low res modes: max growth rate = {lo_res.eigenvalues[lo_indx][-1]}")
     eps = 1e-7
     logger.info(f"good fastest oscillating modes: {evals_good[np.argmax(np.abs(evals_good.imag))]}")
     col = np.where(np.abs(evals_good.imag) > eps, 'g', np.where(evals_good.real > 0, 'r','k'))
-    spec_ax.scatter(evals_good.real, evals_good.imag, marker='o', c=col, label='good modes')
+    spec_ax.scatter(evals_good.real, evals_good.imag, marker='o', c=col, label=f'good modes ($\delta_t$ = {ep.drift_threshold:.1e})')
     spec_ax.scatter(lo_res.eigenvalues.real, lo_res.eigenvalues.imag, marker='x', label='low res', alpha=0.4)
     spec_ax.scatter(hi_res.eigenvalues.real, hi_res.eigenvalues.imag, marker='+', label='hi res', alpha=0.4)
     spec_ax.legend()
