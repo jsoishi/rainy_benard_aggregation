@@ -53,8 +53,7 @@ import h5py
 import matplotlib.pyplot as plt
 #plt.style.use("../../prl.mplstyle")
 
-from rainy_evp import RainyBenardEVP
-from etools import Eigenproblem
+from rainy_evp import RainyBenardEVP, mode_reject
 from docopt import docopt
 args = docopt(__doc__)
 
@@ -75,19 +74,6 @@ Prandtl = 1
 dealias = 2
 
 import os
-
-def mode_reject(lo_res, hi_res, drift_threshold=1e6):
-    ep = Eigenproblem(None,use_ordinal=False, drift_threshold=drift_threshold)
-    ep.evalues_low   = lo_res.eigenvalues
-    ep.evalues_high  = hi_res.eigenvalues
-    evals_good, indx = ep.discard_spurious_eigenvalues()
-
-    fig, ax = plt.subplots()
-    ep.plot_drift_ratios(axes=ax)
-    nz = lo_res.nz
-    fig.savefig(f'{lo_res.case_name}/nz_{nz}_drift_ratios.png', dpi=300)
-    indx = np.argsort(evals_good.real)
-    return evals_good, indx, ep
 
 if __name__ == "__main__":
     Legendre = args['--Legendre']

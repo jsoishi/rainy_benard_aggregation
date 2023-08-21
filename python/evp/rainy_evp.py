@@ -4,6 +4,8 @@ import dedalus.public as de
 import h5py
 import matplotlib.pyplot as plt
 import logging
+from etools import Eigenproblem
+
 logger = logging.getLogger(__name__)
 for system in ['h5py._conv', 'matplotlib', 'PIL']:
     logging.getLogger(system).setLevel(logging.WARNING)
@@ -279,3 +281,17 @@ class RainyBenardEVP():
         else:
             self.solver.solve_sparse(self.solver.subproblems[0], N=N_evals, target=target, rebuild_matrices=True)
         self.eigenvalues = self.solver.eigenvalues
+
+def mode_reject(lo_res, hi_res, drift_threshold=1e6):
+    ep = Eigenproblem(None,use_ordinal=False, drift_threshold=drift_threshold)
+    ep.evalues_low   = lo_res.eigenvalues
+    ep.evalues_high  = hi_res.eigenvalues
+    evals_good, indx = ep.discard_spurious_eigenvalues()
+
+    fig, ax = plt.subplots()
+    ep.plot_drift_ratios(axes=ax)
+    nz = lo_res.nz
+    fig.savefig(f'{lo_res.case_name}/nz_{nz}_drift_ratios.png', dpi=300)
+    indx = np.argsort(evals_good.real)
+    return evals_good, indx, ep
+
