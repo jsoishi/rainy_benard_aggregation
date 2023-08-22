@@ -282,16 +282,16 @@ class RainyBenardEVP():
             self.solver.solve_sparse(self.solver.subproblems[0], N=N_evals, target=target, rebuild_matrices=True)
         self.eigenvalues = self.solver.eigenvalues
 
-def mode_reject(lo_res, hi_res, drift_threshold=1e6):
+def mode_reject(lo_res, hi_res, drift_threshold=1e6, plot_drift_ratios=True):
     ep = Eigenproblem(None,use_ordinal=False, drift_threshold=drift_threshold)
     ep.evalues_low   = lo_res.eigenvalues
     ep.evalues_high  = hi_res.eigenvalues
     evals_good, indx = ep.discard_spurious_eigenvalues()
 
-    fig, ax = plt.subplots()
-    ep.plot_drift_ratios(axes=ax)
-    nz = lo_res.nz
-    fig.savefig(f'{lo_res.case_name}/nz_{nz}_drift_ratios.png', dpi=300)
+    if plot_drift_ratios:
+        fig, ax = plt.subplots()
+        ep.plot_drift_ratios(axes=ax)
+        nz = lo_res.nz
+        fig.savefig(f'{lo_res.case_name}/nz_{nz}_drift_ratios.png', dpi=300)
     indx = np.argsort(evals_good.real)
     return evals_good, indx, ep
-
