@@ -36,7 +36,7 @@ Options:
     --nz=<nz>              Number of coeffs to use in eigenvalue search; if not set, uses resolution of background
     --target=<targ>        Target value for sparse eigenvalue search [default: 0]
     --eigs=<eigs>          Target number of eigenvalues to search for [default: 20]
- 
+    --drift_threshold=<dt>      Drift threshold [default: 1e6]
     --erf                  Use an erf rather than a tanh for the phase transition
     --Legendre             Use Legendre polynomials
  
@@ -54,8 +54,7 @@ import h5py
 import matplotlib.pyplot as plt
 plt.style.use("../../prl.mplstyle")
 
-from rainy_evp import RainyBenardEVP
-from etools import Eigenproblem
+from rainy_evp import RainyBenardEVP, mode_reject
 from docopt import docopt
 args = docopt(__doc__)
 
@@ -64,6 +63,7 @@ target = float(args['--target'])
 Rayleigh = float(args['--Ra'])
 n_kx = int(args['--n_kx'])
 tau_in = float(args['--tau'])
+drift_threshold = float(args['--drift_threshold'])
 if args['--stress-free']:
     bc_type = 'stress-free'
 elif args['--top-stress-free']:
@@ -86,15 +86,6 @@ Prandtl = 1
 dealias = 2
 
 import os
-
-def mode_reject(lo_res, hi_res):
-    ep = Eigenproblem(None)
-    ep.evalues_low   = lo_res.eigenvalues
-    ep.evalues_high  = hi_res.eigenvalues
-    evals_good, indx = ep.discard_spurious_eigenvalues()
-
-    indx = np.argsort(evals_good.real)
-    return evals_good, indx
 
 if __name__ == "__main__":
     Legendre = args['--Legendre']
@@ -140,18 +131,19 @@ if __name__ == "__main__":
     dlog = logging.getLogger('subsystems')
     dlog.setLevel(logging.WARNING)
     spectra = []
-    fig = plt.figure(figsize=[6,6/2])
-    fig_filename=f"Ra_{Rayleigh:.2e}_nz_{nz}_kx_min_{kx_min:.3f}_kx_max_{kx_max:.3f}_bc_{bc_type}_spectrum"
+    fig = plt.figure(figsize=[12,6])
+    fig_filename=f"spectrum_Ra_{Rayleigh:.2e}_nz_{nz}_kx_min_{kx_min:.3f}_kx_max_{kx_max:.3f}_bc_{bc_type}_drift_threshold_{drift_threshold:.2e}"
     re_ax = fig.add_axes([0.14,0.2,0.35,0.7])
     im_ax = fig.add_axes([0.64,0.2,0.35,0.7])
     max_growth = []
     for kx in kxs:
+        logger.info(f"Calculating spectrum for kx = {kx:.3f}")
         for solver in [lo_res, hi_res]:
             if args['--dense']:
                 solver.solve(Rayleigh, kx, dense=True)
             else:
                 solver.solve(Rayleigh, kx, dense=False, N_evals=N_evals, target=target)
-        evals_good, indx = mode_reject(lo_res, hi_res)
+        evals_good, indx, ep = mode_reject(lo_res, hi_res, drift_threshold=drift_threshold)
         max_growth.append(evals_good[indx][-1])
         eps = 1e-7
         col = np.where(np.abs(evals_good.imag) > eps, 'g',np.where(evals_good.real > 0, 'r','k'))

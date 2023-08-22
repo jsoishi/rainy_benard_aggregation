@@ -36,7 +36,7 @@ Options:
 
     --erf                  Use an erf rather than a tanh for the phase transition
     --Legendre             Use Legendre polynomials
-
+    --drift_threshold=<dt>        Drift threshold [default: 1e3]
     --relaxation_method=<re>      Method for relaxing the background [default: IVP]
 
     --dense                Solve densely for all eigenvalues (slow)
@@ -61,6 +61,7 @@ N_evals = int(float(args['--eigs']))
 target = float(args['--target'])
 Rayleigh = float(args['--Ra'])
 tau_in = float(args['--tau'])
+drift_threshold = float(args['--drift_threshold'])
 if args['--stress-free']:
     bc_type = 'stress-free'
 elif args['--top-stress-free']:
@@ -125,14 +126,14 @@ if __name__ == "__main__":
             solver.solve(Rayleigh, kx, dense=True)
         else:
             solver.solve(Rayleigh, kx, dense=False, N_evals=N_evals, target=target)
-    evals_good, indx,ep = mode_reject(lo_res, hi_res)
-    logger.info(f"good modes ($\delta_t$ = {ep.drift_threshold:.1e}):    max growth rate = {evals_good[-1]}")
+    evals_good, indx,ep = mode_reject(lo_res, hi_res, plot_drift=True, drift_threshold=drift_threshold)
+    logger.info(f"good modes ($\delta_t$ = {drift_threshold:.1e}):    max growth rate = {evals_good[-1]}")
     lo_indx = np.argsort(lo_res.eigenvalues.real)
     logger.info(f"low res modes: max growth rate = {lo_res.eigenvalues[lo_indx][-1]}")
     eps = 1e-7
     logger.info(f"good fastest oscillating modes: {evals_good[np.argmax(np.abs(evals_good.imag))]}")
     col = np.where(np.abs(evals_good.imag) > eps, 'g', np.where(evals_good.real > 0, 'r','k'))
-    spec_ax.scatter(evals_good.real, evals_good.imag, marker='o', c=col, label=f'good modes ($\delta_t$ = {ep.drift_threshold:.1e})')
+    spec_ax.scatter(evals_good.real, evals_good.imag, marker='o', c=col, label=f'good modes ($\delta_t$ = {drift_threshold:.1e})')
     spec_ax.scatter(lo_res.eigenvalues.real, lo_res.eigenvalues.imag, marker='x', label='low res', alpha=0.4)
     spec_ax.scatter(hi_res.eigenvalues.real, hi_res.eigenvalues.imag, marker='+', label='hi res', alpha=0.4)
     spec_ax.legend()
@@ -143,7 +144,7 @@ if __name__ == "__main__":
     logger.info(f"saving file to {spec_filename}")
     fig.tight_layout()
     fig.savefig(spec_filename, dpi=300)
-    spec_ax.set_xlim(-1,0.1)
+    spec_ax.set_xlim(-0.2,0.5)
     spec_filename = lo_res.case_name+'/'+fig_filename+'_zoom.png'
     logger.info(f"saving zoomed file to {spec_filename}")
     fig.tight_layout()

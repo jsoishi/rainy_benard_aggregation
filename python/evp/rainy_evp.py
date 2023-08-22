@@ -120,7 +120,7 @@ class RainyBenardEVP():
         ax[1].legend()
         ax[1].axvline(x=0, linestyle='dashed', color='xkcd:dark grey', alpha=0.5)
         fig.tight_layout()
-        fig.savefig(self.case_name+f'/nz_{self.nz}_evp_background.png', dpi=300)
+        fig.savefig(self.case_name+f'/nz_{self.nz}_k_{self.k}_tau_{self.tau}_evp_background.png', dpi=300)
 
 
     def build_solver(self, relaxation_method = 'IVP'):
@@ -199,7 +199,7 @@ class RainyBenardEVP():
         q0_lower = q0(z=0).evaluate()['g'][0,0,0]
         q0_upper = q0(z=Lz).evaluate()['g'][0,0,0]
         lap0 = lambda A: de.lap(A)
-        logger.info("relaxing atmosphere via {:s}".format(relaxation_method))
+        logger.info("relaxing atmosphere via {:}".format(relaxation_method))
         for system in ['subsystems']:
             logging.getLogger(system).setLevel(logging.WARNING)
         if relaxation_method == 'NLBVP':
