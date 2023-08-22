@@ -27,6 +27,8 @@ Options:
     --max_Ra=<maxR>   Maximum Rayleigh number to sample [default: 1e5]
     --num_Ra=<nRa>    How many Rayleigh numbers to sample [default: 5]
 
+    --num_kx=<nkx>    How many kxs to sample [default: 50]
+
     --top-stress-free     Stress-free upper boundary
     --stress-free         Stress-free both boundaries
 
@@ -41,6 +43,8 @@ Options:
 
     --dense           Solve densely for all eigenvalues (slow)
 
+    --tol_crit_Ra=<tol>    Tolerance on frequency for critical growth [default: 1e-5]
+
     --verbose         Show plots on screen
 """
 import logging
@@ -53,7 +57,7 @@ import numpy as np
 import dedalus.public as de
 import h5py
 
-from rainy_evp import RainyBenardEVP
+from rainy_evp import RainyBenardEVP, mode_reject
 from etools import Eigenproblem
 
 import matplotlib.pyplot as plt
@@ -69,6 +73,8 @@ relaxation_method = args['--relaxation_method']
 N_evals = int(float(args['--eigs']))
 target = float(args['--target'])
 
+nkx = int(float(args['--num_kx']))
+
 if args['--stress-free']:
     bc_type = 'stress-free'
 elif args['--top-stress-free']:
@@ -79,19 +85,6 @@ else:
 
 dealias = 3/2
 dtype = np.complex128
-
-def mode_reject(lo_res, hi_res):
-    ep = Eigenproblem(None,use_ordinal=False, drift_threshold=1e6)
-    ep.evalues_low   = lo_res.eigenvalues
-    ep.evalues_high  = hi_res.eigenvalues
-    evals_good, indx = ep.discard_spurious_eigenvalues()
-
-    # fig, ax = plt.subplots()
-    # ep.plot_drift_ratios(axes=ax)
-    # fig.savefig('./drift_ratios.png', dpi=300)
-    indx = np.argsort(evals_good.real)
-    return evals_good, indx
-
 
 Prandtlm = 1
 Prandtl = 1
@@ -142,7 +135,7 @@ def compute_growth_rate(kx, Ra, low_res, high_res, target=0):
             solver.solve(Ra, kx, dense=True)
         else:
             solver.solve(Ra, kx, dense=False, N_evals=N_evals, target=target)
-    evals_good, indx = mode_reject(lo_res, hi_res)
+    evals_good, indx, ep = mode_reject(lo_res, hi_res, plot_drift_ratios=False)
 
     i_evals = np.argsort(evals_good.real)
     evals = evals_good[i_evals]
@@ -160,7 +153,7 @@ def peak_growth_rate(*args):
 
 growth_rates = {}
 Ras = np.geomspace(float(args['--min_Ra']),float(args['--max_Ra']),num=int(float(args['--num_Ra'])))
-kxs = np.logspace(-1, 1.5, num=50)
+kxs = np.logspace(-1, 1.5, num=nkx)
 print(Ras)
 for Rayleigh in Ras:
     σ = []
@@ -179,10 +172,10 @@ for Rayleigh in Ras:
         if σ_i.imag > 0:
             # update target if on growing branch
             target = σ_i.imag
-    growth_rates[Rayleigh] = np.array(σ)
+    σ = np.array(σ)
+    growth_rates[Rayleigh] = {'σ':σ, 'max σ.real':σ[np.argmax(σ.real)]}
 
 fig, ax = plt.subplots(figsize=[6,6/1.6])
-peak_σ = -np.inf
 
 if nondim == 'diffusion':
     ax2 = ax.twinx()
@@ -197,8 +190,7 @@ elif nondim == 'buoyancy':
     ax.set_ylabel(r'$\omega_R$ (solid), $\omega_I$ (dashed)')
 
 for Ra in growth_rates:
-    σ = growth_rates[Ra]
-    peak_σ = max(peak_σ, np.max(σ))
+    σ = growth_rates[Ra]['σ']
     p = ax.plot(kxs, σ.real, label='Ra = {:.2g}'.format(Ra))
     ax2.plot(kxs, σ.imag, linestyle='dashed', color=p[0].get_color())
 ax.set_xscale('log')
@@ -217,61 +209,76 @@ ax.set_xlabel('$k_x$')
 ax.set_title('{:} timescales'.format(nondim))
 fig.savefig(lo_res.case_name+'/'+fig_filename+'.png', dpi=300)
 
-
+for system in ['rainy_evp']:
+     logging.getLogger(system).setLevel(logging.WARNING)
 
 import scipy.optimize as sciop
 bounds = sciop.Bounds(lb=1, ub=10)
-
-peaks = {'σ':[], 'k':[], 'Ra':[]}
-for Ra in growth_rates:
-    σ = growth_rates[Ra]
-    peak_i = np.argmax(σ)
-    kx = kxs[peak_i]
+def find_continous_peak(Ra, kx):
     lo_res = RainyBenardEVP(nz, Ra, tau, kx, γ, α, β, q0, k, relaxation_method=relaxation_method, Legendre=Legendre, erf=erf, bc_type=bc_type, nondim=nondim, dealias=dealias,Lz=1)
     hi_res = RainyBenardEVP(int(3*nz/2), Ra, tau, kx, γ, α, β, q0, k, relaxation_method=relaxation_method, Legendre=Legendre, erf=erf, bc_type=bc_type, nondim=nondim, dealias=dealias,Lz=1)
 
     result = sciop.minimize(peak_growth_rate, kx, args=(Ra, lo_res, hi_res), bounds=bounds, method='Nelder-Mead', tol=1e-5)
     # obtain full complex rate
-
     σ = compute_growth_rate(result.x[0], Ra, lo_res, hi_res)
-    logger.info('peak search: start at Ra = {:.4g}, kx = {:.4g}, found σ_max = {:.2g},{:.2g}i, kx = {:.4g}'.format(Ra, kx, σ.real, σ.imag, result.x[0]))
-    peaks['σ'].append(σ)
-    peaks['k'].append(result.x[0])
-    peaks['Ra'].append(Ra)
-    #plot_eigenfunctions(σ)
+    return result.x[0], σ
 
-for key in ['σ', 'k', 'Ra']:
-    peaks[key] = np.array(peaks[key])
+# find Ra bracket
+σ_re = -np.inf
+lower_Ra = None
+upper_Ra = None
+for Ra in growth_rates:
+    σ_re = growth_rates[Ra]['max σ.real']
+    if σ_re < 0:
+        lower_Ra = Ra
+    else:
+        upper_Ra = Ra
+        break
+if not lower_Ra or not upper_Ra:
+    raise ValueError("Sampled Rayleigh numbers do not bound instability (lower: {:}, upper: {:})".format(lower_Ra, upper_Ra))
 
-from scipy.interpolate import interp1d
-f_σR_i = interp1d(peaks['σ'].real, peaks['k']) #inverse
-f_σR = interp1d(peaks['k'], peaks['σ'].real)
-f_σI_i = interp1d(peaks['σ'].imag, peaks['k']) #inverse
-f_σI = interp1d(peaks['k'], peaks['σ'].imag)
+# find peak growth rates of bracket
+peaks = {}
+for Ra in [lower_Ra, upper_Ra]:
+    σ = growth_rates[Ra]['σ']
+    peak_i = np.argmax(σ.real)
+    kx0 = kxs[peak_i] # initial guess
+    kx, σ = find_continous_peak(Ra, kx0)
+    peaks[Ra] = {'σ':σ, 'k':kx}
 
-# to find critical Ra
-f_σR_Ra_i = interp1d(peaks['σ'].real, peaks['Ra'])
-f_σ_Ra = interp1d(peaks['Ra'], peaks['σ'])
-f_k_Ra = interp1d(peaks['Ra'], peaks['k'])
+# conduct a bracketing search with interpolation to find critical Ra
+σ = np.inf
+tol = float(args['--tol_crit_Ra'])
+iter=0
+while np.abs(σ.real) > tol:
+    σs = np.array([peaks[lower_Ra]['σ'], peaks[upper_Ra]['σ']])
+    ks = np.array([peaks[lower_Ra]['k'], peaks[upper_Ra]['k']])
+    Ras = np.array([lower_Ra, upper_Ra])
+    crit_Ra = np.interp(0, σs.real, Ras)
+    crit_k = np.interp(crit_Ra, Ras, ks)
+    crit_σ = np.interp(crit_Ra, Ras, σs)
 
-peak_ks = np.geomspace(np.min(peaks['k']), np.max(peaks['k']))
+    logger.info('Critical point, based on interpolation:')
+    logger.info('Ra = {:.3g}, k = {:}'.format(crit_Ra, crit_k))
 
-crit_Ra = f_σR_Ra_i(0)
-crit_k = f_k_Ra(crit_Ra)
-crit_σ = f_σ_Ra(crit_Ra)
-logger.info('Critical point, based on interpolation:')
-logger.info('Ra = {:}, k = {:}'.format(crit_Ra, crit_k))
-logger.info('σ = {:}, {:}i'.format(crit_σ.real, crit_σ.imag))
+    kx, σ = find_continous_peak(crit_Ra, crit_k)
+    logger.info('σ = {:.2g}, {:.2g}i (calculated) at k = {:}'.format(σ.real, σ.imag, kx))
 
-lo_res = RainyBenardEVP(nz, crit_Ra, tau, crit_k, γ, α, β, q0, k, relaxation_method=relaxation_method, Legendre=Legendre, erf=erf, bc_type=bc_type, nondim=nondim, dealias=dealias,Lz=1)
-hi_res = RainyBenardEVP(int(3*nz/2), crit_Ra, tau, crit_k, γ, α, β, q0, k, relaxation_method=relaxation_method, Legendre=Legendre, erf=erf, bc_type=bc_type, nondim=nondim, dealias=dealias,Lz=1)
-σ = compute_growth_rate(crit_k, crit_Ra, lo_res, hi_res)
-#plot_eigenfunctions(σ)
-logger.info('σ = {:}, {:}i'.format(crit_σ.real, crit_σ.imag))
-logger.info('σ = {:}, {:}i (sigma)'.format(σ.real, σ.imag))
+    if σ.real > 0:
+        upper_Ra = crit_Ra
+    else:
+        lower_Ra = crit_Ra
+    if not crit_Ra in peaks:
+        peaks[crit_Ra] = {'σ':σ, 'k':kx}
+    crit_k = kx
+    iter+=1
 
-ax.plot(peak_ks, f_σR(peak_ks), linestyle='dotted', color='xkcd:grey')
-ax.scatter(crit_k, crit_σ.real, color='xkcd:grey', marker='x')
+logger.info("critical Ra found after {:d} iterations".format(iter))
+logger.info("peak convergence:\n{:}".format(peaks))
+
+for Ra in peaks:
+    ax.scatter(peaks[Ra]['k'], peaks[Ra]['σ'].real, color='xkcd:grey', marker='x', alpha=0.5)
+
 ax.scatter(crit_k, σ.real, color='xkcd:pink', marker='o', alpha=0.5)
 
 fig_filename = 'growth_curves_peaks_{:}_nz{:d}'.format(nondim, nz)
@@ -282,3 +289,4 @@ if args['--top-stress-free']:
 if args['--dense']:
     fig_filename += '_dense'
 fig.savefig(lo_res.case_name+'/'+fig_filename+'.png', dpi=300)
+logger.info("peaks plotted in {:}".format(lo_res.case_name+'/'+fig_filename+'.png'))
