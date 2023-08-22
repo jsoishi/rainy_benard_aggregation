@@ -126,7 +126,7 @@ if __name__ == "__main__":
             solver.solve(Rayleigh, kx, dense=True)
         else:
             solver.solve(Rayleigh, kx, dense=False, N_evals=N_evals, target=target)
-    evals_good, indx,ep = mode_reject(lo_res, hi_res, plot_drift=True, drift_threshold=drift_threshold)
+    evals_good, indx,ep = mode_reject(lo_res, hi_res, plot_drift_ratios=True, drift_threshold=drift_threshold)
     logger.info(f"good modes ($\delta_t$ = {drift_threshold:.1e}):    max growth rate = {evals_good[-1]}")
     lo_indx = np.argsort(lo_res.eigenvalues.real)
     logger.info(f"low res modes: max growth rate = {lo_res.eigenvalues[lo_indx][-1]}")
