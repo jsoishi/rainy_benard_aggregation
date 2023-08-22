@@ -48,12 +48,13 @@ class RainyBenardEVP():
         self.Rayleigh['g'] = Ra
         self.tau = self.dist.Field(name='tau')
         self.tau['g'] = tau_in
+        self.relaxation_method = relaxation_method
 
         if self.atmosphere:
             self.load_atmosphere()
         else:
             self.build_atmosphere()
-        self.build_solver(relaxation_method=relaxation_method)
+        self.build_solver()
 
     def build_atmosphere(self):
         logger.info("Building atmosphere")
@@ -66,7 +67,7 @@ class RainyBenardEVP():
 
         self.case_name = 'analytic_{:s}/alpha{:1.0f}_beta{:}_gamma{:}_q{:1.1f}'.format(atm_name, self.α,self.β,self.γ, self.lower_q0)
 
-        self.case_name += '/tau{:}_k{:.3e}'.format(self.tau['g'][0,0,0].real,self.k)
+        self.case_name += '/tau{:}_k{:.3e}_relaxation_{:}'.format(self.tau['g'][0,0,0].real,self.k,self.relaxation_method)
         if self.erf:
             self.case_name += '_erf'
         if self.Legendre:
@@ -107,6 +108,7 @@ class RainyBenardEVP():
         p4 = ax2.plot(self.scrN['g'][0,0,:].real, z[0,0,:], color='xkcd:purple grey', label=r'$\mathcal{N}(z)$')
         ax2.set_xlabel(r'$\mathcal{N}(z)$')
         ax2.xaxis.label.set_color('xkcd:purple grey')
+        ax2.set_xlim(-0.1,1.1)
         lines = p0 + p1 + p2 + p3 + p4
         labels = [l.get_label() for l in lines]
         ax[0].legend(lines, labels)
@@ -128,7 +130,7 @@ class RainyBenardEVP():
         fig.savefig(filebase+'.png', dpi=300)
 
 
-    def build_solver(self, relaxation_method = 'IVP'):
+    def build_solver(self):
         ex, ey, ez = self.coords.unit_vector_fields(self.dist)
         dx = lambda A: 1j*kx*A # 1-d mode onset
         dy = lambda A: 0*A # flexibility to add 2-d mode if desired
@@ -204,10 +206,10 @@ class RainyBenardEVP():
         q0_lower = q0(z=0).evaluate()['g'][0,0,0]
         q0_upper = q0(z=Lz).evaluate()['g'][0,0,0]
         lap0 = lambda A: de.lap(A)
-        logger.info("relaxing atmosphere via {:}".format(relaxation_method))
+        logger.info("relaxing atmosphere via {:}".format(self.relaxation_method))
         for system in ['subsystems']:
             logging.getLogger(system).setLevel(logging.WARNING)
-        if relaxation_method == 'NLBVP':
+        if self.relaxation_method == 'NLBVP':
             nlbvp = de.NLBVP([q0, b0, τb1, τb2, τq1, τq2], namespace=locals())
             nlbvp.add_equation('-P*lap0(b0) + lift(τb1, -1) + lift(τb2, -2) = γ/tau*(q0-qs0)*H(q0-qs0)')
             nlbvp.add_equation('-S*lap0(q0) + lift(τq1, -1) + lift(τq2, -2) = -1/tau*(q0-qs0)*H(q0-qs0)')
@@ -222,7 +224,7 @@ class RainyBenardEVP():
                 nlbvp_solver.newton_iteration(damping=0.95)
                 pert_norm = sum(pert.allreduce_data_norm('c', 2) for pert in nlbvp_solver.perturbations)
                 logger.info("L2 err = {:.1g}".format(pert_norm))
-        elif relaxation_method == 'IVP':
+        elif self.relaxation_method == 'IVP':
             ivp = de.IVP([q0, b0, τb1, τb2, τq1, τq2], namespace=locals())
             ivp.add_equation('dt(b0) - P*lap0(b0) + lift(τb1, -1) + lift(τb2, -2) = γ/tau*(q0-qs0)*H(q0-qs0)')
             ivp.add_equation('dt(q0) - S*lap0(q0) + lift(τq1, -1) + lift(τq2, -2) = -1/tau*(q0-qs0)*H(q0-qs0)')
@@ -298,5 +300,5 @@ def mode_reject(lo_res, hi_res, drift_threshold=1e6, plot_drift_ratios=True):
         ep.plot_drift_ratios(axes=ax)
         nz = lo_res.nz
         fig.savefig(f'{lo_res.case_name}/nz_{nz}_drift_ratios.png', dpi=300)
-    indx = np.argsort(evals_good.real)
+    
     return evals_good, indx, ep

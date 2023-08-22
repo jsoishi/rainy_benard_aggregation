@@ -40,6 +40,7 @@ Options:
     --relaxation_method=<re>      Method for relaxing the background [default: IVP]
 
     --dense                Solve densely for all eigenvalues (slow)
+    --emode=<emode>        Index for eigenmode to visualize
 """
 import logging
 logger = logging.getLogger(__name__)
@@ -51,7 +52,7 @@ import numpy as np
 import dedalus.public as de
 import h5py
 import matplotlib.pyplot as plt
-#plt.style.use("../../prl.mplstyle")
+plt.style.use("../../prl.mplstyle")
 
 from rainy_evp import RainyBenardEVP, mode_reject
 from docopt import docopt
@@ -74,7 +75,41 @@ Prandtlm = 1
 Prandtl = 1
 dealias = 2
 
+emode = args['--emode']
+if emode:
+    emode = int(emode)
+
 import os
+
+def plot_eigenmode(evp, index):
+    # solver.set_state(i_evals[-1],0) 
+    evp.solver.set_state(index,0)
+    fig, axes = plt.subplot_mosaic([['ux','.','uz'],
+                                    ['b', 'q','p']], layout='constrained')
+
+    z = evp.zb.local_grid(1)[0,0,:]
+    for v in ['b','q','p']:
+        evp.fields[v].change_scales(1)
+        name = evp.fields[v].name
+        data = evp.fields[v]['g'][0,0,:]
+        axes[v].plot(data.real, z)
+        axes[v].plot(data.imag, z, ':')
+        axes[v].set_xlabel(f"${name}$")
+        axes[v].set_ylabel(r"$z$")
+    evp.fields['u'].change_scales(1)
+    u = evp.fields['u']['g']
+    axes['ux'].plot(u[0,0,0,:].real, z)
+    axes['ux'].plot(u[0,0,0,:].imag, z,':')
+    axes['ux'].set_xlabel(r"$u_x$")
+    axes['ux'].set_ylabel(r"$z$")
+    axes['uz'].plot(u[2,0,0,:].real, z)
+    axes['uz'].plot(u[2,0,0,:].imag, z, ':')
+    axes['uz'].set_xlabel(r"$u_z$")
+    axes['uz'].set_ylabel(r"$z$")
+    sigma = evp.solver.eigenvalues[index]
+    fig.suptitle(f"$\sigma = {sigma.real:.3f} {sigma.imag:+.3e} i$")
+    fig_filename=f"emode_indx_{index}_Ra_{Rayleigh:.2e}_nz_{nz}_kx_{kx:.3f}_bc_{bc_type}"
+    fig.savefig(evp.case_name +'/'+fig_filename+'.png', dpi=300)
 
 if __name__ == "__main__":
     Legendre = args['--Legendre']
@@ -118,7 +153,7 @@ if __name__ == "__main__":
     dlog = logging.getLogger('subsystems')
     dlog.setLevel(logging.WARNING)
     spectra = []
-    fig = plt.figure(figsize=[6,6/2])
+    fig = plt.figure(figsize=[12,6])
     fig_filename=f"Ra_{Rayleigh:.2e}_nz_{nz}_kx_{kx:.3f}_bc_{bc_type}_spectrum"
     spec_ax = fig.add_axes([0.15,0.2,0.8,0.7])
     for solver in [lo_res, hi_res]:
@@ -136,6 +171,10 @@ if __name__ == "__main__":
     spec_ax.scatter(evals_good.real, evals_good.imag, marker='o', c=col, label=f'good modes ($\delta_t$ = {drift_threshold:.1e})')
     spec_ax.scatter(lo_res.eigenvalues.real, lo_res.eigenvalues.imag, marker='x', label='low res', alpha=0.4)
     spec_ax.scatter(hi_res.eigenvalues.real, hi_res.eigenvalues.imag, marker='+', label='hi res', alpha=0.4)
+
+    for n,ev in enumerate(evals_good):
+        logger.info(f"ev = {ev}, index = {indx[n]}")
+        spec_ax.annotate(indx[n], (ev.real, ev.imag), fontsize=8)
     spec_ax.legend()
     spec_ax.set_xlabel(r"$\Re{\sigma}$")
     spec_ax.set_ylabel(r"$\Im{\sigma}$")
@@ -149,3 +188,6 @@ if __name__ == "__main__":
     logger.info(f"saving zoomed file to {spec_filename}")
     fig.tight_layout()
     fig.savefig(spec_filename, dpi=300)
+
+    if emode is not None:
+        plot_eigenmode(lo_res,emode)
