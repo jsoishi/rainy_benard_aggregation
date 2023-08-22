@@ -90,8 +90,8 @@ class RainyBenardEVP():
         if not os.path.exists('{:s}/'.format(self.case_name)) and self.dist.comm.rank == 0:
             os.makedirs('{:s}/'.format(self.case_name))
 
-    def plot_background(self):
-        fig, ax = plt.subplots(ncols=2, figsize=[6,6/2])
+    def plot_background(self,label=None):
+        fig, ax = plt.subplots(ncols=2, figsize=[12,6])
         qs0 = self.qs0.evaluate()
         qs0.change_scales(1)
         self.b0.change_scales(1)
@@ -120,7 +120,12 @@ class RainyBenardEVP():
         ax[1].legend()
         ax[1].axvline(x=0, linestyle='dashed', color='xkcd:dark grey', alpha=0.5)
         fig.tight_layout()
-        fig.savefig(self.case_name+f'/nz_{self.nz}_k_{self.k}_tau_{self.tau}_evp_background.png', dpi=300)
+        tau_val = self.tau["g"][0,0,0].real
+        Ra_val  = self.Rayleigh["g"][0,0,0].real
+        filebase = self.case_name+f'/nz_{self.nz}_k_{self.k}_tau_{tau_val:0.1e}_Ra_{Ra_val:0.2e}_evp_background'
+        if label:
+            filebase += f'_{label}'
+        fig.savefig(filebase+'.png', dpi=300)
 
 
     def build_solver(self, relaxation_method = 'IVP'):
