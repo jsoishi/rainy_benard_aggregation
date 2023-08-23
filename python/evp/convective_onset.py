@@ -101,35 +101,44 @@ k = float(args['--k'])
 q0 = float(args['--q0'])
 tau = float(args['--tau'])
 
-case = 'analytic'
 relaxation_method = 'none'
 
 nz = int(float(args['--nz']))
 
 logger.info('α={:}, β={:}, γ={:}, tau={:}, k={:}'.format(α,β,γ,tau, k))
 
-# def plot_eigenfunctions(σ):
-#     i_max = np.argmax(np.abs(b['g'][0,0,:]))
-#     phase_correction = b['g'][0,0,i_max]
-#     u['g'][:] /= phase_correction
-#     b['g'] /= phase_correction
-#     q['g'] /= phase_correction
-#     fig, ax = plt.subplots(figsize=[6,6/1.6])
-#     for Q in [u, q, b]:
-#         if Q.tensorsig:
-#             for i in range(3):
-#                 p = ax.plot(Q['g'][i][0,0,:].real, z[0,0,:], label=Q.name+r'$_'+'{:s}'.format(coords.names[i])+r'$')
-#                 ax.plot(Q['g'][i][0,0,:].imag, z[0,0,:], linestyle='dashed', color=p[0].get_color())
-#         else:
-#             p = ax.plot(Q['g'][0,0,:].real, z[0,0,:], label=Q)
-#             ax.plot(Q['g'][0,0,:].imag, z[0,0,:], linestyle='dashed', color=p[0].get_color())
-#     ax.set_title(r'$\omega_R = ${:.3g}'.format(σ.real)+ r' $\omega_I = ${:.3g}'.format(σ.imag)+' at kx = {:.3g} and Ra = {:.3g}'.format(kx['g'][0,0,0].real, Rayleigh['g'][0,0,0].real))
-#     ax.legend()
-#     fig_filename = 'eigenfunctions_{:}_Ra{:.2g}_kx{:.2g}_nz{:d}'.format(nondim, Rayleigh['g'][0,0,0].real, kx['g'][0,0,0].real, nz)
-#     fig.savefig(case+'/'+fig_filename+'.png', dpi=300)
+def plot_eigenfunctions(evp, index, Rayleigh, kx):
+    print(evp.fields)
+    evp.solver.set_state(index,0)
+    u = evp.fields['u']
+    b = evp.fields['b']
+    q = evp.fields['q']
+    σ = evp.solver.eigenvalues[index]
+    print(u, evp.fields)
+    z = evp.zb.local_grid(1)[0,0,:]
+    nz = z.shape[-1]
+    i_max = np.argmax(np.abs(b['g'][0,0,:]))
+    phase_correction = b['g'][0,0,i_max]
+    u['g'][:] /= phase_correction
+    b['g'] /= phase_correction
+    q['g'] /= phase_correction
+    fig, ax = plt.subplots(figsize=[6,6/1.6])
+    for Q in [u, q, b]:
+        if Q.tensorsig:
+            for i in range(3):
+                p = ax.plot(Q['g'][i][0,0,:].real, z, label=Q.name+r'$_'+'{:s}'.format(coords.names[i])+r'$')
+                ax.plot(Q['g'][i][0,0,:].imag, z, linestyle='dashed', color=p[0].get_color())
+        else:
+            p = ax.plot(Q['g'][0,0,:].real, z, label=Q)
+            ax.plot(Q['g'][0,0,:].imag, z, linestyle='dashed', color=p[0].get_color())
+    ax.set_title(r'$\omega_R = ${:.3g}'.format(σ.real)+ r' $\omega_I = ${:.3g}'.format(σ.imag)+' at kx = {:.3g} and Ra = {:.3g}'.format(kx, Rayleigh))
+    ax.legend()
+    fig_filename = 'eigenfunctions_{:}_Ra{:.2g}_kx{:.2g}_nz{:d}'.format(nondim, Rayleigh, kx, nz)
+    fig.savefig(evp.case_name+'/'+fig_filename+'.png', dpi=300)
+    logger.info("eigenfunctions plotted in {:s}".format(evp.case_name+'/'+fig_filename+'.png'))
 
 # fix Ra, find omega
-def compute_growth_rate(kx, Ra, low_res, high_res, target=0):
+def compute_growth_rate(kx, Ra, lo_res, hi_res, target=0, plot_fastest_mode=False):
     for solver in [lo_res, hi_res]:
         if args['--dense']:
             solver.solve(Ra, kx, dense=True)
@@ -144,6 +153,8 @@ def compute_growth_rate(kx, Ra, low_res, high_res, target=0):
     if peak_eval.imag < 0:
         peak_eval = np.conj(peak_eval)
 
+    if plot_fastest_mode:
+        plot_eigenfunctions(lo_res, indx[-1], Ra, kx)
     return peak_eval
 
 def peak_growth_rate(*args):
@@ -214,13 +225,13 @@ for system in ['rainy_evp']:
 
 import scipy.optimize as sciop
 bounds = sciop.Bounds(lb=1, ub=10)
-def find_continous_peak(Ra, kx):
+def find_continous_peak(Ra, kx, plot_fastest_mode=False):
     lo_res = RainyBenardEVP(nz, Ra, tau, kx, γ, α, β, q0, k, relaxation_method=relaxation_method, Legendre=Legendre, erf=erf, bc_type=bc_type, nondim=nondim, dealias=dealias,Lz=1)
     hi_res = RainyBenardEVP(int(3*nz/2), Ra, tau, kx, γ, α, β, q0, k, relaxation_method=relaxation_method, Legendre=Legendre, erf=erf, bc_type=bc_type, nondim=nondim, dealias=dealias,Lz=1)
 
     result = sciop.minimize(peak_growth_rate, kx, args=(Ra, lo_res, hi_res), bounds=bounds, method='Nelder-Mead', tol=1e-5)
     # obtain full complex rate
-    σ = compute_growth_rate(result.x[0], Ra, lo_res, hi_res)
+    σ = compute_growth_rate(result.x[0], Ra, lo_res, hi_res, plot_fastest_mode=plot_fastest_mode)
     return result.x[0], σ
 
 # find Ra bracket
@@ -261,7 +272,7 @@ while np.abs(σ.real) > tol:
     logger.info('Critical point, based on interpolation:')
     logger.info('Ra = {:.3g}, k = {:}'.format(crit_Ra, crit_k))
 
-    kx, σ = find_continous_peak(crit_Ra, crit_k)
+    kx, σ = find_continous_peak(crit_Ra, crit_k, plot_fastest_mode=True)
     logger.info('σ = {:.2g}, {:.2g}i (calculated) at k = {:}'.format(σ.real, σ.imag, kx))
 
     if σ.real > 0:
