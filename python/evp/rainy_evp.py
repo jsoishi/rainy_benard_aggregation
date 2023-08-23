@@ -241,7 +241,7 @@ class RainyBenardEVP():
         if self.erf:
             scrN = (H(q0 - qs0) + 1/2*(q0 - qs0)*self.k*2*(np.pi)**(-1/2)*np.exp(-self.k**2*(q0 - qs0)**2)).evaluate()
         else:
-            scrN = (H(self.q0 - qs0) + 1/2*(q0 - qs0)*k*(1-(np.tanh(k*(q0 - qs0)))**2)).evaluate()
+            scrN = (H(q0 - qs0) + 1/2*(q0 - qs0)*self.k*(1-(np.tanh(self.k*(q0 - qs0)))**2)).evaluate()
         scrN.name='scrN'
         self.scrN = scrN
         # use only gradient in z direction.
@@ -300,5 +300,5 @@ def mode_reject(lo_res, hi_res, drift_threshold=1e6, plot_drift_ratios=True):
         ep.plot_drift_ratios(axes=ax)
         nz = lo_res.nz
         fig.savefig(f'{lo_res.case_name}/nz_{nz}_drift_ratios.png', dpi=300)
-    
+
     return evals_good, indx, ep
