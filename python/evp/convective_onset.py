@@ -108,13 +108,11 @@ nz = int(float(args['--nz']))
 logger.info('α={:}, β={:}, γ={:}, tau={:}, k={:}'.format(α,β,γ,tau, k))
 
 def plot_eigenfunctions(evp, index, Rayleigh, kx):
-    print(evp.fields)
     evp.solver.set_state(index,0)
     u = evp.fields['u']
     b = evp.fields['b']
     q = evp.fields['q']
     σ = evp.solver.eigenvalues[index]
-    print(u, evp.fields)
     z = evp.zb.local_grid(1)[0,0,:]
     nz = z.shape[-1]
     i_max = np.argmax(np.abs(b['g'][0,0,:]))
@@ -301,3 +299,19 @@ if args['--dense']:
     fig_filename += '_dense'
 fig.savefig(lo_res.case_name+'/'+fig_filename+'.png', dpi=300)
 logger.info("peaks plotted in {:}".format(lo_res.case_name+'/'+fig_filename+'.png'))
+
+f_curves = lo_res.case_name+'/critical_curves_nz_{:d}.h5'.format(nz)
+with h5py.File(f_curves,'w') as f:
+    f['crit/Ra'] = crit_Ra
+    f['crit/k'] = crit_k
+    f['crit/σ'] = peaks[crit_Ra]['σ']
+    for i, Ra in enumerate(peaks):
+        f[f'peaks/{i:d}/Ra'] = Ra
+        f[f'peaks/{i:d}/k'] = peaks[Ra]['k']
+        f[f'peaks/{i:d}/σ'] = peaks[Ra]['σ']
+    for Ra in growth_rates:
+        f[f'curves/{Ra:.4e}/Ra'] = Ra
+        f[f'curves/{Ra:.4e}/k'] = kxs
+        f[f'curves/{Ra:.4e}/σ'] = growth_rates[Ra]['σ']
+    f.close()
+logger.info("Critical curves written out to: {:}".format(f_curves))
