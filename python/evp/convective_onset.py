@@ -258,14 +258,17 @@ for Ra in [lower_Ra, upper_Ra]:
 # conduct a bracketing search with interpolation to find critical Ra
 σ = np.inf
 tol = float(args['--tol_crit_Ra'])
-iter=0
-while np.abs(σ.real) > tol:
+iter = 0
+max_iter = 15
+while np.abs(σ.real) > tol and iter < max_iter:
     σs = np.array([peaks[lower_Ra]['σ'], peaks[upper_Ra]['σ']])
     ks = np.array([peaks[lower_Ra]['k'], peaks[upper_Ra]['k']])
-    Ras = np.array([lower_Ra, upper_Ra])
-    crit_Ra = np.interp(0, σs.real, Ras)
-    crit_k = np.interp(crit_Ra, Ras, ks)
-    crit_σ = np.interp(crit_Ra, Ras, σs)
+    ln_Ras = np.log(np.array([lower_Ra, upper_Ra]))
+    # do this in log Ra
+    ln_crit_Ra = np.interp(0, σs.real, ln_Ras)
+    crit_k = np.interp(ln_crit_Ra, ln_Ras, ks)
+    crit_σ = np.interp(ln_crit_Ra, ln_Ras, σs)
+    crit_Ra = np.exp(ln_crit_Ra)
 
     logger.info('Critical point, based on interpolation:')
     logger.info('Ra = {:.3g}, k = {:}'.format(crit_Ra, crit_k))
@@ -283,7 +286,6 @@ while np.abs(σ.real) > tol:
     iter+=1
 
 logger.info("critical Ra found after {:d} iterations".format(iter))
-logger.info("peak convergence:\n{:}".format(peaks))
 
 for Ra in peaks:
     ax.scatter(peaks[Ra]['k'], peaks[Ra]['σ'].real, color='xkcd:grey', marker='x', alpha=0.5)
@@ -302,9 +304,20 @@ logger.info("peaks plotted in {:}".format(lo_res.case_name+'/'+fig_filename+'.pn
 
 f_curves = lo_res.case_name+'/critical_curves_nz_{:d}.h5'.format(nz)
 with h5py.File(f_curves,'w') as f:
+    f['α'] = α
+    f['β'] = β
+    f['γ'] = γ
+    f['q0'] = q0
+    f['tau'] = tau
+    f['k_q'] = k
+    f['nz'] = nz
+    # critical value
     f['crit/Ra'] = crit_Ra
     f['crit/k'] = crit_k
     f['crit/σ'] = peaks[crit_Ra]['σ']
+    f['crit/iter'] = iter
+    f['crit/max_iter'] = max_iter
+    f['crit/tol'] = tol
     for i, Ra in enumerate(peaks):
         f[f'peaks/{i:d}/Ra'] = Ra
         f[f'peaks/{i:d}/k'] = peaks[Ra]['k']
