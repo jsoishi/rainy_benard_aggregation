@@ -27,6 +27,8 @@ Options:
     --max_Ra=<maxR>   Maximum Rayleigh number to sample [default: 1e5]
     --num_Ra=<nRa>    How many Rayleigh numbers to sample [default: 5]
 
+    --min_kx=<mnkx>   Min kx [default: 0.1]
+    --max_kx=<mxkx>   Max kx [default: 33]
     --num_kx=<nkx>    How many kxs to sample [default: 50]
 
     --top-stress-free     Stress-free upper boundary
@@ -73,6 +75,8 @@ relaxation_method = args['--relaxation_method']
 N_evals = int(float(args['--eigs']))
 target = float(args['--target'])
 
+min_kx = float(args['--min_kx'])
+max_kx = float(args['--max_kx'])
 nkx = int(float(args['--num_kx']))
 
 if args['--stress-free']:
@@ -162,7 +166,7 @@ def peak_growth_rate(*args):
 
 growth_rates = {}
 Ras = np.geomspace(float(args['--min_Ra']),float(args['--max_Ra']),num=int(float(args['--num_Ra'])))
-kxs = np.logspace(-1, 1.5, num=nkx)
+kxs = np.geomspace(min_kx, max_kx, num=nkx)
 print(Ras)
 for Rayleigh in Ras:
     σ = []
