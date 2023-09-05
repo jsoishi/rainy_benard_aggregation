@@ -70,7 +70,10 @@ args = docopt(__doc__)
 Legendre = args['--Legendre']
 erf = args['--erf']
 nondim = args['--nondim']
-relaxation_method = args['--relaxation_method']
+if args['--relaxation_method']:
+    relaxation_method = args['--relaxation_method']
+else:
+    relaxation_method = 'none'
 
 N_evals = int(float(args['--eigs']))
 target = float(args['--target'])
@@ -104,8 +107,6 @@ dealias = 2
 k = float(args['--k'])
 q0 = float(args['--q0'])
 tau = float(args['--tau'])
-
-relaxation_method = 'none'
 
 nz = int(float(args['--nz']))
 
@@ -168,25 +169,27 @@ growth_rates = {}
 Ras = np.geomspace(float(args['--min_Ra']),float(args['--max_Ra']),num=int(float(args['--num_Ra'])))
 kxs = np.geomspace(min_kx, max_kx, num=nkx)
 print(Ras)
-for Rayleigh in Ras:
+for Ra in Ras:
     σ = []
     # reset to base target for each Ra loop
     target = float(args['--target'])
     kx = kxs[0]
-    lo_res = RainyBenardEVP(nz, Rayleigh, tau, kx, γ, α, β, q0, k, relaxation_method=relaxation_method, Legendre=Legendre, erf=erf, bc_type=bc_type, nondim=nondim, dealias=dealias,Lz=1)
+    lo_res = RainyBenardEVP(nz, Ra, tau, kx, γ, α, β, q0, k, relaxation_method=relaxation_method, Legendre=Legendre, erf=erf, bc_type=bc_type, nondim=nondim, dealias=dealias,Lz=1)
     lo_res.plot_background()
-    hi_res = RainyBenardEVP(int(3*nz/2), Rayleigh, tau, kx, γ, α, β, q0, k, relaxation_method=relaxation_method, Legendre=Legendre, erf=erf, bc_type=bc_type, nondim=nondim, dealias=dealias,Lz=1)
+    hi_res = RainyBenardEVP(int(3*nz/2), Ra, tau, kx, γ, α, β, q0, k, relaxation_method=relaxation_method, Legendre=Legendre, erf=erf, bc_type=bc_type, nondim=nondim, dealias=dealias,Lz=1)
     hi_res.plot_background()
+    for system in ['rainy_evp']:
+         logging.getLogger(system).setLevel(logging.WARNING)
 
     for kx in kxs:
-        σ_i = compute_growth_rate(kx, Rayleigh, lo_res, hi_res, target=target)
+        σ_i = compute_growth_rate(kx, Ra, lo_res, hi_res, target=target)
         σ.append(σ_i)
-        logger.info('Ra = {:.2g}, kx = {:.2g}, σ = {:.2g}'.format(Rayleigh, kx, σ_i))
+        logger.info('Ra = {:.2g}, kx = {:.2g}, σ = {:.2g}'.format(Ra, kx, σ_i))
         if σ_i.imag > 0:
             # update target if on growing branch
             target = σ_i.imag
     σ = np.array(σ)
-    growth_rates[Rayleigh] = {'σ':σ, 'max σ.real':σ[np.argmax(σ.real)]}
+    growth_rates[Ra] = {'σ':σ, 'max σ.real':σ[np.argmax(σ.real)]}
 
 fig, ax = plt.subplots(figsize=[6,6/1.6])
 
