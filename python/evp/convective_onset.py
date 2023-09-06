@@ -141,12 +141,14 @@ def plot_eigenfunctions(evp, index, Rayleigh, kx):
     logger.info("eigenfunctions plotted in {:s}".format(evp.case_name+'/'+fig_filename+'.png'))
 
 # fix Ra, find omega
-def compute_growth_rate(kx, Ra, lo_res, hi_res, target=0, plot_fastest_mode=False):
+def compute_growth_rate(kx, Ra, target=0, plot_fastest_mode=False):
+    lo_res = RainyBenardEVP(nz, Ra, tau, kx, γ, α, β, q0, k, relaxation_method=relaxation_method, Legendre=Legendre, erf=erf, bc_type=bc_type, nondim=nondim, dealias=dealias,Lz=1)
+    hi_res = RainyBenardEVP(int(3*nz/2), Ra, tau, kx, γ, α, β, q0, k, relaxation_method=relaxation_method, Legendre=Legendre, erf=erf, bc_type=bc_type, nondim=nondim, dealias=dealias,Lz=1)
     for solver in [lo_res, hi_res]:
         if args['--dense']:
-            solver.solve(Ra, kx, dense=True)
+            solver.solve(dense=True)
         else:
-            solver.solve(Ra, kx, dense=False, N_evals=N_evals, target=target)
+            solver.solve(dense=False, N_evals=N_evals, target=target)
     evals_good, indx, ep = mode_reject(lo_res, hi_res, plot_drift_ratios=False)
 
     i_evals = np.argsort(evals_good.real)
@@ -182,7 +184,7 @@ for Ra in Ras:
          logging.getLogger(system).setLevel(logging.WARNING)
 
     for kx in kxs:
-        σ_i = compute_growth_rate(kx, Ra, lo_res, hi_res, target=target)
+        σ_i = compute_growth_rate(kx, Ra, target=target)
         σ.append(σ_i)
         logger.info('Ra = {:.2g}, kx = {:.2g}, σ = {:.2g}'.format(Ra, kx, σ_i))
         if σ_i.imag > 0:
@@ -202,7 +204,7 @@ if nondim == 'diffusion':
     ax2.set_ylabel(r'$\omega_I$ (dashed)')
 elif nondim == 'buoyancy':
     ax2 = ax
-    ax.set_ylim(-0.05, 0.025)
+    ax.set_ylim(-0.5, 0.5)
     ax.set_ylabel(r'$\omega_R$ (solid), $\omega_I$ (dashed)')
 
 for Ra in growth_rates:
@@ -231,12 +233,10 @@ for system in ['rainy_evp']:
 import scipy.optimize as sciop
 bounds = sciop.Bounds(lb=1, ub=10)
 def find_continous_peak(Ra, kx, plot_fastest_mode=False):
-    lo_res = RainyBenardEVP(nz, Ra, tau, kx, γ, α, β, q0, k, relaxation_method=relaxation_method, Legendre=Legendre, erf=erf, bc_type=bc_type, nondim=nondim, dealias=dealias,Lz=1)
-    hi_res = RainyBenardEVP(int(3*nz/2), Ra, tau, kx, γ, α, β, q0, k, relaxation_method=relaxation_method, Legendre=Legendre, erf=erf, bc_type=bc_type, nondim=nondim, dealias=dealias,Lz=1)
 
-    result = sciop.minimize(peak_growth_rate, kx, args=(Ra, lo_res, hi_res), bounds=bounds, method='Nelder-Mead', tol=1e-5)
+    result = sciop.minimize(peak_growth_rate, kx, args=(Ra), bounds=bounds, method='Nelder-Mead', tol=1e-5)
     # obtain full complex rate
-    σ = compute_growth_rate(result.x[0], Ra, lo_res, hi_res, plot_fastest_mode=plot_fastest_mode)
+    σ = compute_growth_rate(result.x[0], Ra, plot_fastest_mode=plot_fastest_mode)
     return result.x[0], σ
 
 # find Ra bracket

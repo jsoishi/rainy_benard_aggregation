@@ -21,10 +21,6 @@ class RainyBenardEVP():
         self.nz = nz
         self.Lz = Lz
 
-        # Build Fourier basis for x with prescribed kx as the fundamental mode
-        self.nx = 4
-        self.Lx = 2 * np.pi / kx_in
-
         self.dealias = dealias
         self.α = α
         self.β = β
@@ -49,7 +45,12 @@ class RainyBenardEVP():
 
         self.kx = self.dist.Field(name='kx')
         self.kx['g'] = kx_in
-
+        # protection against array type-casting via scipy.optimize;
+        # important when updating Lx during that loop.
+        kx = kx_in.squeeze()[()]
+        # Build Fourier basis for x with prescribed kx as the fundamental mode
+        self.nx = 4
+        self.Lx = 2 * np.pi / kx
         self.xb = de.ComplexFourier(self.coords['x'], size=self.nx, bounds=(0, self.Lx))
 
         self.Rayleigh = self.dist.Field(name='Ra')
@@ -297,11 +298,7 @@ class RainyBenardEVP():
         self.problem.add_equation('integ(p) = 0')
         self.solver = self.problem.build_solver(ncc_cutoff=1e-10)
 
-    def solve(self, Ra, kx, dense=True, N_evals=20, target=0):
-        self.kx['g'] = kx
-        self.Lx = 2 * np.pi / kx
-
-        self.Rayleigh['g'] = Ra
+    def solve(self, dense=True, N_evals=20, target=0):
         if dense:
             self.solver.solve_dense(self.solver.subproblems[1], rebuild_matrices=True)
             self.solver.eigenvalues = self.solver.eigenvalues[np.isfinite(self.solver.eigenvalues)]
