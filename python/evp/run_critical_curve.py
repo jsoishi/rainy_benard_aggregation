@@ -20,6 +20,7 @@ Options:
      --num_kx=<nkx>       Num kx to search [default: 5]
 
      --nz=<nz>            z resolution [default: 128]
+     --verbose
 
 """
 import subprocess as sp
@@ -65,9 +66,11 @@ else:
 for γ in gammas:
     for β in betas:
         print(f"solving γ = {γ}, β = {β}:")
-        sp.run(f"python3 convective_onset.py --beta={β} --gamma={γ} --q0=1 \
+        run_command = f"python3 convective_onset.py --beta={β} --gamma={γ} --q0=1 \
                  --nz={nz} --k=1e4 --tau=0.1 \
                  --min_Ra={min_Ra} --max_Ra={max_Ra} --num_Ra={num_Ra} \
                  --min_kx={min_kx} --max_kx={max_kx} --num_kx={num_kx} \
-                 --erf --Legendre --top-stress-free",
-                 shell=True, capture_output=True)
+                 --erf --Legendre --top-stress-free"
+        if args['--verbose']:
+            print(run_command)
+        sp.run(run_command, shell=True, capture_output=True)

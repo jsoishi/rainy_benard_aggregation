@@ -36,7 +36,7 @@ Options:
 
     --erf                  Use an erf rather than a tanh for the phase transition
     --Legendre             Use Legendre polynomials
-    --drift_threshold=<dt>        Drift threshold [default: 1e3]
+    --drift_threshold=<dt>        Drift threshold [default: 1e6]
     --relaxation_method=<re>      Method for relaxing the background [default: IVP]
     --rejection_method=<rej>      Method for rejecting modes [default: resolution]
 
@@ -187,7 +187,9 @@ if __name__ == "__main__":
         else:
             solver.solve(dense=False, N_evals=N_evals, target=target)
     evals_ok, indx_ok, ep = mode_reject(lo_res, hi_res, plot_drift_ratios=True, drift_threshold=drift_threshold)
-    evals_good, indx = evp_amp_reject(lo_res, indx_ok)
+    evals_good = evals_ok
+    indx = indx_ok
+    #evals_good, indx = evp_amp_reject(lo_res, indx_ok)
     logger.info(f"good modes ($\delta_t$ = {drift_threshold:.1e}):    max growth rate = {evals_good[-1]}")
     lo_indx = np.argsort(lo_res.eigenvalues.real)
     logger.info(f"low res modes: max growth rate = {lo_res.eigenvalues[lo_indx][-1]}")

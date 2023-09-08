@@ -16,7 +16,7 @@ from analytic_zc import f_zc as zc_analytic
 from analytic_zc import f_Tc as Tc_analytic
 
 class RainyBenardEVP():
-    def __init__(self, nz, Ra, tau_in, kx_in, γ, α, β, lower_q0, k, atmosphere=None, relaxation_method=None, Legendre=True, erf=True, nondim='buoyancy', bc_type=None, Prandtl=1, Prandtlm=1, Lz=1, dealias=3/2, dtype=np.complex128):
+    def __init__(self, nz, Ra, tau_in, kx_in, γ, α, β, lower_q0, k, atmosphere=None, relaxation_method=None, Legendre=True, erf=True, nondim='buoyancy', bc_type=None, Prandtl=1, Prandtlm=1, Lz=1, dealias=3/2, dtype=np.complex128, twoD=True):
         logger.info('Ra = {:}, kx = {:}, α={:}, β={:}, γ={:}, tau={:}, k={:}'.format(Ra,kx_in,α,β,γ,tau_in, k))
         self.nz = nz
         self.Lz = Lz
@@ -32,7 +32,11 @@ class RainyBenardEVP():
         self.Prandtl = Prandtl
         self.Prandtlm = Prandtlm
 
-        self.coords = de.CartesianCoordinates('x', 'y', 'z')
+        self.twoD = twoD
+        if self.twoD:
+            self.coords = de.CartesianCoordinates('x', 'z')
+        else:
+            self.coords = de.CartesianCoordinates('x', 'y', 'z')
         self.dist = de.Distributor(self.coords, dtype=dtype)
         self.erf = erf
         self.Legendre = Legendre
@@ -47,7 +51,7 @@ class RainyBenardEVP():
         self.kx['g'] = kx_in
         # protection against array type-casting via scipy.optimize;
         # important when updating Lx during that loop.
-        kx = kx_in.squeeze()[()]
+        kx = np.float64(kx_in).squeeze()[()]
         # Build Fourier basis for x with prescribed kx as the fundamental mode
         self.nx = 4
         self.Lx = 2 * np.pi / kx
@@ -140,7 +144,12 @@ class RainyBenardEVP():
 
 
     def build_solver(self):
-        ex, ey, ez = self.coords.unit_vector_fields(self.dist)
+        if self.twoD:
+            ex, ez = self.coords.unit_vector_fields(self.dist)
+            ey = self.dist.VectorField(self.coords)
+            ey['c'] = 0
+        else:
+            ex, ey, ez = self.coords.unit_vector_fields(self.dist)
         #dx = lambda A: 1j*kx*A # 1-d mode onset
         dy = lambda A: 0*A # flexibility to add 2-d mode if desired
 
@@ -283,7 +292,8 @@ class RainyBenardEVP():
             logger.info("BCs: bottom stress-free")
             self.problem.add_equation('ez@u(z=0) = 0')
             self.problem.add_equation('ez@(ex@e(z=0)) = 0')
-            self.problem.add_equation('ez@(ey@e(z=0)) = 0')
+            if not self.twoD:
+                self.problem.add_equation('ez@(ey@e(z=0)) = 0')
         else:
             logger.info("BCs: bottom no-slip")
             self.problem.add_equation('u(z=0) = 0')
@@ -291,7 +301,8 @@ class RainyBenardEVP():
             logger.info("BCs: top stress-free")
             self.problem.add_equation('ez@u(z=Lz) = 0')
             self.problem.add_equation('ez@(ex@e(z=Lz)) = 0')
-            self.problem.add_equation('ez@(ey@e(z=Lz)) = 0')
+            if not self.twoD:
+                self.problem.add_equation('ez@(ey@e(z=Lz)) = 0')
         else:
             logger.info("BCs: top no-slip")
             self.problem.add_equation('u(z=Lz) = 0')
