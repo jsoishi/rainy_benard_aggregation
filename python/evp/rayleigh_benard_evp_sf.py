@@ -29,7 +29,7 @@ import logging
 logger = logging.getLogger(__name__)
 
 
-def plot_eigenmode(solver, fields, zb, index, kx, n, mode_label=None, correct_phase=True, label=None):
+def plot_eigenmode(solver, fields, zb, index, kx, n, ω, mode_label=None, correct_phase=True, label=None):
     solver.set_state(index, solver.subproblems[1].subsystems[0])
     fig, axes = plt.subplot_mosaic([['ux','uz'],
                                     ['b','p']], layout='constrained')
@@ -41,6 +41,9 @@ def plot_eigenmode(solver, fields, zb, index, kx, n, mode_label=None, correct_ph
             if v == 'b':
                 i_max = np.argmax(np.abs(fields[v]['g'][0,:]))
                 phase_correction = fields[v]['g'][0,i_max]
+                phase_sign = np.sign(fields[v](z=0.125).evaluate()['g'][0,0])
+                if np.sign(phase_correction)*np.sign(phase_sign) < 0:
+                    phase_correction *= phase_sign
         else:
             phase_correction = 1
         fields[v].change_scales(1)
@@ -62,9 +65,10 @@ def plot_eigenmode(solver, fields, zb, index, kx, n, mode_label=None, correct_ph
     axes['uz'].set_ylabel(r"$z$")
     # analytic solution
     axes['b'].plot(np.sin(n*np.pi*z), z, zorder=0, linewidth=10, alpha=0.3)
-    uz_amp = u[-1,0,np.argmax(np.abs(u[-1,0,:]))]
+    uz_amp = (-1j*ω+(n*np.pi)**2+kx**2)
+    #uz_amp = u[-1,0,np.argmax(np.abs(u[-1,0,:]))]
     axes['uz'].plot(uz_amp*np.sin(n*np.pi*z), z, zorder=0, linewidth=10, alpha=0.3)
-    ux_amp = u[0,0,np.argmax(np.abs(u[0,0,:]))]
+    ux_amp = (1j*n*np.pi/kx) * uz_amp
     print(ux_amp)
     axes['ux'].plot((ux_amp*np.cos(n*np.pi*z)).imag, z, zorder=0, linewidth=10, alpha=0.3)
     if correct_phase:
@@ -165,7 +169,7 @@ def max_growth_rate(Rayleigh, Prandtl, kx, Nz, NEV=10, target=0, plot_critical_e
             ω_evp = solver.eigenvalues[index[i]]
             print('eigenvalue: {:}; close to analytic? {:}'.format(ω_evp, np.isclose(ω_evp,ω_analytic)))
 
-            plot_eigenmode(solver, fields, zbasis, index[i], kx, n, label=label)
+            plot_eigenmode(solver, fields, zbasis, index[i], kx, n, ω_evp, label=label)
 
     return np.max(solver.eigenvalues.imag)
 
