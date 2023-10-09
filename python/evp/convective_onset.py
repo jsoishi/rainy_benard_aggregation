@@ -118,22 +118,22 @@ def plot_eigenfunctions(evp, index, Rayleigh, kx):
     b = evp.fields['b']
     q = evp.fields['q']
     σ = evp.solver.eigenvalues[index]
-    z = evp.zb.local_grid(1)[0,0,:]
+    z = evp.zb.local_grid(1)[0,:]
     nz = z.shape[-1]
-    i_max = np.argmax(np.abs(b['g'][0,0,:]))
-    phase_correction = b['g'][0,0,i_max]
+    i_max = np.argmax(np.abs(b['g'][0,:]))
+    phase_correction = b['g'][0,i_max]
     u['g'][:] /= phase_correction
     b['g'] /= phase_correction
     q['g'] /= phase_correction
     fig, ax = plt.subplots(figsize=[6,6/1.6])
     for Q in [u, q, b]:
         if Q.tensorsig:
-            for i in range(3):
-                p = ax.plot(Q['g'][i][0,0,:].real, z, label=Q.name+r'$_'+'{:s}'.format(coords.names[i])+r'$')
-                ax.plot(Q['g'][i][0,0,:].imag, z, linestyle='dashed', color=p[0].get_color())
+            for i in range(2):
+                p = ax.plot(Q['g'][i][0,:].real, z, label=Q.name+r'$_'+'{:s}'.format(coords.names[i])+r'$')
+                ax.plot(Q['g'][i][0,:].imag, z, linestyle='dashed', color=p[0].get_color())
         else:
-            p = ax.plot(Q['g'][0,0,:].real, z, label=Q)
-            ax.plot(Q['g'][0,0,:].imag, z, linestyle='dashed', color=p[0].get_color())
+            p = ax.plot(Q['g'][0,:].real, z, label=Q)
+            ax.plot(Q['g'][0,:].imag, z, linestyle='dashed', color=p[0].get_color())
     ax.set_title(r'$\omega_R = ${:.3g}'.format(σ.real)+ r' $\omega_I = ${:.3g}'.format(σ.imag)+' at kx = {:.3g} and Ra = {:.3g}'.format(kx, Rayleigh))
     ax.legend()
     fig_filename = 'eigenfunctions_{:}_Ra{:.2g}_kx{:.2g}_nz{:d}'.format(nondim, Rayleigh, kx, nz)
@@ -231,9 +231,8 @@ for system in ['rainy_evp']:
      logging.getLogger(system).setLevel(logging.WARNING)
 
 import scipy.optimize as sciop
-bounds = sciop.Bounds(lb=1, ub=10)
+bounds = sciop.Bounds(lb=np.min(kxs), ub=np.max(kxs))
 def find_continous_peak(Ra, kx, plot_fastest_mode=False):
-
     result = sciop.minimize(peak_growth_rate, kx, args=(Ra), bounds=bounds, method='Nelder-Mead', tol=1e-5)
     # obtain full complex rate
     σ = compute_growth_rate(result.x[0], Ra, plot_fastest_mode=plot_fastest_mode)
@@ -259,6 +258,7 @@ for Ra in [lower_Ra, upper_Ra]:
     σ = growth_rates[Ra]['σ']
     peak_i = np.argmax(σ.real)
     kx0 = kxs[peak_i] # initial guess
+    logger.info("{:}, {:}".format(Ra, kx0))
     kx, σ = find_continous_peak(Ra, kx0)
     peaks[Ra] = {'σ':σ, 'k':kx}
 

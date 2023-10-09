@@ -2,7 +2,10 @@
 Script for plotting pre-computed critical Rayleigh numbers.
 
 Usage:
-    plot_critical_Ra <case>...
+    plot_critical_Ra <case>... [options]
+
+Options:
+    --overlay_VPT19        Overlay points from VPT19
 """
 import h5py
 import pandas as pd
@@ -32,7 +35,7 @@ for γ in np.sort(data['γ'].unique()):
     p = ax.plot(curve['β'], curve['Ra'], label=rf'$\gamma = {γ}$', marker='o', alpha=0.5)
     ax2.plot(curve['β'], curve['k'], color=p[0].get_color(),
     linestyle='dashed', marker='s', alpha=0.5)
-    print(curve['σ'])
+    print(curve[['Ra','k','σ']])
 ax.set_ylabel('critical Ra')
 ax.set_yscale('log')
 ax2.set_ylabel('critical k')
@@ -49,7 +52,8 @@ for γ in [0.19, 0.3]:
     p = ax.plot(curve['β'], curve['Ra'], label=rf'$\gamma = {γ}$', marker='o', alpha=0.5)
     ax2.plot(curve['β'], curve['k'], color=p[0].get_color(),
     linestyle='dashed', marker='s', alpha=0.5)
-    print(curve['σ'])
+    print(f'γ = {γ}')
+    print(curve[['β','Ra','k','σ']])
 ax.set_ylabel('critical Ra')
 ax.set_yscale('log')
 ax2.set_ylabel('critical k')
@@ -66,11 +70,18 @@ for β in [1, 1.2]:
     p = ax.plot(curve['γ'], curve['Ra'], label=rf'$\beta = {β}$', marker='o', alpha=0.5)
     ax2.plot(curve['γ'], curve['k'], color=p[0].get_color(),
     linestyle='dashed', marker='s', alpha=0.5)
-    print(curve['σ'])
+    print(f'β = {β}')
+    print(curve[['γ', 'Ra','k','σ']])
 ax.set_ylabel('critical Ra')
 ax.set_yscale('log')
 ax2.set_ylabel('critical k')
 ax.set_xlabel(r'$\gamma$')
+if args['--overlay_VPT19']:
+    Vallis_12 = pd.read_csv('Vallis_et_al_2019_data/beta_1.2.csv', names=['γ', 'Ra_c'])
+    Vallis_10 = pd.read_csv('Vallis_et_al_2019_data/beta_1.0.csv', names=['γ', 'Ra_c'])
+    ax.scatter(Vallis_10['γ'], Vallis_10['Ra_c'], label=r'Vallis, $\beta=1.0$', color='xkcd:dark green', marker='o', alpha=0.5)
+    ax.scatter(Vallis_12['γ'], Vallis_12['Ra_c'], label=r'Vallis, $\beta=1.2$', color='xkcd:dark red', marker='o', alpha=0.5)
+
 ax.legend(loc='lower left')
 fig.tight_layout()
 fig.savefig('critical_Ra_and_k_beta.png', dpi=300)
