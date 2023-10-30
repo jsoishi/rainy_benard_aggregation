@@ -36,8 +36,12 @@ class SplitRainyBenardEVP():
         self.twoD = twoD
         if self.twoD:
             self.coords = de.CartesianCoordinates('x', 'z')
+            self.vector_dims = 3
+            self.z_slice = (0,slice(None))
         else:
             self.coords = de.CartesianCoordinates('x', 'y', 'z')
+            self.vector_dims = 4
+            self.z_slice = (0,0,slice(None))
         self.dist = de.Distributor(self.coords, dtype=dtype, comm=MPI.COMM_SELF)
         self.erf = erf
         self.Legendre = Legendre
@@ -51,6 +55,8 @@ class SplitRainyBenardEVP():
         else:
             self.zb1 = de.ChebyshevT(self.coords['z'], size=self.nz, bounds=(0, self.zc), dealias=self.dealias)
             self.zb2 = de.ChebyshevT(self.coords['z'], size=self.nz, bounds=(self.zc, self.Lz), dealias=self.dealias)
+        self.z = np.concatenate([self.zb1.local_grid(1).squeeze(), self.zb2.local_grid(1).squeeze()])
+        self.zd = np.concatenate([self.zb1.local_grid(self.dealias).squeeze(), self.zb2.local_grid(self.dealias).squeeze()])
 
         # self.kx = self.dist.Field(name='kx')
         # self.kx['g'] = kx_in
@@ -79,7 +85,7 @@ class SplitRainyBenardEVP():
         logger.info("Building atmosphere")
         atm_name = 'unsaturated'
 
-        self.case_name = 'analytic_{:s}/alpha{:1.0f}_beta{:}_gamma{:}_q{:1.1f}'.format(atm_name, self.α,self.β,self.γ, self.lower_q0)
+        self.case_name = 'analytic_{:s}/stacked_alpha{:1.0f}_beta{:}_gamma{:}_q{:1.1f}'.format(atm_name, self.α,self.β,self.γ, self.lower_q0)
         self.case_name += '/tau{:}_k{:.3e}'.format(self.tau['g'].squeeze().real,self.k)
         if self.erf:
             self.case_name += '_erf'
@@ -124,32 +130,33 @@ class SplitRainyBenardEVP():
         if not os.path.exists('{:s}/'.format(self.case_name)) and self.dist.comm.rank == 0:
             os.makedirs('{:s}/'.format(self.case_name))
 
+    def concatenate_bases(self, field1, field2):
+        return np.concatenate([field1['g'],field2['g']], axis=-1)
+        
     def plot_background(self,label=None):
         fig, ax = plt.subplots(ncols=2, figsize=[12,6])
         for b0,q0 in zip(self.b0, self.q0):
             b0.change_scales(1)
             q0.change_scales(1)
-        z = np.concatenate([self.zb1.local_grid(1).squeeze(), self.zb2.local_grid(1).squeeze()])
-        zd = np.concatenate([self.zb1.local_grid(self.dealias).squeeze(), self.zb2.local_grid(self.dealias).squeeze()])
-        b0 = np.concatenate([b['g'][0,:] for b in self.b0])
-        q0 = np.concatenate([q['g'][0,:] for q in self.q0])
-        qs0 = np.concatenate([q['g'][0,:] for q in self.qs0])
-        grad_q0 = np.concatenate([gq['g'][-1,0,:] for gq in self.grad_q0])
-        grad_b0 = np.concatenate([gq['g'][-1,0,:] for gq in self.grad_b0])
+        b0 = self.concatenate_bases(*self.b0)
+        q0 = self.concatenate_bases(*self.q0)
+        qs0 = self.concatenate_bases(*self.qs0)
+        grad_q0 = self.concatenate_bases(*self.grad_q0)
+        grad_b0 = self.concatenate_bases(*self.grad_b0)
 
-        p0 = ax[0].plot(b0.real, z, label=r'$b$')
-        p1 = ax[0].plot(self.γ*q0.real, z, label=r'$\gamma q$')
-        p2 = ax[0].plot(b0.real+self.γ*q0.real, z, label=r'$m = b + \gamma q$')
-        p3 = ax[0].plot(self.γ*qs0.real, z, linestyle='dashed', alpha=0.3, label=r'$\gamma q_s$')
+        p0 = ax[0].plot(b0[0,:].real, self.z, label=r'$b$')
+        p1 = ax[0].plot(self.γ*q0[0,:].real, self.z, label=r'$\gamma q$')
+        p2 = ax[0].plot(b0[0,:].real+self.γ*q0[0,:].real, self.z, label=r'$m = b + \gamma q$')
+        p3 = ax[0].plot(self.γ*qs0[0,:].real, self.z, linestyle='dashed', alpha=0.3, label=r'$\gamma q_s$')
         lines = p0 + p1 + p2 + p3 
         labels = [l.get_label() for l in lines]
         ax[0].legend(lines, labels)
         ax[0].set_xlabel(r'$b$, $\gamma q$, $m$')
         ax[0].set_ylabel(r'$z$')
         
-        ax[1].plot(grad_b0.real, zd, label=r'$\nabla b$')
-        ax[1].plot(self.γ*grad_q0.real, zd, label=r'$\gamma \nabla q$')
-        ax[1].plot(grad_b0.real+self.γ*grad_q0.real, zd, label=r'$\nabla m$')
+        ax[1].plot(grad_b0[1,0,:].real, self.zd, label=r'$\nabla b$')
+        ax[1].plot(self.γ*grad_q0[1,0,:].real, self.zd, label=r'$\gamma \nabla q$')
+        ax[1].plot(grad_b0[1,0,:].real+self.γ*grad_q0[1,0,:].real, self.zd, label=r'$\nabla m$')
         ax[1].set_xlabel(r'$\nabla b$, $\gamma \nabla q$, $\nabla m$')
         ax[1].legend()
         ax[1].axvline(x=0, linestyle='dashed', color='xkcd:dark grey', alpha=0.5)
@@ -162,6 +169,53 @@ class SplitRainyBenardEVP():
         if label:
             filebase += f'_{label}'
         fig.savefig(filebase+'.png', dpi=300)
+
+    def plot_eigenmode(self, index, mode_label=None):
+        self.solver.set_state(index,0)
+        fields = ['b','q','p','u']
+        names = {}
+        data ={}
+        for f in fields:
+            lower_field = self.fields[f'{f}1']
+            lower_field.change_scales(1)
+            upper_field = self.fields[f'{f}2']
+            upper_field.change_scales(1)
+            data[f] = self.concatenate_bases(lower_field,upper_field)
+            names[f] = lower_field.name
+
+        fig, axes = plt.subplot_mosaic([['ux','.','uz'],
+                                        ['b', 'q','p']], layout='constrained')
+        i_max = np.argmax(np.abs(data['b'][self.z_slice]))
+        phase_correction = data['b'][self.z_slice][i_max]
+
+        for v in ['b','q','p']:
+            name = names[v]
+            d = data[v]/phase_correction
+            axes[v].plot(d[0,:].real, self.z)
+            axes[v].plot(d[0,:].imag, self.z, ':')
+            axes[v].set_xlabel(f"${name}$")
+            axes[v].set_ylabel(r"$z$")
+            axes[v].axhline(self.zc, color='k',alpha=0.3)
+
+        u = data['u']/phase_correction
+        axes['ux'].plot(u[0,0,...,:].squeeze().real, self.z)
+        axes['ux'].plot(u[0,0,...,:].squeeze().imag, self.z,':')
+        axes['ux'].set_xlabel(r"$u_x$")
+        axes['ux'].set_ylabel(r"$z$")
+        axes['uz'].plot(u[-1,0,...,:].squeeze().real, self.z)
+        axes['uz'].plot(u[-1,0,...,:].squeeze().imag, self.z, ':')
+        axes['uz'].set_xlabel(r"$u_z$")
+        axes['uz'].set_ylabel(r"$z$")
+        axes['q'].set_title(f"phase {phase_correction.real:.3e}+{phase_correction.imag:.3e}i")
+        sigma = self.solver.eigenvalues[index]
+        fig.suptitle(f"$\sigma = {sigma.real:.2f} {sigma.imag:+.2e} i$")
+        if not mode_label:
+            mode_label = index
+        kx = 2*np.pi/self.Lx
+        fig_filename=f"emode_indx_{mode_label}_Ra_{self.Rayleigh['g'].squeeze().real:.2e}_nz_{self.nz}_kx_{kx:.3f}_bc_{self.bc_type}"
+        fig.savefig(self.case_name +'/'+fig_filename+'.pdf')
+        logger.info("eigenmode {:d} saved in {:s}".format(index, self.case_name +'/'+fig_filename+'.png'))
+
 
     def build_solver(self):
         if self.twoD:
@@ -293,15 +347,11 @@ class SplitRainyBenardEVP():
             logger.info("BCs: top no-slip")
             self.problem.add_equation('u2(z=Lz) = 0')
         self.problem.add_equation('integ(p1) + integ(p2) = 0')
-        for u,var in zip([u1,u2],[grad_b01, grad_b02]):
-            test = (u@var).evaluate()
-            logger.info(f"shape({test.name}) = {test['g'].shape}")
         self.solver = self.problem.build_solver(entry_cutoff=0)#)ncc_cutoff=1e-10)
 
     def solve(self, dense=True, N_evals=20, target=0):
         if dense:
             self.solver.solve_dense(self.solver.subproblems[1], rebuild_matrices=True)
-            self.solver.eigenvalues = self.solver.eigenvalues[np.isfinite(self.solver.eigenvalues)]
         else:
             self.solver.solve_sparse(self.solver.subproblems[1], N=N_evals, target=target, rebuild_matrices=True)
         self.eigenvalues = self.solver.eigenvalues
@@ -602,7 +652,6 @@ class RainyBenardEVP():
     def solve(self, dense=True, N_evals=20, target=0):
         if dense:
             self.solver.solve_dense(self.solver.subproblems[1], rebuild_matrices=True)
-            self.solver.eigenvalues = self.solver.eigenvalues[np.isfinite(self.solver.eigenvalues)]
         else:
             self.solver.solve_sparse(self.solver.subproblems[1], N=N_evals, target=target, rebuild_matrices=True)
         self.eigenvalues = self.solver.eigenvalues
