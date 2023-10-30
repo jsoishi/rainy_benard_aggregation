@@ -62,10 +62,10 @@ class SplitRainyBenardEVP():
         # self.kx['g'] = kx_in
         # # protection against array type-casting via scipy.optimize;
         # # important when updating Lx during that loop.
-        # kx = np.float64(kx_in).squeeze()[()]
+        kx = np.float64(kx_in).squeeze()[()]
         # # Build Fourier basis for x with prescribed kx as the fundamental mode
         self.nx = 4
-        self.Lx = 2 * np.pi / kx_in
+        self.Lx = 2 * np.pi / kx
         self.xb = de.ComplexFourier(self.coords['x'], size=self.nx, bounds=(0, self.Lx), dealias=self.dealias)
 
         self.Rayleigh = self.dist.Field(name='Ra')
@@ -76,10 +76,18 @@ class SplitRainyBenardEVP():
         self.build_solver()
     
     def get_zc_Tc(self):
-        if self.α != 3.0 or self.β != 1.2 or self.lower_q0 != 0.6:
-            raise NotImplementedError("Only α = 3.0, β = 1.2, and lower_q0 = 0.6 currently supported.")
-        self.zc = 0.483289354408442
-        self.Tc = -0.4588071140209613
+        #if self.α != 3.0 or self.β != 1.2 or self.lower_q0 != 0.6:
+        #    raise NotImplementedError("Only α = 3.0, β = 1.2, and lower_q0 = 0.6 currently supported.")
+        if self.α != 3.0 or self.lower_q0 !=0.6:
+            raise NotImplementedError("Only α = 3.0 and lower_q0 = 0.6 currently supported.")
+        if self.γ == 0.3:
+            self.zc = 0.483289354408442
+            self.Tc = -0.4588071140209613
+        elif self.γ == 0.19:
+            self.zc = 0.4751621541611023
+            self.Tc = -0.4588071140209616
+        else:
+            raise NotImplementedError(f"gamma = {self.gamma:.3f} is not supported.")
 
     def build_atmosphere(self):
         logger.info("Building atmosphere")
@@ -183,19 +191,26 @@ class SplitRainyBenardEVP():
             data[f] = self.concatenate_bases(lower_field,upper_field)
             names[f] = lower_field.name
 
-        fig, axes = plt.subplot_mosaic([['ux','.','uz'],
+        fig, axes = plt.subplot_mosaic([['ux','bzoom','uz'],
                                         ['b', 'q','p']], layout='constrained')
         i_max = np.argmax(np.abs(data['b'][self.z_slice]))
         phase_correction = data['b'][self.z_slice][i_max]
 
-        for v in ['b','q','p']:
+        for v in ['q','p','b']:
             name = names[v]
             d = data[v]/phase_correction
-            axes[v].plot(d[0,:].real, self.z)
-            axes[v].plot(d[0,:].imag, self.z, ':')
-            axes[v].set_xlabel(f"${name}$")
-            axes[v].set_ylabel(r"$z$")
+            axes[v].plot(d[0,:].real, self.z)            
+            axes[v].plot(d[0,:].imag, self.z, ':')       
+            axes[v].set_xlabel(f"${name}$")              
+            axes[v].set_ylabel(r"$z$")                   
             axes[v].axhline(self.zc, color='k',alpha=0.3)
+
+        axes['bzoom'].plot(d[0,:].real, self.z,'x-')            
+        axes['bzoom'].plot(d[0,:].imag, self.z, ':')
+        axes['bzoom'].set_ylim(0.47,0.4775)
+        axes['bzoom'].set_xlabel(f"${name}$")              
+        axes['bzoom'].set_ylabel(r"$z$")                   
+        axes['bzoom'].axhline(self.zc, color='k',alpha=0.3)
 
         u = data['u']/phase_correction
         axes['ux'].plot(u[0,0,...,:].squeeze().real, self.z)
@@ -376,8 +391,10 @@ class RainyBenardEVP():
         self.twoD = twoD
         if self.twoD:
             self.coords = de.CartesianCoordinates('x', 'z')
+            self.z_slice = (0,slice(None))
         else:
             self.coords = de.CartesianCoordinates('x', 'y', 'z')
+            self.z_slice = (0,0,slice(None))
         self.dist = de.Distributor(self.coords, dtype=dtype)
         self.erf = erf
         self.Legendre = Legendre
@@ -387,7 +404,7 @@ class RainyBenardEVP():
             self.zb = de.Legendre(self.coords.coords[-1], size=self.nz, bounds=(0, self.Lz), dealias=self.dealias)
         else:
             self.zb = de.ChebyshevT(self.coords.coords[-1], size=self.nz, bounds=(0, self.Lz), dealias=self.dealias)
-
+            self.z = self.zb.local_grid(1).squeeze()
         # protection against array type-casting via scipy.optimize;
         # important when updating Lx during that loop.
         kx = np.float64(kx_in).squeeze()[()]
@@ -481,6 +498,47 @@ class RainyBenardEVP():
         if label:
             filebase += f'_{label}'
         fig.savefig(filebase+'.png', dpi=300)
+
+    def plot_eigenmode(self, index, mode_label=None):
+        self.solver.set_state(index,0)
+        fields = ['b','q','p','u']
+        names = {}
+        data ={}
+        for f in fields:
+            data[f] = self.fields[f]['g']
+            names[f] = self.fields[f].name
+
+        fig, axes = plt.subplot_mosaic([['ux','.','uz'],
+                                        ['b', 'q','p']], layout='constrained')
+        i_max = np.argmax(np.abs(data['b'][self.z_slice]))
+        phase_correction = data['b'][self.z_slice][i_max]
+
+        for v in ['b','q','p']:
+            name = names[v]
+            d = data[v]/phase_correction
+            axes[v].plot(d[0,:].real, self.z)
+            axes[v].plot(d[0,:].imag, self.z, ':')
+            axes[v].set_xlabel(f"${name}$")
+            axes[v].set_ylabel(r"$z$")
+
+        u = data['u']/phase_correction
+        axes['ux'].plot(u[0,0,...,:].squeeze().real, self.z)
+        axes['ux'].plot(u[0,0,...,:].squeeze().imag, self.z,':')
+        axes['ux'].set_xlabel(r"$u_x$")
+        axes['ux'].set_ylabel(r"$z$")
+        axes['uz'].plot(u[-1,0,...,:].squeeze().real, self.z)
+        axes['uz'].plot(u[-1,0,...,:].squeeze().imag, self.z, ':')
+        axes['uz'].set_xlabel(r"$u_z$")
+        axes['uz'].set_ylabel(r"$z$")
+        axes['q'].set_title(f"phase {phase_correction.real:.3e}+{phase_correction.imag:.3e}i")
+        sigma = self.solver.eigenvalues[index]
+        fig.suptitle(f"$\sigma = {sigma.real:.2f} {sigma.imag:+.2e} i$")
+        if not mode_label:
+            mode_label = index
+        kx = 2*np.pi/self.Lx
+        fig_filename=f"emode_indx_{mode_label}_Ra_{self.Rayleigh['g'].squeeze().real:.2e}_nz_{self.nz}_kx_{kx:.3f}_bc_{self.bc_type}"
+        fig.savefig(self.case_name +'/'+fig_filename+'.pdf')
+        logger.info("eigenmode {:d} saved in {:s}".format(index, self.case_name +'/'+fig_filename+'.png'))
 
 
     def build_solver(self):
