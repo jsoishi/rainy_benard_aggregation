@@ -40,7 +40,7 @@ Options:
 import logging
 logger = logging.getLogger(__name__)
 for system in ['h5py._conv', 'matplotlib', 'PIL']:
-     logging.getLogger(system).setLevel(logging.WARNING)
+    logging.getLogger(system).setLevel(logging.WARNING)
 
 import numpy as np
 import dedalus.public as de
