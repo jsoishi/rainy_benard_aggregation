@@ -14,27 +14,27 @@ Usage:
 Options:
                       Properties of analytic atmosphere, if used
     --alpha=<alpha>   alpha value [default: 3]
-    --beta=<beta>     beta value  [default: 1.1]
+    --beta=<beta>     beta value  [default: 1]
     --gamma=<gamma>   gamma value [default: 0.19]
-    --q0=<q0>         basal q value [default: 0.6]
+    --q0=<q0>         basal q value [default: 1.0]
 
-    --tau=<tau>       If set, override value of tau
-    --k=<k>           If set, override value of k
+    --tau=<tau>       If set, override value of tau [default: 0.1]
+    --k=<k>           If set, override value of k [default: 1e4]
 
     --nondim=<n>      Non-Nondimensionalization [default: buoyancy]
 
-    --min_Ra=<minR>   Minimum Rayleigh number to sample [default: 1e4]
-    --max_Ra=<maxR>   Maximum Rayleigh number to sample [default: 1e5]
-    --num_Ra=<nRa>    How many Rayleigh numbers to sample [default: 5]
+    --min_Ra=<minR>   Minimum Rayleigh number to sample [default: 1e3]
+    --max_Ra=<maxR>   Maximum Rayleigh number to sample [default: 1e7]
+    --num_Ra=<nRa>    How many Rayleigh numbers to sample [default: 2]
 
-    --min_kx=<mnkx>   Min kx [default: 0.1]
-    --max_kx=<mxkx>   Max kx [default: 33]
-    --num_kx=<nkx>    How many kxs to sample [default: 50]
+    --min_kx=<mnkx>   Min kx [default: 1]
+    --max_kx=<mxkx>   Max kx [default: 10]
+    --num_kx=<nkx>    How many kxs to sample [default: 10]
 
     --top-stress-free     Stress-free upper boundary
     --stress-free         Stress-free both boundaries
 
-    --nz=<nz>         Number of coeffs to use in eigenvalue search; if not set, uses resolution of background
+    --nz=<nz>         Number of coeffs to use in eigenvalue search; if not set, uses resolution of background [default: 64]
     --target=<targ>   Target value for sparse eigenvalue search [default: 0]
     --eigs=<eigs>     Target number of eigenvalues to search for [default: 20]
 
@@ -142,17 +142,18 @@ def plot_eigenfunctions(evp, index, Rayleigh, kx):
 
 # fix Ra, find omega
 def compute_growth_rate(kx, Ra, target=0, plot_fastest_mode=False):
-    lo_res = RainyBenardEVP(nz, Ra, tau, kx, γ, α, β, q0, k, relaxation_method=relaxation_method, Legendre=Legendre, erf=erf, bc_type=bc_type, nondim=nondim, dealias=dealias,Lz=1)
-    hi_res = RainyBenardEVP(int(3*nz/2), Ra, tau, kx, γ, α, β, q0, k, relaxation_method=relaxation_method, Legendre=Legendre, erf=erf, bc_type=bc_type, nondim=nondim, dealias=dealias,Lz=1)
+    # globally inherit lo_res and hi_res
     for solver in [lo_res, hi_res]:
+        solver.kx['g'] = kx
+        solver.Rayleigh['g'] = Ra
         if args['--dense']:
             solver.solve(dense=True)
         else:
             solver.solve(dense=False, N_evals=N_evals, target=target)
-    evals_good, indx, ep = mode_reject(lo_res, hi_res, plot_drift_ratios=False)
-
+    evals_good, indx, ep = mode_reject(lo_res, hi_res, drift_threshold=1e6, plot_drift_ratios=True)
     i_evals = np.argsort(evals_good.real)
     evals = evals_good[i_evals]
+
     peak_eval = evals[-1]
     # choose convention: return the positive complex mode of the pair
     if peak_eval.imag < 0:
@@ -171,15 +172,15 @@ growth_rates = {}
 Ras = np.geomspace(float(args['--min_Ra']),float(args['--max_Ra']),num=int(float(args['--num_Ra'])))
 kxs = np.geomspace(min_kx, max_kx, num=nkx)
 print(Ras)
+Ra = Ras[0]
+kx = kxs[0]
+lo_res = RainyBenardEVP(nz, Ra, tau, kx, γ, α, β, q0, k, relaxation_method=relaxation_method, Legendre=Legendre, erf=erf, bc_type=bc_type, nondim=nondim, dealias=dealias,Lz=1, label='scalar_kx')
+hi_res = RainyBenardEVP(int(3*nz/2), Ra, tau, kx, γ, α, β, q0, k, relaxation_method=relaxation_method, Legendre=Legendre, erf=erf, bc_type=bc_type, nondim=nondim, dealias=dealias,Lz=1, label='scalar_kx')
+
 for Ra in Ras:
     σ = []
     # reset to base target for each Ra loop
     target = float(args['--target'])
-    kx = kxs[0]
-    lo_res = RainyBenardEVP(nz, Ra, tau, kx, γ, α, β, q0, k, relaxation_method=relaxation_method, Legendre=Legendre, erf=erf, bc_type=bc_type, nondim=nondim, dealias=dealias,Lz=1)
-    lo_res.plot_background()
-    hi_res = RainyBenardEVP(int(3*nz/2), Ra, tau, kx, γ, α, β, q0, k, relaxation_method=relaxation_method, Legendre=Legendre, erf=erf, bc_type=bc_type, nondim=nondim, dealias=dealias,Lz=1)
-    hi_res.plot_background()
     for system in ['rainy_evp']:
          logging.getLogger(system).setLevel(logging.WARNING)
 
@@ -192,6 +193,7 @@ for Ra in Ras:
             target = σ_i.imag
     σ = np.array(σ)
     growth_rates[Ra] = {'σ':σ, 'max σ.real':σ[np.argmax(σ.real)]}
+    hi_res.plot_background()
 
 fig, ax = plt.subplots(figsize=[6,6/1.6])
 

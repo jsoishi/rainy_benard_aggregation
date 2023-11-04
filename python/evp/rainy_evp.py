@@ -16,7 +16,7 @@ from analytic_zc import f_zc as zc_analytic
 from analytic_zc import f_Tc as Tc_analytic
 
 class RainyBenardEVP():
-    def __init__(self, nz, Ra, tau_in, kx_in, γ, α, β, lower_q0, k, atmosphere=None, relaxation_method=None, Legendre=True, erf=True, nondim='buoyancy', bc_type=None, Prandtl=1, Prandtlm=1, Lz=1, dealias=3/2, dtype=np.complex128, twoD=True):
+    def __init__(self, nz, Ra, tau_in, kx_in, γ, α, β, lower_q0, k, atmosphere=None, relaxation_method=None, Legendre=True, erf=True, nondim='buoyancy', bc_type=None, Prandtl=1, Prandtlm=1, Lz=1, dealias=3/2, dtype=np.complex128, twoD=True, label=None):
         logger.info('Ra = {:}, kx = {:}, α={:}, β={:}, γ={:}, tau={:}, k={:}'.format(Ra,kx_in,α,β,γ,tau_in, k))
         self.nz = nz
         self.Lz = Lz
@@ -51,11 +51,7 @@ class RainyBenardEVP():
         self.kx['g'] = kx_in
         # protection against array type-casting via scipy.optimize;
         # important when updating Lx during that loop.
-        kx = np.float64(kx_in).squeeze()[()]
-        # Build Fourier basis for x with prescribed kx as the fundamental mode
-        self.nx = 4
-        self.Lx = 2 * np.pi / kx
-        self.xb = de.ComplexFourier(self.coords['x'], size=self.nx, bounds=(0, self.Lx))
+        # kx = np.float64(kx_in).squeeze()[()]
 
         self.Rayleigh = self.dist.Field(name='Ra')
         self.Rayleigh['g'] = Ra
@@ -66,10 +62,10 @@ class RainyBenardEVP():
         if self.atmosphere:
             self.load_atmosphere()
         else:
-            self.build_atmosphere()
+            self.build_atmosphere(label=label)
         self.build_solver()
 
-    def build_atmosphere(self):
+    def build_atmosphere(self, label=None):
         logger.info("Building atmosphere")
         if self.lower_q0 < 1:
             atm_name = 'unsaturated'
@@ -85,6 +81,8 @@ class RainyBenardEVP():
             self.case_name += '_erf'
         if self.Legendre:
             self.case_name += '_Legendre'
+        if label:
+            self.case_name += '_'+label
 
         if atm_name == 'unsaturated':
             zc = zc_analytic()(self.γ)
@@ -150,38 +148,43 @@ class RainyBenardEVP():
             ey['c'] = 0
         else:
             ex, ey, ez = self.coords.unit_vector_fields(self.dist)
-        #dx = lambda A: 1j*kx*A # 1-d mode onset
+        dx = lambda A: 1j*kx*A # 1-d mode onset
         dy = lambda A: 0*A # flexibility to add 2-d mode if desired
 
-        grad = lambda A: de.grad(A) #+ ex*dx(A) + ey*dy(A)
-        div = lambda A:  de.div(A) #+ dx(ex@A) + dy(ey@A)
-        lap = lambda A: de.lap(A) # + dx(dx(A)) + dy(dy(A))
+        grad = lambda A: de.grad(A) + ex*dx(A) + ey*dy(A)
+        div = lambda A:  de.div(A) + dx(ex@A) + dy(ey@A)
+        lap = lambda A: de.lap(A) + dx(dx(A)) + dy(dy(A))
 
         trans = lambda A: de.TransposeComponents(A)
 
         z = self.zb.local_grid(1)
         zd = self.zb.local_grid(self.dealias)
 
-        bases = (self.xb, self.zb)
-        bases_p = (self.xb)
+        zbasis = self.zb
+        bases = (self.zb)
+        bases_p = ()
 
         p = self.dist.Field(name='p', bases=bases)
         u = self.dist.VectorField(self.coords, name='u', bases=bases)
         b = self.dist.Field(name='b', bases=bases)
         q = self.dist.Field(name='q', bases=bases)
         τp = self.dist.Field(name='τp')
-        τu1 = self.dist.VectorField(self.coords, name='τu1', bases=bases_p)
-        τu2 = self.dist.VectorField(self.coords, name='τu2', bases=bases_p)
-        τb1 = self.dist.Field(name='τb1', bases=bases_p)
-        τb2 = self.dist.Field(name='τb2', bases=bases_p)
-        τq1 = self.dist.Field(name='τq1', bases=bases_p)
-        τq2 = self.dist.Field(name='τq2', bases=bases_p)
+        τu1 = self.dist.VectorField(self.coords, name='τu1') #, bases=bases_p)
+        τu2 = self.dist.VectorField(self.coords, name='τu2') #, bases=bases_p)
+        τb1 = self.dist.Field(name='τb1') #, bases=bases_p)
+        τb2 = self.dist.Field(name='τb2') #, bases=bases_p)
+        τq1 = self.dist.Field(name='τq1') #, bases=bases_p)
+        τq2 = self.dist.Field(name='τq2') #, bases=bases_p)
         variables = [p, u, b, q, τp, τu1, τu2, τb1, τb2, τq1, τq2]
         varnames = [v.name for v in variables]
         self.fields = {k:v for k, v in zip(varnames, variables)}
 
-        lift_basis = self.zb #.derivative_basis(2)
-        lift = lambda A, n: de.Lift(A, lift_basis, n)
+        lift_basis = zbasis.derivative_basis(1)
+        lift = lambda A: de.Lift(A, lift_basis, -1)
+
+        lift_basis2 = zbasis.derivative_basis(2)
+        lift2 = lambda A: de.Lift(A, lift_basis2, -1)
+        lift2_2 = lambda A: de.Lift(A, lift_basis2, -2)
 
         z_grid = self.dist.Field(name='z_grid', bases=self.zb)
         z_grid['g'] = z
@@ -239,8 +242,8 @@ class RainyBenardEVP():
             logging.getLogger(system).setLevel(logging.WARNING)
         if self.relaxation_method == 'NLBVP':
             nlbvp = de.NLBVP(vars0, namespace=locals())
-            nlbvp.add_equation('-P*lap0(b0) + lift(τb01, -1) + lift(τb02, -2) = γ/tau*(q0-qs0)*H(q0-qs0)')
-            nlbvp.add_equation('-S*lap0(q0) + lift(τq01, -1) + lift(τq02, -2) = -1/tau*(q0-qs0)*H(q0-qs0)')
+            nlbvp.add_equation('-P*lap0(b0) + lift2(τb01) + lift2_2(τb02) = γ/tau*(q0-qs0)*H(q0-qs0)')
+            nlbvp.add_equation('-S*lap0(q0) + lift2(τq01) + lift2_2(τq02) = -1/tau*(q0-qs0)*H(q0-qs0)')
             nlbvp.add_equation('b0(z=0) = b0_lower')
             nlbvp.add_equation('b0(z=Lz) = b0_upper')
             nlbvp.add_equation('q0(z=0) = q0_lower')
@@ -254,8 +257,8 @@ class RainyBenardEVP():
                 logger.info("L2 err = {:.1g}".format(pert_norm))
         elif self.relaxation_method == 'IVP':
             ivp = de.IVP(vars0, namespace=locals())
-            ivp.add_equation('dt(b0) - P*lap0(b0) + lift(τb01, -1) + lift(τb02, -2) = γ/tau*(q0-qs0)*H(q0-qs0)')
-            ivp.add_equation('dt(q0) - S*lap0(q0) + lift(τq01, -1) + lift(τq02, -2) = -1/tau*(q0-qs0)*H(q0-qs0)')
+            ivp.add_equation('dt(b0) - P*lap0(b0) + lift2(τb01) + lift2_2(τb02) = γ/tau*(q0-qs0)*H(q0-qs0)')
+            ivp.add_equation('dt(q0) - S*lap0(q0) + lift2(τq01) + lift2_2(τq02) = -1/tau*(q0-qs0)*H(q0-qs0)')
             ivp.add_equation('b0(z=0) = b0_lower')
             ivp.add_equation('b0(z=Lz) = b0_upper')
             ivp.add_equation('q0(z=0) = q0_lower')
@@ -273,17 +276,17 @@ class RainyBenardEVP():
         scrN.name='scrN'
         self.scrN = scrN
 
-        grad_b0 = grad(b0).evaluate()
-        grad_q0 = grad(q0).evaluate()
+        grad_b0 = de.grad(b0).evaluate()
+        grad_q0 = de.grad(q0).evaluate()
 
         ω = self.dist.Field(name='ω')
         dt = lambda A: ω*A
 
         self.problem = de.EVP(variables, eigenvalue=ω, namespace=locals())
-        self.problem.add_equation('div(u) + τp + 1/PdR*dot(lift(τu2,-1),ez) = 0')
-        self.problem.add_equation('dt(u) - PdR*lap(u) + grad(p) - PtR*b*ez + lift(τu1, -1) + lift(τu2, -2) = 0')
-        self.problem.add_equation('dt(b) - P*lap(b) + u@grad_b0 - γ/tau*(q-α*qs0*b)*scrN + lift(τb1, -1) + lift(τb2, -2) = 0')
-        self.problem.add_equation('dt(q) - S*lap(q) + u@grad_q0 + 1/tau*(q-α*qs0*b)*scrN + lift(τq1, -1) + lift(τq2, -2) = 0')
+        self.problem.add_equation('div(u) + lift(τp) = 0')
+        self.problem.add_equation('dt(u) - PdR*lap(u) + grad(p) - PtR*b*ez + lift2(τu1) + lift2_2(τu2) = 0')
+        self.problem.add_equation('dt(b) - P*lap(b) + u@grad_b0 - γ/tau*(q-α*qs0*b)*scrN + lift2(τb1) + lift2_2(τb2) = 0')
+        self.problem.add_equation('dt(q) - S*lap(q) + u@grad_q0 + 1/tau*(q-α*qs0*b)*scrN + lift2(τq1) + lift2_2(τq2) = 0')
         self.problem.add_equation('b(z=0) = 0')
         self.problem.add_equation('b(z=Lz) = 0')
         self.problem.add_equation('q(z=0) = 0')
@@ -297,6 +300,8 @@ class RainyBenardEVP():
         else:
             logger.info("BCs: bottom no-slip")
             self.problem.add_equation('u(z=0) = 0')
+            #self.problem.add_equation('ez@u(z=0) = 0')
+            #self.problem.add_equation("ez@τu1 = 0")
         if self.bc_type == 'top-stress-free' or self.bc_type == 'stress-free':
             logger.info("BCs: top stress-free")
             self.problem.add_equation('ez@u(z=Lz) = 0')
@@ -311,10 +316,11 @@ class RainyBenardEVP():
 
     def solve(self, dense=True, N_evals=20, target=0):
         if dense:
-            self.solver.solve_dense(self.solver.subproblems[1], rebuild_matrices=True)
+            self.solver.solve_dense(self.solver.subproblems[0], rebuild_matrices=True)
             self.solver.eigenvalues = self.solver.eigenvalues[np.isfinite(self.solver.eigenvalues)]
         else:
-            self.solver.solve_sparse(self.solver.subproblems[1], N=N_evals, target=target, rebuild_matrices=True)
+            self.solver.solve_sparse(self.solver.subproblems[0], N=N_evals, target=target, rebuild_matrices=True)
+            #self.solver.print_subproblem_ranks(target=target)
         self.eigenvalues = self.solver.eigenvalues
 
 def mode_reject(lo_res, hi_res, drift_threshold=1e6, plot_drift_ratios=True):
