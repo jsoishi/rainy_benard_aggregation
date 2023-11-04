@@ -1,5 +1,7 @@
 import os
 import numpy as np
+from mpi4py import MPI
+from scipy.special import lambertw as W
 import dedalus.public as de
 import h5py
 import matplotlib.pyplot as plt
@@ -14,6 +16,360 @@ for system in ['h5py._conv', 'matplotlib', 'PIL']:
 import analytic_atmosphere
 from analytic_zc import f_zc as zc_analytic
 from analytic_zc import f_Tc as Tc_analytic
+
+class SplitRainyBenardEVP():
+    def __init__(self, nz, Ra, tau_in, kx_in, γ, α, β, lower_q0, k, Legendre=True, erf=True, nondim='buoyancy', bc_type=None, Prandtl=1, Prandtlm=1, Lz=1, dealias=3/2, dtype=np.complex128, twoD=True):
+        logger.info('Ra = {:}, kx = {:}, α={:}, β={:}, γ={:}, tau={:}, k={:}'.format(Ra,kx_in,α,β,γ,tau_in, k))
+        self.nz = nz
+        self.Lz = Lz
+
+        self.dealias = dealias
+        self.α = α
+        self.β = β
+        self.γ = γ
+        self.lower_q0 = lower_q0
+        self.k = k
+
+        self.Prandtl = Prandtl
+        self.Prandtlm = Prandtlm
+
+        self.twoD = twoD
+        if self.twoD:
+            self.coords = de.CartesianCoordinates('x', 'z')
+            self.vector_dims = 3
+            self.z_slice = (0,slice(None))
+        else:
+            self.coords = de.CartesianCoordinates('x', 'y', 'z')
+            self.vector_dims = 4
+            self.z_slice = (0,0,slice(None))
+        self.dist = de.Distributor(self.coords, dtype=dtype, comm=MPI.COMM_SELF)
+        self.erf = erf
+        self.Legendre = Legendre
+        self.nondim = nondim
+        self.bc_type = bc_type
+
+        self.get_zc_Tc()
+        if self.Legendre:
+            self.zb1 = de.Legendre(self.coords['z'], size=self.nz, bounds=(0, self.zc), dealias=self.dealias)
+            self.zb2 = de.Legendre(self.coords['z'], size=self.nz, bounds=(self.zc, self.Lz), dealias=self.dealias)
+        else:
+            self.zb1 = de.ChebyshevT(self.coords['z'], size=self.nz, bounds=(0, self.zc), dealias=self.dealias)
+            self.zb2 = de.ChebyshevT(self.coords['z'], size=self.nz, bounds=(self.zc, self.Lz), dealias=self.dealias)
+        self.z = np.concatenate([self.zb1.local_grid(1).squeeze(), self.zb2.local_grid(1).squeeze()])
+        self.zd = np.concatenate([self.zb1.local_grid(self.dealias).squeeze(), self.zb2.local_grid(self.dealias).squeeze()])
+
+        # self.kx = self.dist.Field(name='kx')
+        # self.kx['g'] = kx_in
+        # # protection against array type-casting via scipy.optimize;
+        # # important when updating Lx during that loop.
+        kx = np.float64(kx_in).squeeze()[()]
+        # # Build Fourier basis for x with prescribed kx as the fundamental mode
+        self.nx = 4
+        self.Lx = 2 * np.pi / kx
+        self.xb = de.ComplexFourier(self.coords['x'], size=self.nx, bounds=(0, self.Lx), dealias=self.dealias)
+
+        self.Rayleigh = self.dist.Field(name='Ra')
+        self.Rayleigh['g'] = Ra
+        self.tau = self.dist.Field(name='tau')
+        self.tau['g'] = tau_in
+        self.build_atmosphere()
+        self.build_solver()
+    
+    def get_zc_Tc(self):
+        #if self.α != 3.0 or self.β != 1.2 or self.lower_q0 != 0.6:
+        #    raise NotImplementedError("Only α = 3.0, β = 1.2, and lower_q0 = 0.6 currently supported.")
+        if self.α != 3.0 or self.lower_q0 !=0.6:
+            raise NotImplementedError("Only α = 3.0 and lower_q0 = 0.6 currently supported.")
+        if self.γ == 0.3:
+            self.zc = 0.483289354408442
+            self.Tc = -0.4588071140209613
+        elif self.γ == 0.19:
+            self.zc = 0.4751621541611023
+            self.Tc = -0.4588071140209616
+        else:
+            raise NotImplementedError(f"gamma = {self.gamma:.3f} is not supported.")
+
+    def build_atmosphere(self):
+        logger.info("Building atmosphere")
+        atm_name = 'unsaturated'
+
+        self.case_name = 'analytic_{:s}/stacked_alpha{:1.0f}_beta{:}_gamma{:}_q{:1.1f}'.format(atm_name, self.α,self.β,self.γ, self.lower_q0)
+        self.case_name += '/tau{:}_k{:.3e}'.format(self.tau['g'].squeeze().real,self.k)
+        if self.erf:
+            self.case_name += '_erf'
+        if self.Legendre:
+            self.case_name += '_Legendre'
+        z1 = self.zb1.local_grid(1)
+        z2 = self.zb2.local_grid(1)
+        ΔT = -1
+        b1 = 0
+        b2 = self.β + ΔT
+        q1 = self.lower_q0
+        q2 = np.exp(self.α*ΔT)
+        
+        bc = self.Tc + self.β*self.zc
+        qc = np.exp(self.α*self.Tc)
+
+        P = bc + self.γ*qc
+        Q = ((b2-bc) + self.γ*(q2-qc))
+        C = P + Q*(z2-self.zc)/(1-self.zc) - self.β*z2
+        T_lo = self.Tc*z1/self.zc
+        T_hi = C - W(self.α*self.γ*np.exp(self.α*C)).real/self.α
+        
+        b0_lo = self.dist.Field(name='b0_lo', bases=self.zb1)
+        b0_lo['g'] = T_lo + self.β*z1
+        b0_hi = self.dist.Field(name='b0_hi', bases=self.zb2)
+        b0_hi['g'] = T_hi + self.β*z2
+        q0_lo = self.dist.Field(name='q0_lo', bases=self.zb1)
+        q0_lo['g'] = q1 + (qc - q1)*z1/self.zc
+        q0_hi = self.dist.Field(name='q0_hi', bases=self.zb2)
+        q0_hi['g'] = np.exp(self.α*T_hi)
+        qs0_lo = self.dist.Field(name='qs0_lo', bases=self.zb1)
+        qs0_lo['g'] = np.exp(self.α*T_lo)
+        
+        self.b0 = [b0_lo,b0_hi]
+        self.q0 = [q0_lo,q0_hi]
+        self.qs0 = [qs0_lo, q0_hi] # above zc, qs0 = q0
+        self.grad_b0 = []
+        self.grad_q0 = []
+        for b0,q0 in zip(self.b0, self.q0):
+            self.grad_b0.append(de.grad(b0).evaluate())
+            self.grad_q0.append(de.grad(q0).evaluate())
+        if not os.path.exists('{:s}/'.format(self.case_name)) and self.dist.comm.rank == 0:
+            os.makedirs('{:s}/'.format(self.case_name))
+
+    def concatenate_bases(self, field1, field2):
+        return np.concatenate([field1['g'],field2['g']], axis=-1)
+        
+    def plot_background(self,label=None):
+        fig, ax = plt.subplots(ncols=2, figsize=[12,6])
+        for b0,q0 in zip(self.b0, self.q0):
+            b0.change_scales(1)
+            q0.change_scales(1)
+        b0 = self.concatenate_bases(*self.b0)
+        q0 = self.concatenate_bases(*self.q0)
+        qs0 = self.concatenate_bases(*self.qs0)
+        grad_q0 = self.concatenate_bases(*self.grad_q0)
+        grad_b0 = self.concatenate_bases(*self.grad_b0)
+
+        p0 = ax[0].plot(b0[0,:].real, self.z, label=r'$b$')
+        p1 = ax[0].plot(self.γ*q0[0,:].real, self.z, label=r'$\gamma q$')
+        p2 = ax[0].plot(b0[0,:].real+self.γ*q0[0,:].real, self.z, label=r'$m = b + \gamma q$')
+        p3 = ax[0].plot(self.γ*qs0[0,:].real, self.z, linestyle='dashed', alpha=0.3, label=r'$\gamma q_s$')
+        lines = p0 + p1 + p2 + p3 
+        labels = [l.get_label() for l in lines]
+        ax[0].legend(lines, labels)
+        ax[0].set_xlabel(r'$b$, $\gamma q$, $m$')
+        ax[0].set_ylabel(r'$z$')
+        
+        ax[1].plot(grad_b0[1,0,:].real, self.zd, label=r'$\nabla b$')
+        ax[1].plot(self.γ*grad_q0[1,0,:].real, self.zd, label=r'$\gamma \nabla q$')
+        ax[1].plot(grad_b0[1,0,:].real+self.γ*grad_q0[1,0,:].real, self.zd, label=r'$\nabla m$')
+        ax[1].set_xlabel(r'$\nabla b$, $\gamma \nabla q$, $\nabla m$')
+        ax[1].legend()
+        ax[1].axvline(x=0, linestyle='dashed', color='xkcd:dark grey', alpha=0.5)
+        for a in ax:
+            a.axhline(self.zc,color='k',alpha=0.4)
+        fig.tight_layout()
+        tau_val = self.tau["g"].squeeze().real
+        Ra_val  = self.Rayleigh["g"].squeeze().real
+        filebase = self.case_name+f'/nz_{self.nz}_k_{self.k}_tau_{tau_val:0.1e}_Ra_{Ra_val:0.2e}_evp_background_stacked'
+        if label:
+            filebase += f'_{label}'
+        fig.savefig(filebase+'.png', dpi=300)
+
+    def plot_eigenmode(self, index, mode_label=None):
+        self.solver.set_state(index,0)
+        fields = ['b','q','p','u']
+        names = {}
+        data ={}
+        for f in fields:
+            lower_field = self.fields[f'{f}1']
+            lower_field.change_scales(1)
+            upper_field = self.fields[f'{f}2']
+            upper_field.change_scales(1)
+            data[f] = self.concatenate_bases(lower_field,upper_field)
+            names[f] = lower_field.name
+
+        fig, axes = plt.subplot_mosaic([['ux','bzoom','uz'],
+                                        ['b', 'q','p']], layout='constrained')
+        i_max = np.argmax(np.abs(data['b'][self.z_slice]))
+        phase_correction = data['b'][self.z_slice][i_max]
+
+        for v in ['q','p','b']:
+            name = names[v]
+            d = data[v]/phase_correction
+            axes[v].plot(d[0,:].real, self.z)            
+            axes[v].plot(d[0,:].imag, self.z, ':')       
+            axes[v].set_xlabel(f"${name}$")              
+            axes[v].set_ylabel(r"$z$")                   
+            axes[v].axhline(self.zc, color='k',alpha=0.3)
+
+        axes['bzoom'].plot(d[0,:].real, self.z,'x-')            
+        axes['bzoom'].plot(d[0,:].imag, self.z, ':')
+        axes['bzoom'].set_ylim(0.47,0.4775)
+        axes['bzoom'].set_xlabel(f"${name}$")              
+        axes['bzoom'].set_ylabel(r"$z$")                   
+        axes['bzoom'].axhline(self.zc, color='k',alpha=0.3)
+
+        u = data['u']/phase_correction
+        axes['ux'].plot(u[0,0,...,:].squeeze().real, self.z)
+        axes['ux'].plot(u[0,0,...,:].squeeze().imag, self.z,':')
+        axes['ux'].set_xlabel(r"$u_x$")
+        axes['ux'].set_ylabel(r"$z$")
+        axes['uz'].plot(u[-1,0,...,:].squeeze().real, self.z)
+        axes['uz'].plot(u[-1,0,...,:].squeeze().imag, self.z, ':')
+        axes['uz'].set_xlabel(r"$u_z$")
+        axes['uz'].set_ylabel(r"$z$")
+        axes['q'].set_title(f"phase {phase_correction.real:.3e}+{phase_correction.imag:.3e}i")
+        sigma = self.solver.eigenvalues[index]
+        fig.suptitle(f"$\sigma = {sigma.real:.2f} {sigma.imag:+.2e} i$")
+        if not mode_label:
+            mode_label = index
+        kx = 2*np.pi/self.Lx
+        fig_filename=f"emode_indx_{mode_label}_Ra_{self.Rayleigh['g'].squeeze().real:.2e}_nz_{self.nz}_kx_{kx:.3f}_bc_{self.bc_type}"
+        fig.savefig(self.case_name +'/'+fig_filename+'.pdf')
+        logger.info("eigenmode {:d} saved in {:s}".format(index, self.case_name +'/'+fig_filename+'.png'))
+
+
+    def build_solver(self):
+        if self.twoD:
+            ex, ez = self.coords.unit_vector_fields(self.dist)
+            ey = self.dist.VectorField(self.coords)
+            ey['c'] = 0
+        else:
+            raise NotImplementedError("3D is not implemented.")
+        grad = lambda A: de.grad(A) 
+        div = lambda A:  de.div(A) 
+        lap = lambda A: de.lap(A) 
+        trans = lambda A: de.TransposeComponents(A)
+        
+        z1 = self.zb1.local_grid(1)
+        z2 = self.zb2.local_grid(1)
+
+        bases1 = (self.xb, self.zb1)
+        bases2 = (self.xb, self.zb2)
+        bases_p = self.xb
+        p1 = self.dist.Field(name='p1', bases=bases1)
+        u1 = self.dist.VectorField(self.coords, name='u1', bases=bases1)
+        b1 = self.dist.Field(name='b1', bases=bases1)
+        q1 = self.dist.Field(name='q1', bases=bases1)
+        τp = self.dist.Field(name='τp')
+        τu11 = self.dist.VectorField(self.coords, name='τu11', bases=bases_p)
+        τu21 = self.dist.VectorField(self.coords, name='τu21', bases=bases_p)
+        τb11 = self.dist.Field(name='τb11', bases=bases_p)
+        τb21 = self.dist.Field(name='τb21', bases=bases_p)
+        τq11 = self.dist.Field(name='τq11', bases=bases_p)
+        τq21 = self.dist.Field(name='τq21', bases=bases_p)
+
+        p2 = self.dist.Field(name='p2', bases=bases2)
+        u2 = self.dist.VectorField(self.coords, name='u2', bases=bases2)
+        b2 = self.dist.Field(name='b2', bases=bases2)
+        q2 = self.dist.Field(name='q2', bases=bases2)
+        τu12 = self.dist.VectorField(self.coords, name='τu12', bases=bases_p)
+        τu22 = self.dist.VectorField(self.coords, name='τu22', bases=bases_p)
+        τb12 = self.dist.Field(name='τb12', bases=bases_p)
+        τb22 = self.dist.Field(name='τb22', bases=bases_p)
+        τq12 = self.dist.Field(name='τq12', bases=bases_p)
+        τq22 = self.dist.Field(name='τq22', bases=bases_p)
+        variables = [p1, u1, b1, q1, τp, τu11, τu21, τb11, τb21, τq11, τq21,
+                     p2, u2, b2, q2, τu12, τu22, τb12, τb22, τq12, τq22]
+        varnames = [v.name for v in variables]
+        self.fields = {k:v for k, v in zip(varnames, variables)}
+
+        lift_basis1 = self.zb1
+        lift1 = lambda A, n: de.Lift(A, lift_basis1, n)
+        lift_basis2 = self.zb2
+        lift2 = lambda A, n: de.Lift(A, lift_basis2, n)
+
+        # need local aliases...this is a weakness of this approach
+        Lz = self.Lz
+        #kx = self.kx
+        γ = self.γ
+        α = self.α
+        β = self.β
+        tau = self.tau
+        zc = self.zc
+
+        grad_q01 = self.grad_q0[0]
+        grad_b01 = self.grad_b0[0]
+        qs02 = self.qs0[1]
+        grad_q02 = self.grad_q0[1]
+        grad_b02 = self.grad_b0[1]
+        e1 = grad(u1) + trans(grad(u1))
+        e2 = grad(u2) + trans(grad(u2))
+        if self.nondim == 'diffusion':
+            P = 1                      #  diffusion on buoyancy. Always = 1 in this scaling.
+            S = self.Prandtlm               #  diffusion on moisture  k_q / k_b
+            PdR = self.Prandtl              #  diffusion on momentum
+            PtR = self.Prandtl*self.Rayleigh     #  Prandtl times Rayleigh = buoyancy force
+        elif self.nondim == 'buoyancy':
+            P = (self.Rayleigh * self.Prandtl)**(-1/2)         #  diffusion on buoyancy
+            S = (self.Rayleigh * self.Prandtlm)**(-1/2)        #  diffusion on moisture
+            PdR = (self.Rayleigh/self.Prandtl)**(-1/2)         #  diffusion on momentum
+            PtR = 1
+            #tau_in /=                     # think through what this should be
+        else:
+            raise ValueError('nondim {:} not in valid set [diffusion, buoyancy]'.format(nondim))
+
+        ω = self.dist.Field(name='ω')
+        dt = lambda A: ω*A
+
+        self.problem = de.EVP(variables, eigenvalue=ω, namespace=locals())
+        for i in [1, 2]:
+            self.problem.add_equation(f'div(u{i}) + τp + 1/PdR*dot(lift{i}(τu2{i},-1),ez) = 0')
+            self.problem.add_equation(f'dt(u{i}) - PdR*lap(u{i}) + grad(p{i}) - PtR*b{i}*ez + lift{i}(τu1{i}, -1) + lift{i}(τu2{i}, -2) = 0')
+        # self.problem.add_equation('div(u1) + τp1 + 1/PdR*dot(lift1(τu21,-1),ez) = 0')
+        # self.problem.add_equation('dt(u1) - PdR*lap(u1) + grad(p1) - PtR*b1*ez + lift1(τu11, -1) + lift1(τu21, -2) = 0')
+        # self.problem.add_equation('div(u2) + τp2 + 1/PdR*dot(lift2(τu22,-1),ez) = 0')
+        # self.problem.add_equation('dt(u2) - PdR*lap(u2) + grad(p2) - PtR*b2*ez + lift2(τu12, -1) + lift2(τu22, -2) = 0')
+        # unsaturated layer
+        self.problem.add_equation('dt(b1) - P*lap(b1) + u1@grad_b01 + lift1(τb11, -1) + lift1(τb21, -2) = 0')
+        self.problem.add_equation('dt(q1) - S*lap(q1) + u1@grad_q01 + lift1(τq11, -1) + lift1(τq21, -2) = 0')
+        # saturated layer
+        self.problem.add_equation('dt(b2) - P*lap(b2) + u2@grad_b02 - γ/tau*(q2-α*qs02*b2) + lift2(τb12, -1) + lift2(τb22, -2) = 0')
+        self.problem.add_equation('dt(q2) - S*lap(q2) + u2@grad_q02 + 1/tau*(q2-α*qs02*b2) + lift2(τq12, -1) + lift2(τq22, -2) = 0')
+
+        # matching conditions
+        self.problem.add_equation('p1(z=zc) - p2(z=zc) = 0')
+        self.problem.add_equation('b1(z=zc) - b2(z=zc) = 0')
+        self.problem.add_equation('q1(z=zc) - q2(z=zc) = 0')
+        self.problem.add_equation('u1(z=zc) - u2(z=zc) = 0')
+        self.problem.add_equation('ez@grad(b1)(z=zc) - ez@grad(b2)(z=zc) = 0')
+        self.problem.add_equation('ez@grad(q1)(z=zc) - ez@grad(q2)(z=zc) = 0')
+        self.problem.add_equation('ez@grad(ex@u1)(z=zc) - ez@grad(ex@u2)(z=zc) = 0')
+        # boundary conditions
+        self.problem.add_equation('b1(z=0) = 0')
+        self.problem.add_equation('b2(z=Lz) = 0')
+        self.problem.add_equation('q1(z=0) = 0')
+        self.problem.add_equation('q2(z=Lz) = 0')
+        if self.bc_type=='stress-free':
+            logger.info("BCs: bottom stress-free")
+            self.problem.add_equation('ez@u1(z=0) = 0')
+            self.problem.add_equation('ez@(ex@e1(z=0)) = 0')
+            if not self.twoD:
+                self.problem.add_equation('ez@(ey@e1(z=0)) = 0')
+        else:
+            logger.info("BCs: bottom no-slip")
+            self.problem.add_equation('u1(z=0) = 0')
+        if self.bc_type == 'top-stress-free' or self.bc_type == 'stress-free':
+            logger.info("BCs: top stress-free")
+            self.problem.add_equation('ez@u2(z=Lz) = 0')
+            self.problem.add_equation('ez@(ex@e2(z=Lz)) = 0')
+            if not self.twoD:
+                self.problem.add_equation('ez@(ey@e2(z=Lz)) = 0')
+        else:
+            logger.info("BCs: top no-slip")
+            self.problem.add_equation('u2(z=Lz) = 0')
+        self.problem.add_equation('integ(p1) + integ(p2) = 0')
+        self.solver = self.problem.build_solver(entry_cutoff=0)#)ncc_cutoff=1e-10)
+
+    def solve(self, dense=True, N_evals=20, target=0):
+        if dense:
+            self.solver.solve_dense(self.solver.subproblems[1], rebuild_matrices=True)
+        else:
+            self.solver.solve_sparse(self.solver.subproblems[1], N=N_evals, target=target, rebuild_matrices=True)
+        self.eigenvalues = self.solver.eigenvalues
 
 class RainyBenardEVP():
     def __init__(self, nz, Ra, tau_in, kx_in, γ, α, β, lower_q0, k, atmosphere=None, relaxation_method=None, Legendre=True, erf=True, nondim='buoyancy', bc_type=None, Prandtl=1, Prandtlm=1, Lz=1, dealias=3/2, dtype=np.complex128, twoD=True):
@@ -35,8 +391,10 @@ class RainyBenardEVP():
         self.twoD = twoD
         if self.twoD:
             self.coords = de.CartesianCoordinates('x', 'z')
+            self.z_slice = (0,slice(None))
         else:
             self.coords = de.CartesianCoordinates('x', 'y', 'z')
+            self.z_slice = (0,0,slice(None))
         self.dist = de.Distributor(self.coords, dtype=dtype)
         self.erf = erf
         self.Legendre = Legendre
@@ -46,12 +404,11 @@ class RainyBenardEVP():
             self.zb = de.Legendre(self.coords.coords[-1], size=self.nz, bounds=(0, self.Lz), dealias=self.dealias)
         else:
             self.zb = de.ChebyshevT(self.coords.coords[-1], size=self.nz, bounds=(0, self.Lz), dealias=self.dealias)
-
-        self.kx = self.dist.Field(name='kx')
-        self.kx['g'] = kx_in
+            self.z = self.zb.local_grid(1).squeeze()
         # protection against array type-casting via scipy.optimize;
         # important when updating Lx during that loop.
         kx = np.float64(kx_in).squeeze()[()]
+        self.kx = kx
         # Build Fourier basis for x with prescribed kx as the fundamental mode
         self.nx = 4
         self.Lx = 2 * np.pi / kx
@@ -141,6 +498,47 @@ class RainyBenardEVP():
         if label:
             filebase += f'_{label}'
         fig.savefig(filebase+'.png', dpi=300)
+
+    def plot_eigenmode(self, index, mode_label=None):
+        self.solver.set_state(index,0)
+        fields = ['b','q','p','u']
+        names = {}
+        data ={}
+        for f in fields:
+            data[f] = self.fields[f]['g']
+            names[f] = self.fields[f].name
+
+        fig, axes = plt.subplot_mosaic([['ux','.','uz'],
+                                        ['b', 'q','p']], layout='constrained')
+        i_max = np.argmax(np.abs(data['b'][self.z_slice]))
+        phase_correction = data['b'][self.z_slice][i_max]
+
+        for v in ['b','q','p']:
+            name = names[v]
+            d = data[v]/phase_correction
+            axes[v].plot(d[0,:].real, self.z)
+            axes[v].plot(d[0,:].imag, self.z, ':')
+            axes[v].set_xlabel(f"${name}$")
+            axes[v].set_ylabel(r"$z$")
+
+        u = data['u']/phase_correction
+        axes['ux'].plot(u[0,0,...,:].squeeze().real, self.z)
+        axes['ux'].plot(u[0,0,...,:].squeeze().imag, self.z,':')
+        axes['ux'].set_xlabel(r"$u_x$")
+        axes['ux'].set_ylabel(r"$z$")
+        axes['uz'].plot(u[-1,0,...,:].squeeze().real, self.z)
+        axes['uz'].plot(u[-1,0,...,:].squeeze().imag, self.z, ':')
+        axes['uz'].set_xlabel(r"$u_z$")
+        axes['uz'].set_ylabel(r"$z$")
+        axes['q'].set_title(f"phase {phase_correction.real:.3e}+{phase_correction.imag:.3e}i")
+        sigma = self.solver.eigenvalues[index]
+        fig.suptitle(f"$\sigma = {sigma.real:.2f} {sigma.imag:+.2e} i$")
+        if not mode_label:
+            mode_label = index
+        kx = 2*np.pi/self.Lx
+        fig_filename=f"emode_indx_{mode_label}_Ra_{self.Rayleigh['g'].squeeze().real:.2e}_nz_{self.nz}_kx_{kx:.3f}_bc_{self.bc_type}"
+        fig.savefig(self.case_name +'/'+fig_filename+'.pdf')
+        logger.info("eigenmode {:d} saved in {:s}".format(index, self.case_name +'/'+fig_filename+'.png'))
 
 
     def build_solver(self):
@@ -312,7 +710,6 @@ class RainyBenardEVP():
     def solve(self, dense=True, N_evals=20, target=0):
         if dense:
             self.solver.solve_dense(self.solver.subproblems[1], rebuild_matrices=True)
-            self.solver.eigenvalues = self.solver.eigenvalues[np.isfinite(self.solver.eigenvalues)]
         else:
             self.solver.solve_sparse(self.solver.subproblems[1], N=N_evals, target=target, rebuild_matrices=True)
         self.eigenvalues = self.solver.eigenvalues
