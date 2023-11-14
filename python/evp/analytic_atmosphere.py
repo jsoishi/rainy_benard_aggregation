@@ -139,14 +139,14 @@ def plot_solution(solution, title=None, mask=None, linestyle=None, ax=None):
         markup = False
         return_fig = False
 
-    ax[0].plot(b[mask],z[mask], label='$b$', linestyle=linestyle)
-    ax[0].plot(γ*q[mask],z[mask], label='$\gamma q$', linestyle=linestyle)
-    ax[0].plot(m[mask],z[mask], label='$b+\gamma q$', linestyle=linestyle)
+    ax[0].plot(b[mask],z[mask], label='$b$', linestyle=linestyle, color='xkcd:dark red')
+    ax[0].plot(γ*q[mask],z[mask], label='$\gamma q$', linestyle=linestyle, color='xkcd:french blue')
+    ax[0].plot(m[mask],z[mask], label='$b+\gamma q$', linestyle=linestyle, color='xkcd:viridian')
 
-    ax[1].plot(T[mask],z[mask], label='$T$', linestyle=linestyle)
-    ax[1].plot(q[mask],z[mask], label='$q$', linestyle=linestyle)
-    ax[1].plot(rh[mask],z[mask], label='$r_h$', linestyle=linestyle)
-    ax[1].axvline(x=1, linestyle='dotted')
+    ax[1].plot(T[mask],z[mask], label='$T$', linestyle=linestyle, color='xkcd:electric pink')
+    ax[1].plot(q[mask],z[mask], label='$q$', linestyle=linestyle, color='xkcd:french blue')
+    ax[1].plot(rh[mask],z[mask], label='$r_h$', linestyle=linestyle, color='xkcd:perrywinkle')
+    ax[1].axvline(x=1, linestyle='dotted', color='xkcd:dark grey', alpha=0.5)
     if markup:
         ax[1].legend()
         ax[0].legend()
