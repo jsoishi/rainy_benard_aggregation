@@ -16,6 +16,8 @@ Options:
     --alpha=<alpha>      Alpha parameter [default: 3]
     --gamma=<gamma>      Gamma parameter [default: 0.19]
     --beta=<beta>        Beta parameter  [default: 1.15]
+
+    --q0=<q0>            Lower moisture value for unsaturated [default: 0.6]
 """
 from scipy.special import lambertw as W
 import numpy as np
@@ -23,7 +25,7 @@ import numpy as np
 ΔT = -1
 
 def saturated(dist, zb, β, γ,
-              dealias=3/2, q0=1, α=3):
+              dealias=1, q0=1, α=3):
 
     z = dist.Field(bases=zb)
     z['g'] = zb.local_grid(1)
@@ -47,7 +49,7 @@ def saturated(dist, zb, β, γ,
     return {'b':b, 'q':q, 'm':m, 'T':T, 'rh':rh, 'z':z, 'γ':γ}
 
 def saturated_VPT19(dist, zb, β, γ,
-              dealias=3/2, q0=1, α=3,
+              dealias=1, q0=1, α=3,
               K2=4e-10, T0=5.5):
 
     z = dist.Field(bases=zb)
@@ -74,8 +76,7 @@ def saturated_VPT19(dist, zb, β, γ,
     return {'b':b, 'q':q, 'm':m, 'T':T, 'rh':rh, 'z':z, 'γ':γ}
 
 def unsaturated(dist, zb, β, γ, zc, Tc,
-#                zc=0, Tc=0,
-                dealias=3/2, q0=0.6, α=3):
+                dealias=1, q0=0.6, α=3):
 
     z = dist.Field(bases=zb)
     z['g'] = zb.local_grid(1)
@@ -146,6 +147,7 @@ def plot_solution(solution, title=None, mask=None, linestyle=None, ax=None):
     ax[1].plot(T[mask],z[mask], label='$T$', linestyle=linestyle, color='xkcd:electric pink')
     ax[1].plot(q[mask],z[mask], label='$q$', linestyle=linestyle, color='xkcd:french blue')
     ax[1].plot(rh[mask],z[mask], label='$r_h$', linestyle=linestyle, color='xkcd:perrywinkle')
+
     ax[1].axvline(x=1, linestyle='dotted', color='xkcd:dark grey', alpha=0.5)
     if markup:
         ax[1].legend()
@@ -169,7 +171,9 @@ if __name__=="__main__":
     β = float(args['--beta'])
     γ = float(args['--gamma'])
 
-    dealias = 2
+    q0 = float(args['--q0'])
+
+    dealias = 1
     nz = 128
     dtype = np.float64
     Lz = 1
@@ -182,11 +186,11 @@ if __name__=="__main__":
     fig, ax = plot_solution(sol)
     ax[0].set_xlim(5.5,5.8)
     ax[1].set_xlim(4.5,5.5)
-    fig.savefig('analytic_VPT19.png', dpi=300)
+    fig.savefig(f'analytic_VPT19_alpha{α}_beta{β}_gamma{γ}.png', dpi=300)
 
     sol = saturated(dist, zb, β, γ, α=α, dealias=dealias)
     fig, ax = plot_solution(sol)
-    fig.savefig('analytic_saturated.png', dpi=300)
+    fig.savefig(f'analytic_saturated_alpha{α}_beta{β}_gamma{γ}.png', dpi=300)
 
     m = (sol['b'] + γ*sol['q']).evaluate()
     m_bot = m(z=0).evaluate()['g'][0,0,0]
@@ -200,9 +204,12 @@ if __name__=="__main__":
     zc = zc_analytic()
     Tc = Tc_analytic()
 
-    sol = unsaturated(dist, zb, β, γ, zc(γ), Tc(γ), α=α, dealias=dealias)
-    fig, ax = plot_solution(sol)
-    fig.savefig('analytic_unsaturated.png', dpi=300)
+    sol = unsaturated(dist, zb, β, γ, zc(γ), Tc(γ), α=α, q0=q0, dealias=dealias)
+    mask = (sol['z']['g'] >= zc(γ))
+    fig, ax = plot_solution(sol, mask=mask)
+    plot_solution(sol, ax=ax, mask=~mask, linestyle='dashed')
+
+    fig.savefig(f'analytic_unsaturated_q{q0}_alpha{α}_beta{β}_gamma{γ}.png', dpi=300)
 
     m = (sol['b'] + γ*sol['q']).evaluate()
     m_bot = m(z=0).evaluate()['g'][0,0,0]
