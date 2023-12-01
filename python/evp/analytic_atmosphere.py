@@ -118,7 +118,8 @@ def unsaturated(dist, zb, β, γ, zc, Tc,
     rh = (q*np.exp(-α*T)).evaluate()
     return {'b':b, 'q':q, 'm':m, 'T':T, 'rh':rh, 'z':z, 'γ':γ}
 
-def plot_solution(solution, title=None, mask=None, linestyle=None, ax=None):
+def plot_solution(solution, title=None, mask=None, markup=None,
+                  linestyle=None, ax=None, **kwargs):
     b = solution['b']['g']
     q = solution['q']['g']
     m = solution['m']['g']
@@ -132,29 +133,32 @@ def plot_solution(solution, title=None, mask=None, linestyle=None, ax=None):
         mask = np.ones_like(z, dtype=bool)
     if ax is None:
         fig, ax = plt.subplots(ncols=2, sharey=True)
-        markup = True
+        if markup is None:
+            markup = True
         return_fig = True
     else:
         for axi in ax:
             axi.set_prop_cycle(None)
-        markup = False
+        if markup is None:
+            markup = False
         return_fig = False
 
-    ax[0].plot(b[mask],z[mask], label='$b$', linestyle=linestyle, color='xkcd:dark red')
-    ax[0].plot(γ*q[mask],z[mask], label='$\gamma q$', linestyle=linestyle, color='xkcd:french blue')
-    ax[0].plot(m[mask],z[mask], label='$b+\gamma q$', linestyle=linestyle, color='xkcd:viridian')
+    ax[0].plot(b[mask],z[mask], label='$b$', linestyle=linestyle, color='xkcd:dark red', **kwargs)
+    ax[0].plot(γ*q[mask],z[mask], label='$\gamma q$', linestyle=linestyle, color='xkcd:french blue', **kwargs)
+    ax[0].plot(m[mask],z[mask], label='$m$', linestyle=linestyle, color='xkcd:viridian', **kwargs)
 
-    ax[1].plot(T[mask],z[mask], label='$T$', linestyle=linestyle, color='xkcd:electric pink')
-    ax[1].plot(q[mask],z[mask], label='$q$', linestyle=linestyle, color='xkcd:french blue')
-    ax[1].plot(rh[mask],z[mask], label='$r_h$', linestyle=linestyle, color='xkcd:perrywinkle')
+    ax[1].plot(T[mask],z[mask], label='$T$', linestyle=linestyle, color='xkcd:electric pink', **kwargs)
+    ax[1].plot(q[mask],z[mask], label='$q$', linestyle=linestyle, color='xkcd:french blue', **kwargs)
+    ax[1].plot(rh[mask],z[mask], label='$r_h$', linestyle=linestyle, color='xkcd:perrywinkle', **kwargs)
 
     ax[1].axvline(x=1, linestyle='dotted', color='xkcd:dark grey', alpha=0.5)
     if markup:
-        ax[1].legend()
-        ax[0].legend()
         ax[0].set_ylabel('z')
+        ax[0].legend(loc='lower right')
+        ax[1].legend()
         if title:
             ax[0].set_title(title)
+
     if return_fig:
         return fig, ax
     else:
@@ -216,3 +220,26 @@ if __name__=="__main__":
     m_top = m(z=1).evaluate()['g'][0,0,0]
     print("unsaturated atmosphere properties:")
     print("m_bot = {:.2g}, m_top = {:.2g}, Δm = {:.2g}".format(m_bot, m_top, m_top-m_bot))
+
+    fig = None
+    alpha_f = lambda β: 0.75*(1.35-β)/.25
+    for i, β in enumerate(np.linspace(1,1.25, num=6)):
+        sol = saturated(dist, zb, β, γ, α=α, dealias=dealias)
+        if fig:
+            plot_solution(sol, ax=ax, alpha=alpha_f(β))
+        else:
+            fig, ax = plot_solution(sol)
+    fig.savefig(f'many_beta_analytic_saturated_alpha{α}_gamma{γ}.png', dpi=300)
+
+    fig = None
+    alpha_f = lambda β: 0.75*(1.2-β)/.15
+    for β in np.linspace(1,1.15, num=6):
+        sol = unsaturated(dist, zb, β, γ, zc(γ), Tc(γ), α=α, q0=q0, dealias=dealias)
+        mask = (sol['z']['g'] >= zc(γ))
+        if fig:
+            plot_solution(sol, mask=mask, ax=ax, alpha=alpha_f(β))
+        else:
+            fig, ax = plot_solution(sol, mask=mask)
+        plot_solution(sol, ax=ax, mask=~mask, linestyle='dashed', alpha=alpha_f(β))
+
+    fig.savefig(f'many_beta_analytic_unsaturated_q{q0}_alpha{α}_gamma{γ}.png', dpi=300)
