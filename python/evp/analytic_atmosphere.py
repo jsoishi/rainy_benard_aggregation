@@ -132,7 +132,7 @@ def plot_solution(solution, title=None, mask=None, markup=None,
     if mask is None:
         mask = np.ones_like(z, dtype=bool)
     if ax is None:
-        fig, ax = plt.subplots(ncols=2, sharey=True)
+        fig, ax = plt.subplots(ncols=2, sharey=True, figsize=[1.8*6,1.8*6/1.6])
         if markup is None:
             markup = True
         return_fig = True
@@ -166,6 +166,8 @@ def plot_solution(solution, title=None, mask=None, markup=None,
 
 if __name__=="__main__":
     import matplotlib.pyplot as plt
+    #plt.style.use("../../prl.mplstyle")
+    plt.style.use("prl.mplstyle")
     import dedalus.public as de
 
     from docopt import docopt
@@ -190,10 +192,12 @@ if __name__=="__main__":
     fig, ax = plot_solution(sol)
     ax[0].set_xlim(5.5,5.8)
     ax[1].set_xlim(4.5,5.5)
+    fig.tight_layout()
     fig.savefig(f'analytic_VPT19_alpha{α}_beta{β}_gamma{γ}.png', dpi=300)
 
     sol = saturated(dist, zb, β, γ, α=α, dealias=dealias)
     fig, ax = plot_solution(sol)
+    fig.tight_layout()
     fig.savefig(f'analytic_saturated_alpha{α}_beta{β}_gamma{γ}.png', dpi=300)
 
     m = (sol['b'] + γ*sol['q']).evaluate()
@@ -212,7 +216,7 @@ if __name__=="__main__":
     mask = (sol['z']['g'] >= zc(γ))
     fig, ax = plot_solution(sol, mask=mask)
     plot_solution(sol, ax=ax, mask=~mask, linestyle='dashed')
-
+    fig.tight_layout()
     fig.savefig(f'analytic_unsaturated_q{q0}_alpha{α}_beta{β}_gamma{γ}.png', dpi=300)
 
     m = (sol['b'] + γ*sol['q']).evaluate()
@@ -229,6 +233,7 @@ if __name__=="__main__":
             plot_solution(sol, ax=ax, alpha=alpha_f(β))
         else:
             fig, ax = plot_solution(sol)
+    fig.tight_layout()
     fig.savefig(f'many_beta_analytic_saturated_alpha{α}_gamma{γ}.png', dpi=300)
 
     fig = None
@@ -242,4 +247,5 @@ if __name__=="__main__":
             fig, ax = plot_solution(sol, mask=mask)
         plot_solution(sol, ax=ax, mask=~mask, linestyle='dashed', alpha=alpha_f(β))
 
+    fig.tight_layout()
     fig.savefig(f'many_beta_analytic_unsaturated_q{q0}_alpha{α}_gamma{γ}.png', dpi=300)
