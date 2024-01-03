@@ -186,8 +186,8 @@ if not zb:
         case += '_Legendre'
     else:
         zb = de.ChebyshevT(coords.coords[2], size=nz, bounds=(0, Lz), dealias=dealias)
-x = xb.local_grid(1)
-z = zb.local_grid(1)
+x = dist.local_grid(xb)
+z = dist.local_grid(zb)
 
 b0 = dist.Field(name='b0', bases=zb)
 q0 = dist.Field(name='q0', bases=zb)

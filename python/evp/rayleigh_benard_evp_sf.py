@@ -29,12 +29,12 @@ import logging
 logger = logging.getLogger(__name__)
 
 
-def plot_eigenmode(solver, fields, zb, index, kx, n, ω, mode_label=None, correct_phase=True, label=None):
+def plot_eigenmode(solver, fields, dist, zb, index, kx, n, ω, mode_label=None, correct_phase=True, label=None):
     solver.set_state(index, solver.subproblems[1].subsystems[0])
     fig, axes = plt.subplot_mosaic([['ux','uz'],
                                     ['b','p']], layout='constrained')
 
-    z = zb.local_grid(1)[0,:]
+    z = dist.local_grid(zb)[0,:]
     nz = z.shape[-1]
     for v in ['b','p']:
         if correct_phase:
@@ -169,7 +169,7 @@ def max_growth_rate(Rayleigh, Prandtl, kx, Nz, NEV=10, target=0, plot_critical_e
             ω_evp = solver.eigenvalues[index[i]]
             print('eigenvalue: {:}; close to analytic? {:}'.format(ω_evp, np.isclose(ω_evp,ω_analytic)))
 
-            plot_eigenmode(solver, fields, zbasis, index[i], kx, n, ω_evp, label=label)
+            plot_eigenmode(solver, fields, dist, zbasis, index[i], kx, n, ω_evp, label=label)
 
     return np.max(solver.eigenvalues.imag)
 

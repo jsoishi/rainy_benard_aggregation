@@ -31,7 +31,7 @@ def unsaturated(dist, zb, β, γ, zc, Tc,
                      dealias=1, q0=0.6, α=3):
 
     z = dist.Field(bases=zb)
-    z['g'] = zb.local_grid(1)
+    z['g'] = dist.local_grid(zb)
     z.change_scales(dealias)
 
     q = dist.Field(bases=zb)

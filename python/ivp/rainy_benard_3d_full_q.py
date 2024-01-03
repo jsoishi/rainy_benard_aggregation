@@ -216,9 +216,9 @@ if not zb:
         case += '_Legendre'
     else:
         zb = de.ChebyshevT(coords['z'], size=nz, bounds=(0, Lz), dealias=dealias)
-x = xb.local_grid(1)
-y = yb.local_grid(1)
-z = zb.local_grid(1)
+x = dist.local_grid(xb)
+y = dist.local_grid(yb)
+z = dist.local_grid(zb)
 
 bases = (xb, yb, zb)
 bases_perp = (xb, yb)
@@ -231,7 +231,7 @@ scale_ratio = 1 #nz_sol/nz
 b0.change_scales(scale_ratio)
 q0.change_scales(scale_ratio)
 logger.info('rescaling b0, q0 to match background from {:} to {:} coeffs (ratio: {:})'.format(nz, nz_sol, scale_ratio))
-z_sol = zb.local_grid(scale_ratio)
+z_sol = dist.local_grid(zb, scale=scale_ratio)
 has_k0 = (b0['g'].size > 0)
 logger.info('reading in solution from grid')
 if has_k0:

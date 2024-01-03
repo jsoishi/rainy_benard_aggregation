@@ -90,7 +90,8 @@ if args['--Legendre']:
     zb = de.Legendre(coords.coords[2], size=nz, bounds=(0, Lz), dealias=dealias)
 else:
     zb = de.ChebyshevT(coords.coords[2], size=nz, bounds=(0, Lz), dealias=dealias)
-z = zb.local_grid(1)
+z = dist.local_grid(zb)
+zd = dist.local_grid(zb, scale=dealias)
 
 b = dist.Field(name='b', bases=zb)
 q = dist.Field(name='q', bases=zb)
@@ -181,7 +182,7 @@ elif γ == 0.19:
 else:
     raise ValueError("γ = {:} not yet supported".format(γ))
 
-analytic = compute_analytic(zb.local_grid(dealias), zc_analytic, Tc_analytic)
+analytic = compute_analytic(zd, zc_analytic, Tc_analytic)
 
 def plot_solution(z, solution, title=None, mask=None, linestyle=None, ax=None):
     b = solution['b']['g']
@@ -222,7 +223,7 @@ def plot_solution(z, solution, title=None, mask=None, linestyle=None, ax=None):
     else:
         return ax
 
-fig, ax = plot_solution(zb.local_grid(dealias), analytic)
+fig, ax = plot_solution(zd, analytic)
 fig.savefig(data_dir+'/'+case_dir+'/analytic_solution.png', dpi=300)
 
 if args['--use_analytic']:
@@ -311,6 +312,6 @@ logger.info(L2_results)
 
 m = (b + γ*q).evaluate()
 sol = {'b':b, 'q':q, 'm':m, 'T':temp.evaluate(), 'rh':rh.evaluate(), 'γ':γ}
-fig, ax = plot_solution(zb.local_grid(dealias), sol, title=L2_results)
-plot_solution(zb.local_grid(dealias), analytic, ax=ax, linestyle='dashed')
+fig, ax = plot_solution(zd, sol, title=L2_results)
+plot_solution(zd, analytic, ax=ax, linestyle='dashed')
 fig.savefig(data_dir+'/'+case_dir+'/comparison_to_analytic_solution.png', dpi=300)
