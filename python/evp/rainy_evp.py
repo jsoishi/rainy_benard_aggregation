@@ -55,8 +55,8 @@ class SplitRainyBenardEVP():
         else:
             self.zb1 = de.ChebyshevT(self.coords['z'], size=self.nz, bounds=(0, self.zc), dealias=self.dealias)
             self.zb2 = de.ChebyshevT(self.coords['z'], size=self.nz, bounds=(self.zc, self.Lz), dealias=self.dealias)
-        self.z = np.concatenate([self.dist.local_grid(zb1).squeeze(), self.dist.local_grid(zb2).squeeze()])
-        self.zd = np.concatenate([self.dist.local_grid(zb1, scale=self.dealias).squeeze(), self.dist.local_grid(zb2, scale=self.dealias).squeeze()])
+        self.z = np.concatenate([self.dist.local_grid(self.zb1).squeeze(), self.dist.local_grid(self.zb2).squeeze()])
+        self.zd = np.concatenate([self.dist.local_grid(self.zb1, scale=self.dealias).squeeze(), self.dist.local_grid(self.zb2, scale=self.dealias).squeeze()])
 
         # self.kx = self.dist.Field(name='kx')
         # self.kx['g'] = kx_in
@@ -99,8 +99,8 @@ class SplitRainyBenardEVP():
             self.case_name += '_erf'
         if self.Legendre:
             self.case_name += '_Legendre'
-        z1 = self.dist.local_grid(zb1)
-        z2 = self.dist.local_grid(zb2)
+        z1 = self.dist.local_grid(self.zb1)
+        z2 = self.dist.local_grid(self.zb2)
         ΔT = -1
         b1 = 0
         b2 = self.β + ΔT
@@ -244,8 +244,8 @@ class SplitRainyBenardEVP():
         lap = lambda A: de.lap(A)
         trans = lambda A: de.TransposeComponents(A)
 
-        z1 = self.dist.local_grid(zb1)
-        z2 = self.dist.local_grid(zb2)
+        z1 = self.dist.local_grid(self.zb1)
+        z2 = self.dist.local_grid(self.zb2)
 
         bases1 = (self.xb, self.zb1)
         bases2 = (self.xb, self.zb2)
