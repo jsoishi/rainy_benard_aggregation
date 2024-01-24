@@ -70,7 +70,7 @@ dtype = np.float64
 Lz = 1
 Lx = aspect
 
-coords = de.CartesianCoordinates('x', 'y', 'z')
+coords = de.CartesianCoordinates('x', 'z', 'y', right_handed=False)
 dist = de.Distributor(coords, dtype=dtype)
 
 case = args['<case>']
@@ -102,10 +102,10 @@ if case == 'analytic':
 
     nz = int(float(args['--nz']))
     if args['--Legendre']:
-        zb = de.Legendre(coords.coords[2], size=nz, bounds=(0, Lz), dealias=dealias)
+        zb = de.Legendre(coords['z'], size=nz, bounds=(0, Lz), dealias=dealias)
         case += '_Legendre'
     else:
-        zb = de.ChebyshevT(coords.coords[2], size=nz, bounds=(0, Lz), dealias=dealias)
+        zb = de.ChebyshevT(coords['z'], size=nz, bounds=(0, Lz), dealias=dealias)
 
     if atm_name == 'unsaturated':
         sol = analytic_atmosphere.unsaturated
@@ -122,7 +122,7 @@ if case == 'analytic':
     sol['b'] = sol['b']['g']
     sol['q'] = sol['q']['g']
     sol['z'].change_scales(1)
-    nz_sol = sol['z']['g'].shape[-1]
+    nz_sol = sol['z']['g'].shape[-2]
     if not os.path.exists('{:s}/'.format(case)) and dist.comm.rank == 0:
         os.makedirs('{:s}/'.format(case))
 else:
@@ -179,20 +179,20 @@ if run_time_iter != None:
 else:
     run_time_iter = np.inf
 
-xb = de.RealFourier(coords.coords[0], size=nx, bounds=(0, Lx), dealias=dealias)
+xb = de.RealFourier(coords['x'], size=nx, bounds=(0, Lx), dealias=dealias)
 if not zb:
     if args['--Legendre']:
-        zb = de.Legendre(coords.coords[2], size=nz, bounds=(0, Lz), dealias=dealias)
+        zb = de.Legendre(coords['z'], size=nz, bounds=(0, Lz), dealias=dealias)
         case += '_Legendre'
     else:
-        zb = de.ChebyshevT(coords.coords[2], size=nz, bounds=(0, Lz), dealias=dealias)
+        zb = de.ChebyshevT(coords['z'], size=nz, bounds=(0, Lz), dealias=dealias)
 x = dist.local_grid(xb)
 z = dist.local_grid(zb)
 
 b0 = dist.Field(name='b0', bases=zb)
 q0 = dist.Field(name='q0', bases=zb)
 
-scale_ratio = nz_sol/nz
+scale_ratio = 1 #nz_sol/nz
 b0.change_scales(scale_ratio)
 q0.change_scales(scale_ratio)
 logger.info('rescaling b0, q0 to match background from {:} to {:} coeffs (ratio: {:})'.format(nz, nz_sol, scale_ratio))
@@ -220,7 +220,7 @@ zb2 = zb.clone_with(a=zb.a+2, b=zb.b+2)
 lift1 = lambda A, n: de.Lift(A, zb1, n)
 lift = lambda A, n: de.Lift(A, zb2, n)
 
-ex, ey, ez = coords.unit_vector_fields(dist)
+ex, ez, ey = coords.unit_vector_fields(dist)
 
 from scipy.special import erf
 if args['--erf']:
