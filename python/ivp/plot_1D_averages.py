@@ -69,7 +69,7 @@ def plot_hov(df, task_name, output_path, zrange=None, aspect_ratio = 4, fig_W = 
 
 args = docopt(__doc__)
 df_name = args['<file>']
-case = df_name.split('snapshots')[0]
+case = df_name.split('averages')[0]
 if args['--output'] is not None:
     output_path = pathlib.Path(args['--output']).absolute()
 else:
