@@ -70,7 +70,7 @@ dtype = np.float64
 Lz = 1
 Lx = aspect
 
-coords = de.CartesianCoordinates('x', 'y', 'z')
+coords = de.CartesianCoordinates('x', 'z')
 dist = de.Distributor(coords, dtype=dtype)
 
 case = args['<case>']
@@ -102,10 +102,10 @@ if case == 'analytic':
 
     nz = int(float(args['--nz']))
     if args['--Legendre']:
-        zb = de.Legendre(coords.coords[2], size=nz, bounds=(0, Lz), dealias=dealias)
+        zb = de.Legendre(coords['z'], size=nz, bounds=(0, Lz), dealias=dealias)
         case += '_Legendre'
     else:
-        zb = de.ChebyshevT(coords.coords[2], size=nz, bounds=(0, Lz), dealias=dealias)
+        zb = de.ChebyshevT(coords['z'], size=nz, bounds=(0, Lz), dealias=dealias)
 
     if atm_name == 'unsaturated':
         sol = analytic_atmosphere.unsaturated
@@ -126,6 +126,7 @@ if case == 'analytic':
     if not os.path.exists('{:s}/'.format(case)) and dist.comm.rank == 0:
         os.makedirs('{:s}/'.format(case))
 else:
+    pass
     f = h5py.File(case+'/drizzle_sol/drizzle_sol_s1.h5', 'r')
     sol = {}
     for task in f['tasks']:
@@ -179,13 +180,13 @@ if run_time_iter != None:
 else:
     run_time_iter = np.inf
 
-xb = de.RealFourier(coords.coords[0], size=nx, bounds=(0, Lx), dealias=dealias)
+xb = de.RealFourier(coords['x'], size=nx, bounds=(0, Lx), dealias=dealias)
 if not zb:
     if args['--Legendre']:
-        zb = de.Legendre(coords.coords[2], size=nz, bounds=(0, Lz), dealias=dealias)
+        zb = de.Legendre(coords['z'], size=nz, bounds=(0, Lz), dealias=dealias)
         case += '_Legendre'
     else:
-        zb = de.ChebyshevT(coords.coords[2], size=nz, bounds=(0, Lz), dealias=dealias)
+        zb = de.ChebyshevT(coords['z'], size=nz, bounds=(0, Lz), dealias=dealias)
 x = dist.local_grid(xb)
 z = dist.local_grid(zb)
 
@@ -220,7 +221,7 @@ zb2 = zb.clone_with(a=zb.a+2, b=zb.b+2)
 lift1 = lambda A, n: de.Lift(A, zb1, n)
 lift = lambda A, n: de.Lift(A, zb2, n)
 
-ex, ey, ez = coords.unit_vector_fields(dist)
+ex, ez = coords.unit_vector_fields(dist)
 
 from scipy.special import erf
 if args['--erf']:
@@ -243,9 +244,12 @@ if q0['g'].size > 0 :
 grad = lambda A: de.Gradient(A, coords)
 trans = lambda A: de.TransposeComponents(A)
 curl = lambda A: de.Curl(A)
+skew = lambda A: de.Skew(A)
+div = lambda A: de.Divergence(A, index=0)
+grid = lambda A: de.Grid(A)
 
 e = grad(u) + trans(grad(u))
-ω = curl(u)
+ω = -div(skew(u))
 
 vars = [p, u, b, q, τp, τu1, τu2, τb1, τb2, τq1, τq2]
 problem = de.IVP(vars, namespace=locals())
@@ -267,7 +271,7 @@ else:
 
 
 problem.add_equation('div(u) + τp + 1/PdR*dot(lift(τu2,-1),ez) = 0')
-problem.add_equation('dt(u) - PdR*lap(u) + grad(p) - PtR*b*ez + lift(τu1, -1) + lift(τu2, -2) = cross(u, ω)')
+problem.add_equation('dt(u) - PdR*lap(u) + grad(p) - PtR*b*ez + lift(τu1, -1) + lift(τu2, -2) = skew(grid(u))*ω') # cross(u, ω)
 # problem.add_equation('dt(b) - P*lap(b) + u@grad(b0) - γ/tau*(q-α*qs0*b)*scrN + lift(τb1, -1) + lift(τb2, -2) = - (u@grad(b)) + γ/tau*((q-qs)*H(q-qs) - (q-α*qs0*b)*scrN_g)')
 # problem.add_equation('dt(q) - S*lap(q) + u@grad(q0) + 1/tau*(q-α*qs0*b)*scrN + lift(τq1, -1) + lift(τq2, -2) = - (u@grad(q)) - 1/tau*((q-qs)*H(q-qs) - (q-α*qs0*b)*scrN_g)')
 problem.add_equation('dt(b) - P*lap(b) + lift(τb1, -1) + lift(τb2, -2) = - (u@grad(b)) + γ/tau*((q-qs)*H(q-qs))')
@@ -279,13 +283,11 @@ problem.add_equation('q(z=Lz) = np.exp(α*ΔT)')
 if args['--stress-free']:
     problem.add_equation('ez@u(z=0) = 0')
     problem.add_equation('ez@(ex@e(z=0)) = 0')
-    problem.add_equation('ez@(ey@e(z=0)) = 0')
 else:
     problem.add_equation('u(z=0) = 0')
 if args['--top-stress-free'] or args['--stress-free']:
     problem.add_equation('ez@u(z=Lz) = 0')
     problem.add_equation('ez@(ex@e(z=Lz)) = 0')
-    problem.add_equation('ez@(ey@e(z=Lz)) = 0')
 else:
     problem.add_equation('u(z=Lz) = 0')
 problem.add_equation('integ(p) = 0')
@@ -344,8 +346,8 @@ if not args['--no-output']:
     snapshots.add_task(rh-x_avg(rh), name='rh_fluc')
     snapshots.add_task(ex@u, name='ux')
     snapshots.add_task(ez@u, name='uz')
-    snapshots.add_task(ey@ω, name='vorticity')
-    snapshots.add_task(ω@ω, name='enstrophy')
+    snapshots.add_task(ω, name='vorticity')
+    snapshots.add_task(ω*ω, name='enstrophy')
 
     averages = solver.evaluator.add_file_handler(data_dir+'/averages', sim_dt=snap_dt, max_writes=None)
     averages.add_task(x_avg(b), name='b')
@@ -358,8 +360,8 @@ if not args['--no-output']:
     averages.add_task(x_avg(ex@u), name='ux')
     averages.add_task(x_avg(ez@u), name='uz')
     averages.add_task(x_avg(np.sqrt((u-x_avg(u))@(u-x_avg(u)))), name='u_rms')
-    averages.add_task(x_avg(ω@ω), name='enstrophy')
-    averages.add_task(x_avg((ω-x_avg(ω))@(ω-x_avg(ω))), name='enstrophy_rms')
+    averages.add_task(x_avg(ω*ω), name='enstrophy')
+    averages.add_task(x_avg((ω-x_avg(ω))*(ω-x_avg(ω))), name='enstrophy_rms')
 
     trace_dt = snap_dt/5
     traces = solver.evaluator.add_file_handler(data_dir+'/traces', sim_dt=trace_dt, max_writes=None)
@@ -369,7 +371,7 @@ if not args['--no-output']:
     traces.add_task(avg(ME), name='ME')
     traces.add_task(avg(Q_eq), name='Q_eq')
     traces.add_task(avg(Re), name='Re')
-    traces.add_task(avg(ω@ω), name='enstrophy')
+    traces.add_task(avg(ω*ω), name='enstrophy')
     traces.add_task(x_avg(np.sqrt(τu1@τu1)), name='τu1')
     traces.add_task(x_avg(np.sqrt(τu2@τu2)), name='τu2')
     traces.add_task(x_avg(np.abs(τb1)), name='τb1')
