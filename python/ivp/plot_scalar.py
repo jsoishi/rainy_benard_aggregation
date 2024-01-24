@@ -144,3 +144,34 @@ for benchmark in benchmark_set:
         print("{:3s} = {:20.12e} +- {:4.2e}".format(benchmark, np.mean(data[benchmark][i_ten:]), np.std(data[benchmark][i_ten:])))
     except:
         print("{:3s} missing".format(benchmark))
+
+print("periodogram analysis")
+fig, ax = plt.subplots(figsize=[6,6],nrows=2)
+
+i_5 = int(0.21*data[benchmark_set[0]].shape[0])
+ts = np.copy(t[i_5:])
+f_min = 2*np.pi/(np.max(ts)-np.min(ts))
+f_max = 1e2*f_min
+print(f'{f_min:.2g}, {2*np.pi/f_min:.2g}')
+print(f'{f_max:.2g}, {2*np.pi/f_max:.2g}')
+N_freq = int(1e5)
+import scipy.signal as scs
+for q in ['KE', 'PE', 'QE']:#, 'Re', 'enstrophy']:
+    # try:
+        ds = np.copy(data[q][i_5:])
+        ds -= np.mean(ds)
+        ds /= np.std(ds)
+        freqs = np.geomspace(f_min, f_max, N_freq)
+        LSP = scs.lombscargle(ds, ts, freqs, normalize=True, precenter=True)
+        i_max = np.argmax(LSP)
+        print("{:3s} = {:.3g} ({:.3g})".format(q, 1/freqs[i_max], 2*np.pi/freqs[i_max]))
+        ax[0].plot(2*np.pi/freqs, LSP)
+        ax[0].scatter(2*np.pi/freqs[i_max], LSP[i_max], marker='o', label=q)
+        ax[1].plot(ts, ds, label=q)
+    # except:
+    #     print("{:3s} missing".format(1))
+ax[0].legend()
+ax[0].set_yscale('log')
+ax[0].set_xscale('log')
+fig.tight_layout()
+fig.savefig('{:s}/lombscargle_periodogram.png'.format(str(output_path)), dpi=300)
