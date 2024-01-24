@@ -332,7 +332,7 @@ ME = PE + QE # moist static energy
 Q_eq = (q-qs)*H(q - qs)
 
 if not args['--no-output']:
-    snap_dt = 10
+    snap_dt = 5
     snapshots = solver.evaluator.add_file_handler(data_dir+'/snapshots', sim_dt=snap_dt, max_writes=20)
     snapshots.add_task(b, name='b')
     snapshots.add_task(q, name='q')
