@@ -9,12 +9,10 @@ Vallis, Parker & Tobias, 2019, JFM,
 This script solves IVPs for an existing atmospheres, solved for by scripts in the nlbvp section.
 
 Usage:
-    rainy_benard.py <case> [options]
+    rainy_benard.py [options]
 
 Options:
-    <case>            Case to build IVP around
-
-                      Properties of analytic atmosphere, if used
+                      Properties of analytic atmosphere
     --alpha=<alpha>   alpha value [default: 3]
     --beta=<beta>     beta value  [default: 1.1]
     --gamma=<gamma>   gamma value [default: 0.19]
@@ -24,18 +22,22 @@ Options:
 
     --aspect=<a>      Aspect ratio of domain, Lx/Lz [default: 10]
 
-    --tau=<tau>       If set, override value of tau
-    --k=<k>           If set, override value of k
+    --tau=<tau>       Timescale for moisture reaction [default: 0.1]
+    --k=<k>           Sharpness of smooth phase transition [default: 1e4]
 
-    --erf             Use an erf rather than a tanh for the phase transition
-    --Legendre        Use Legendre polynomials
+    --erf             Use an erf for the phase transition (default)
+    --tanh            Use a tanh for the phase transition
+
+    --Legendre        Use Legendre polynomials (default)
+    --Chebyshev       Use Chebyshev polynomials
 
     --nondim=<n>      Non-Nondimensionalization [default: buoyancy]
 
-    --top-stress-free     Stress-free upper boundary
+    --top-stress-free     Stress-free upper boundary (default)
     --stress-free         Stress-free both boundaries
+    --no-slip             No slip both boundaries
 
-    --nz=<nz>         Number z coeffs to use in IVP; if not set, uses resolution of background solution
+    --nz=<nz>         Number z coeffs to use in IVP
     --nx=<nx>         Number of x coeffs to use in IVP; if not set, scales nz by aspect
 
     --max_dt=<dt>     Largest timestep to use; should be set by oscillation timescales of waves (Brunt) [default: 1]
@@ -45,6 +47,8 @@ Options:
     --run_time_iter=<rti>      Run time, number of iterations; if not set, n_iter=np.inf
 
     --no-output       Suppress disk writing output, for timing
+
+    --full_case_label  Use a longer form of case labelling including erf/tanh, Tz/L in name
 
     --label=<label>   Label to add to output directory
 """
@@ -76,86 +80,69 @@ nproc = MPI.COMM_WORLD.size
 coords = de.CartesianCoordinates('y', 'x', 'z', right_handed=False)
 dist = de.Distributor(coords, mesh=[1,nproc], dtype=dtype)
 
-case = args['<case>']
-if case == 'analytic':
-    import os
-    import analytic_atmosphere
+import os
+import analytic_atmosphere
 
-    from analytic_zc import f_zc as zc_analytic
-    from analytic_zc import f_Tc as Tc_analytic
-    α = float(args['--alpha'])
-    β = float(args['--beta'])
-    γ = float(args['--gamma'])
-    k = float(args['--k'])
-    q0 = float(args['--q0'])
-    tau = float(args['--tau'])
+from analytic_zc import f_zc as zc_analytic
+from analytic_zc import f_Tc as Tc_analytic
+α = float(args['--alpha'])
+β = float(args['--beta'])
+γ = float(args['--gamma'])
+k = float(args['--k'])
+q0 = float(args['--q0'])
+tau = float(args['--tau'])
 
-    if q0 < 1:
-        atm_name = 'unsaturated'
-    elif q0 == 1:
-        atm_name = 'saturated'
-    else:
-        raise ValueError("q0 has invalid value, q0 = {:}".format(q0))
-
-    case += '_{:s}/alpha{:}_beta{:}_gamma{:}_q{:}'.format(atm_name, args['--alpha'],args['--beta'],args['--gamma'], args['--q0'])
-
-    case += '/tau{:}_k{:}'.format(args['--tau'],args['--k'])
-    if args['--erf']:
-        case += '_erf'
-
-    nz = int(float(args['--nz']))
-    if args['--Legendre']:
-        zb = de.Legendre(coords['z'], size=nz, bounds=(0, Lz), dealias=dealias)
-        case += '_Legendre'
-    else:
-        zb = de.ChebyshevT(coords['z'], size=nz, bounds=(0, Lz), dealias=dealias)
-
-    if atm_name == 'unsaturated':
-        sol = analytic_atmosphere.unsaturated
-        zc = zc_analytic()(γ)
-        Tc = Tc_analytic()(γ)
-
-        sol = sol(dist, zb, β, γ, zc, Tc, dealias=dealias, q0=q0, α=α)
-    elif atm_name == 'saturated':
-        sol = analytic_atmosphere.saturated
-        sol = sol(dist, zb, β, γ, dealias=dealias, q0=q0, α=α)
-
-    sol['b'].change_scales(1)
-    sol['q'].change_scales(1)
-    sol['b'] = sol['b']['g']
-    sol['q'] = sol['q']['g']
-    sol['z'].change_scales(1)
-    nz_sol = sol['z']['g'].shape[-1]
-    if not os.path.exists('{:s}/'.format(case)) and dist.comm.rank == 0:
-        os.makedirs('{:s}/'.format(case))
+if q0 < 1:
+    atm_name = 'unsaturated'
+elif q0 == 1:
+    atm_name = 'saturated'
 else:
-    f = h5py.File(case+'/drizzle_sol/drizzle_sol_s1.h5', 'r')
-    sol = {}
-    for task in f['tasks']:
-        sol[task] = f['tasks'][task][0,0,0][:]
-    sol['z'] = f['tasks']['b'].dims[3][0][:]
-    tau_in = sol['tau'][0]
-    k = sol['k'][0]
-    α = sol['α'][0]
-    β = sol['β'][0]
-    γ = sol['γ'][0]
-    f.close()
-    if args['--tau']:
-        tau = float(args['--tau'])
-    else:
-        tau = tau_in
-    nz_sol = sol['z'].shape[0]
+    raise ValueError("q0 has invalid value, q0 = {:}".format(q0))
 
-if args['--nz']:
-    nz = int(float(args['--nz']))
+case = 'analytic'
+case += '_{:s}/alpha{:}_beta{:}_gamma{:}_q{:}'.format(atm_name, args['--alpha'],args['--beta'],args['--gamma'], args['--q0'])
+
+nz = int(float(args['--nz']))
+if args['--Chebyshev']:
+    zb = de.ChebyshevT(coords['z'], size=nz, bounds=(0, Lz), dealias=dealias)
 else:
-    nz = nz_sol
+    zb = de.Legendre(coords['z'], size=nz, bounds=(0, Lz), dealias=dealias)
+
+if atm_name == 'unsaturated':
+    sol = analytic_atmosphere.unsaturated
+    zc = zc_analytic()(γ)
+    Tc = Tc_analytic()(γ)
+
+    sol = sol(dist, zb, β, γ, zc, Tc, dealias=dealias, q0=q0, α=α)
+elif atm_name == 'saturated':
+    sol = analytic_atmosphere.saturated
+    sol = sol(dist, zb, β, γ, dealias=dealias, q0=q0, α=α)
+
+sol['b'].change_scales(1)
+sol['q'].change_scales(1)
+sol['b'] = sol['b']['g']
+sol['q'] = sol['q']['g']
+sol['z'].change_scales(1)
+nz_sol = sol['z']['g'].shape[-1]
+if not os.path.exists('{:s}/'.format(case)) and dist.comm.rank == 0:
+    os.makedirs('{:s}/'.format(case))
+
 if args['--nx']:
     nx = int(float(args['--nx']))
 else:
     nx = int(aspect)*nz
 
 data_dir = case+'/rainy_benard_Ra{:}_tau{:.2g}_k{:.2g}_nz{:d}_nx{:d}'.format(args['--Rayleigh'], tau, k, nz, nx)
+
+if args['--full_case_label']:
+    if args['--tanh']:
+        case += '_tanh'
+    else:
+        case += '_erf'
+    if args['--Chebyshev']:
+        case += '_Tz'
+    else:
+        case += '_L'
 
 if args['--label']:
     data_dir += '_{:s}'.format(args['--label'])
@@ -183,12 +170,6 @@ else:
     run_time_iter = np.inf
 
 xb = de.RealFourier(coords['x'], size=nx, bounds=(0, Lx), dealias=dealias)
-if not zb:
-    if args['--Legendre']:
-        zb = de.Legendre(coords['z'], size=nz, bounds=(0, Lz), dealias=dealias)
-        case += '_Legendre'
-    else:
-        zb = de.ChebyshevT(coords['z'], size=nz, bounds=(0, Lz), dealias=dealias)
 x = dist.local_grid(xb)
 z = dist.local_grid(zb)
 
@@ -226,10 +207,10 @@ lift = lambda A, n: de.Lift(A, zb2, n)
 ey, ex, ez = coords.unit_vector_fields(dist)
 
 from scipy.special import erf
-if args['--erf']:
-    H = lambda A: 0.5*(1+erf(k*A))
-else:
+if args['--tanh']:
     H = lambda A: 0.5*(1+np.tanh(k*A))
+else:
+    H = lambda A: 0.5*(1+erf(k*A))
 
 z_grid = dist.Field(name='z_grid', bases=zb)
 z_grid['g'] = z
@@ -271,8 +252,6 @@ else:
 
 problem.add_equation('div(u) + τp + 1/PdR*dot(lift(τu2,-1),ez) = 0')
 problem.add_equation('dt(u) - PdR*lap(u) + grad(p) - PtR*b*ez + lift(τu1, -1) + lift(τu2, -2) = cross(u, ω)')
-# problem.add_equation('dt(b) - P*lap(b) + u@grad(b0) - γ/tau*(q-α*qs0*b)*scrN + lift(τb1, -1) + lift(τb2, -2) = - (u@grad(b)) + γ/tau*((q-qs)*H(q-qs) - (q-α*qs0*b)*scrN_g)')
-# problem.add_equation('dt(q) - S*lap(q) + u@grad(q0) + 1/tau*(q-α*qs0*b)*scrN + lift(τq1, -1) + lift(τq2, -2) = - (u@grad(q)) - 1/tau*((q-qs)*H(q-qs) - (q-α*qs0*b)*scrN_g)')
 problem.add_equation('dt(b) - P*lap(b) + lift(τb1, -1) + lift(τb2, -2) = - (u@grad(b)) + γ/tau*((q-qs)*H(q-qs))')
 problem.add_equation('dt(q) - S*lap(q) + lift(τq1, -1) + lift(τq2, -2) = - (u@grad(q)) - 1/tau*((q-qs)*H(q-qs))')
 problem.add_equation('b(z=0) = 0')
@@ -280,16 +259,20 @@ problem.add_equation('b(z=Lz) = β + ΔT') # technically β*Lz
 problem.add_equation('q(z=0) = q_surface*qs(z=0)')
 problem.add_equation('q(z=Lz) = np.exp(α*ΔT)')
 if args['--stress-free']:
+    logger.info("bottom is stress-free")
     problem.add_equation('ez@u(z=0) = 0')
     problem.add_equation('ez@(ex@e(z=0)) = 0')
     problem.add_equation('ez@(ey@e(z=0)) = 0')
 else:
+    logger.info("bottom is no-slip")
     problem.add_equation('u(z=0) = 0')
-if args['--top-stress-free'] or args['--stress-free']:
+if not args['--no-slip'] or args['--stress-free']:
+    logger.info("top is stress-free")
     problem.add_equation('ez@u(z=Lz) = 0')
     problem.add_equation('ez@(ex@e(z=Lz)) = 0')
     problem.add_equation('ez@(ey@e(z=Lz)) = 0')
 else:
+    logger.info("top is no-slip")
     problem.add_equation('u(z=Lz) = 0')
 problem.add_equation('integ(p) = 0')
 
