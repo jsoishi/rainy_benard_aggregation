@@ -330,17 +330,19 @@ PE = PtR*b
 QE = PtR*γ*q
 ME = PE + QE # moist static energy
 Q_eq = (q-qs)*H(q - qs)
+m = b+γ*q
 
 if not args['--no-output']:
     snap_dt = 5
     snapshots = solver.evaluator.add_file_handler(data_dir+'/snapshots', sim_dt=snap_dt, max_writes=20)
     snapshots.add_task(b, name='b')
     snapshots.add_task(q, name='q')
-    snapshots.add_task(b+γ*q, name='m')
+    snapshots.add_task(m, name='m')
+    snapshots.add_task(rh, name='rh')
     snapshots.add_task(Q_eq, name='c')
     snapshots.add_task(b-x_avg(b), name='b_fluc')
     snapshots.add_task(q-x_avg(q), name='q_fluc')
-    snapshots.add_task(rh, name='rh')
+    snapshots.add_task(m-x_avg(m), name='m_fluc')
     snapshots.add_task(rh-x_avg(rh), name='rh_fluc')
     snapshots.add_task(ex@u, name='ux')
     snapshots.add_task(ez@u, name='uz')
