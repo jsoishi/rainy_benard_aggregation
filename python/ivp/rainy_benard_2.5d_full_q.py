@@ -199,11 +199,6 @@ q = dist.Field(name='q', bases=bases)
 τq1 = dist.Field(name='τq1', bases=xb)
 τq2 = dist.Field(name='τq2', bases=xb)
 
-zb1 = zb.clone_with(a=zb.a+1, b=zb.b+1)
-zb2 = zb.clone_with(a=zb.a+2, b=zb.b+2)
-lift1 = lambda A, n: de.Lift(A, zb1, n)
-lift = lambda A, n: de.Lift(A, zb2, n)
-
 ey, ex, ez = coords.unit_vector_fields(dist)
 
 from scipy.special import erf
@@ -224,15 +219,13 @@ q_surface = dist.Field(name='q_surface')
 if q0['g'].size > 0 :
     q_surface['g'] = q0(z=0).evaluate()['g']
 
+div = lambda A: de.Divergence(A)
 grad = lambda A: de.Gradient(A, coords)
 trans = lambda A: de.TransposeComponents(A)
 curl = lambda A: de.Curl(A)
 
 e = grad(u) + trans(grad(u))
 ω = curl(u)
-
-vars = [p, u, b, q, τp, τu1, τu2, τb1, τb2, τq1, τq2]
-problem = de.IVP(vars, namespace=locals())
 
 nondim = args['--nondim']
 if nondim == 'diffusion':
@@ -249,23 +242,40 @@ elif nondim == 'buoyancy':
 else:
     raise ValueError('nondim {:} not in valid set [diffusion, buoyancy]'.format(nondim))
 
+# zb1 = zb.clone_with(a=zb.a+1, b=zb.b+1)
+# zb2 = zb.clone_with(a=zb.a+2, b=zb.b+2)
+# lift1 = lambda A, n: de.Lift(A, zb1, n)
+# lift = lambda A, n: de.Lift(A, zb2, n)
 
-problem.add_equation('div(u) + τp + 1/PdR*dot(lift(τu2,-1),ez) = 0')
-problem.add_equation('dt(u) - PdR*lap(u) + grad(p) - PtR*b*ez + lift(τu1, -1) + lift(τu2, -2) = cross(u, ω)')
-problem.add_equation('dt(b) - P*lap(b) + lift(τb1, -1) + lift(τb2, -2) = - (u@grad(b)) + γ/tau*((q-qs)*H(q-qs))')
-problem.add_equation('dt(q) - S*lap(q) + lift(τq1, -1) + lift(τq2, -2) = - (u@grad(q)) - 1/tau*((q-qs)*H(q-qs))')
+lift_basis = zb.derivative_basis(1)
+lift = lambda A: de.Lift(A, lift_basis, -1)
+
+lift_basis2 = zb.derivative_basis(2)
+lift2 = lambda A: de.Lift(A, lift_basis2, -1)
+lift2_2 = lambda A: de.Lift(A, lift_basis2, -2)
+
+vars = [p, u, b, q, τp, τu1, τu2, τb1, τb2, τq1, τq2]
+problem = de.IVP(vars, namespace=locals())
+problem.add_equation('div(u) + lift(τp) = 0')
+problem.add_equation('dt(u) - PdR*lap(u) + grad(p) - PtR*b*ez + lift2_2(τu1) + lift2(τu2) = cross(u, ω)')
+problem.add_equation('dt(b) - P*lap(b) + lift2_2(τb1) + lift2(τb2) = - (u@grad(b)) + γ/tau*((q-qs)*H(q-qs))')
+problem.add_equation('dt(q) - S*lap(q) + lift2_2(τq1) + lift(τq2) = - (u@grad(q)) - 1/tau*((q-qs)*H(q-qs))')
 problem.add_equation('b(z=0) = 0')
 problem.add_equation('b(z=Lz) = β + ΔT') # technically β*Lz
 problem.add_equation('q(z=0) = q_surface*qs(z=0)')
 problem.add_equation('q(z=Lz) = np.exp(α*ΔT)')
 if args['--stress-free']:
     logger.info("bottom is stress-free")
-    problem.add_equation('ez@u(z=0) = 0')
+    problem.add_equation('ez@u(z=0) = 0', condition="nx!=0")
     problem.add_equation('ez@(ex@e(z=0)) = 0')
     problem.add_equation('ez@(ey@e(z=0)) = 0')
+    problem.add_equation("ez@τu1 = 0", condition="nx==0")
 else:
     logger.info("bottom is no-slip")
-    problem.add_equation('u(z=0) = 0')
+    problem.add_equation("u(z=0) = 0", condition="nx!=0")
+    problem.add_equation("ez@(ex@e(z=0)) = 0", condition="nx==0")
+    problem.add_equation("ez@(ey@e(z=0)) = 0", condition="nx==0")
+    problem.add_equation("ez@τu1 = 0", condition="nx==0")
 if not args['--no-slip'] or args['--stress-free']:
     logger.info("top is stress-free")
     problem.add_equation('ez@u(z=Lz) = 0')
@@ -358,6 +368,7 @@ if not args['--no-output']:
     traces.add_task(avg(Q_eq), name='Q_eq')
     traces.add_task(avg(Re), name='Re')
     traces.add_task(avg(ω@ω), name='enstrophy')
+    traces.add_task(avg(div(u)), name='div_u')
     traces.add_task(x_avg(np.sqrt(τu1@τu1)), name='τu1')
     traces.add_task(x_avg(np.sqrt(τu2@τu2)), name='τu2')
     traces.add_task(x_avg(np.abs(τb1)), name='τb1')
@@ -370,6 +381,7 @@ if not args['--no-output']:
 flow = flow_tools.GlobalFlowProperty(solver, cadence=report_cadence)
 flow.add_property(Re, name='Re')
 flow.add_property(KE, name='KE')
+flow.add_property(div(u), name='div_u')
 flow.add_property(np.sqrt(τu1@τu1), name='|τu1|')
 flow.add_property(np.sqrt(τu2@τu2), name='|τu2|')
 flow.add_property(np.abs(τb1), name='|τb1|')
@@ -389,8 +401,11 @@ try:
             Re_max = flow.max('Re')
             Re_avg = flow.volume_integral('Re')/vol
             KE_avg = flow.volume_integral('KE')/vol
+            div_u_avg = flow.volume_integral('div_u')/vol
+            div_u_max = flow.max('div_u')
             log_string = 'Iteration: {:5d}, Time: {:8.3e}, dt: {:5.1e}'.format(solver.iteration, solver.sim_time, Δt)
             log_string += ', KE: {:.2g}, Re: {:.2g} ({:.2g})'.format(KE_avg, Re_avg, Re_max)
+            log_string += ', div(u): {:.2g} ({:.2g})'.format(div_u_avg, div_u_max)
             log_string += ', τ: {:.2g}'.format(τ_max)
             logger.info(log_string)
         Δt = cfl.compute_timestep()
