@@ -70,8 +70,11 @@ dtype = np.float64
 Lz = 1
 Lx = aspect
 
-coords = de.CartesianCoordinates('x', 'z', 'y', right_handed=False)
-dist = de.Distributor(coords, dtype=dtype)
+from mpi4py import MPI
+nproc = MPI.COMM_WORLD.size
+
+coords = de.CartesianCoordinates('y', 'x', 'z', right_handed=False)
+dist = de.Distributor(coords, mesh=[1,nproc], dtype=dtype)
 
 case = args['<case>']
 if case == 'analytic':
@@ -122,7 +125,7 @@ if case == 'analytic':
     sol['b'] = sol['b']['g']
     sol['q'] = sol['q']['g']
     sol['z'].change_scales(1)
-    nz_sol = sol['z']['g'].shape[-2]
+    nz_sol = sol['z']['g'].shape[-1]
     if not os.path.exists('{:s}/'.format(case)) and dist.comm.rank == 0:
         os.makedirs('{:s}/'.format(case))
 else:
@@ -220,7 +223,7 @@ zb2 = zb.clone_with(a=zb.a+2, b=zb.b+2)
 lift1 = lambda A, n: de.Lift(A, zb1, n)
 lift = lambda A, n: de.Lift(A, zb2, n)
 
-ex, ez, ey = coords.unit_vector_fields(dist)
+ey, ex, ez = coords.unit_vector_fields(dist)
 
 from scipy.special import erf
 if args['--erf']:
