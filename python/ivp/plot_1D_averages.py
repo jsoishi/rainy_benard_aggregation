@@ -6,7 +6,7 @@ Usage:
 
 Options:
     --output=<output>    Output directory; if blank a guess based on likely case name will be made
-    --tag=<tag>          Adds a label tag to the tasks [default: _avg]
+    --tag=<tag>          Adds a label tag to the tasks (old data used tag='_avg')
 
 """
 import logging
