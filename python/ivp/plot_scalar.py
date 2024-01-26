@@ -118,7 +118,7 @@ for a in ax:
     if subrange:
         a.set_xlim(t_min,t_max)
     a.set_xlabel('time')
-    a.legend(loc='lower left')
+    a.legend()
 ax[1].set_yscale('log')
 fig.tight_layout()
 fig.savefig('{:s}/div_u_error.png'.format(str(output_path)), dpi=300)
