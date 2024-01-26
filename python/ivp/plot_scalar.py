@@ -110,6 +110,20 @@ fig_tau.savefig('{:s}/tau_error.pdf'.format(str(output_path)))
 fig_tau.savefig('{:s}/tau_error.png'.format(str(output_path)), dpi=300)
 
 
+fig, ax = plt.subplots(nrows=2, sharex=True)
+ax[0].plot(t, data['div_u'], label=r'$\vec{\nabla}\cdot\vec{u}$')
+ax[1].plot(t, np.abs(data['div_u']), label=r'$|\vec{\nabla}\cdot\vec{u}|$')
+
+for a in ax:
+    if subrange:
+        a.set_xlim(t_min,t_max)
+    a.set_xlabel('time')
+    a.legend(loc='lower left')
+ax[1].set_yscale('log')
+fig.tight_layout()
+fig.savefig('{:s}/div_u_error.png'.format(str(output_path)), dpi=300)
+
+
 fig_f, ax_f = plt.subplots(nrows=2, sharex=True)
 for ax in ax_f:
     ax.plot(t, data['Re'], label='Re')
@@ -134,7 +148,7 @@ fig_f.tight_layout()
 fig_f.savefig('{:s}/Re_and_ens.pdf'.format(str(output_path)))
 fig_f.savefig('{:s}/Re_and_ens.png'.format(str(output_path)), dpi=300)
 
-benchmark_set = ['KE', 'PE', 'QE', 'Re', 'enstrophy', 'τu1', 'τu2', 'τb1', 'τb2', 'τq1', 'τq2', 'τp']
+benchmark_set = ['KE', 'PE', 'QE', 'Re', 'enstrophy', 'τu1', 'τu2', 'τb1', 'τb2', 'τq1', 'τq2', 'τp', 'div_u']
 
 i_ten = int(0.9*data[benchmark_set[0]].shape[0])
 print("total simulation time {:6.2g}".format(t[-1]-t[0]))

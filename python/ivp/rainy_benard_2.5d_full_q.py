@@ -273,8 +273,8 @@ if args['--stress-free']:
 else:
     logger.info("bottom is no-slip")
     problem.add_equation("u(z=0) = 0", condition="nx!=0")
-    problem.add_equation("ez@(ex@e(z=0)) = 0", condition="nx==0")
-    problem.add_equation("ez@(ey@e(z=0)) = 0", condition="nx==0")
+    problem.add_equation("ex@u(z=0) = 0", condition="nx==0")
+    problem.add_equation("ey@u(z=0) = 0", condition="nx==0")
     problem.add_equation("ez@τu1 = 0", condition="nx==0")
 if not args['--no-slip'] or args['--stress-free']:
     logger.info("top is stress-free")
@@ -348,7 +348,7 @@ if not args['--no-output']:
     averages = solver.evaluator.add_file_handler(data_dir+'/averages', sim_dt=snap_dt, max_writes=None)
     averages.add_task(x_avg(b), name='b')
     averages.add_task(x_avg(q), name='q')
-    averages.add_task(x_avg(b+γ*q), name='m')
+    averages.add_task(x_avg(m), name='m')
     averages.add_task(x_avg(rh), name='rh')
     averages.add_task(x_avg(Q_eq), name='Q_eq')
     averages.add_task(x_avg(ez@u*q), name='uq')
@@ -358,6 +358,19 @@ if not args['--no-output']:
     averages.add_task(x_avg(np.sqrt((u-x_avg(u))@(u-x_avg(u)))), name='u_rms')
     averages.add_task(x_avg(ω@ω), name='enstrophy')
     averages.add_task(x_avg((ω-x_avg(ω))@(ω-x_avg(ω))), name='enstrophy_rms')
+
+    slice = solver.evaluator.add_file_handler(data_dir+'/slice', sim_dt=snap_dt, max_writes=None)
+    slice.add_task(b(z=0.5), name='b')
+    slice.add_task(q(z=0.5), name='q')
+    slice.add_task(m(z=0.5), name='m')
+    slice.add_task(rh(z=0.5), name='rh')
+    slice.add_task(Q_eq(z=0.5), name='Q_eq')
+    slice.add_task((ez@u*q)(z=0.5), name='uq')
+    slice.add_task((ez@u*b)(z=0.5), name='ub')
+    slice.add_task((ez@u)(z=0.5), name='uz')
+    slice.add_task((np.sqrt((u-x_avg(u))@(u-x_avg(u))))(z=0.5), name='u_rms')
+    slice.add_task((ω@ω)(z=0.5), name='enstrophy')
+    slice.add_task(((ω-x_avg(ω))@(ω-x_avg(ω)))(z=0.5), name='enstrophy_rms')
 
     trace_dt = snap_dt/5
     traces = solver.evaluator.add_file_handler(data_dir+'/traces', sim_dt=trace_dt, max_writes=None)
@@ -405,7 +418,7 @@ try:
             div_u_max = flow.max('div_u')
             log_string = 'Iteration: {:5d}, Time: {:8.3e}, dt: {:5.1e}'.format(solver.iteration, solver.sim_time, Δt)
             log_string += ', KE: {:.2g}, Re: {:.2g} ({:.2g})'.format(KE_avg, Re_avg, Re_max)
-            log_string += ', div(u): {:.2g} ({:.2g})'.format(div_u_avg, div_u_max)
+            log_string += ', div(u): {:.2g}'.format(div_u_max)
             log_string += ', τ: {:.2g}'.format(τ_max)
             logger.info(log_string)
         Δt = cfl.compute_timestep()
