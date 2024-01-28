@@ -61,11 +61,12 @@ def plot_hov(df, task_name, output_path, zrange=None, aspect_ratio = 4, fig_W = 
     if zmin is not None:
         if zmax == 1:
             zmax += eps
+        # here the x-direction is the line amplitude, hence zrange
         plot_z_ax.set_xlim(zmin, zmax)
     plot_z_ax.get_yaxis().set_visible(False)
     plot_z_ax.set_xlabel(f"{task_label}")
 
-    fig.savefig(output_path/pathlib.Path(f"{task_name}_hov.png"), dpi=300)
+    fig.savefig(output_path/pathlib.Path(f"{task_name}_hov_z.png"), dpi=300)
 
 args = docopt(__doc__)
 df_name = args['<file>']
@@ -75,12 +76,11 @@ if args['--output'] is not None:
 else:
     data_dir = case +'/'
     output_path = pathlib.Path(data_dir).absolute()
-# need to fix this later...
-tasks = ['b', 'q', 'm', 'rh', 'ub', 'uq', 'ux']
-if args['--tag']:
-    tasks = [task + args['--tag'] for task in tasks]
-zranges = [None, None, None, (0,1), None, None, None]
+
+tasks = {'b':None, 'q':None, 'm':None, 'rh':(0,1), 'ub':None, 'uq':None, 'ux':None}
 
 with h5py.File(df_name,'r') as df:
-    for zr, task in zip(zranges, tasks):
-        plot_hov(df, task, output_path,zrange=zr)
+    for task, zr in tasks.items():
+        if args['--tag']:
+            task += args['--tag']
+        plot_hov(df, task, output_path, zrange=zr)

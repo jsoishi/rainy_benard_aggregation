@@ -46,6 +46,8 @@ Options:
     --run_time_buoy=<rtb>      Run time, in buoyancy times
     --run_time_iter=<rti>      Run time, number of iterations; if not set, n_iter=np.inf
 
+    --output_dt=<output_dt>    Delta T for outputs (in buoyancy times) [default: 5]
+
     --no-output       Suppress disk writing output, for timing
 
     --full_case_label  Use a longer form of case labelling including erf/tanh, Tz/L in name
@@ -130,9 +132,9 @@ if not os.path.exists('{:s}/'.format(case)) and dist.comm.rank == 0:
 if args['--nx']:
     nx = int(float(args['--nx']))
 else:
-    nx = int(aspect)*nz
+    nx = int(aspect*nz)
 
-data_dir = case+'/rainy_benard_Ra{:}_tau{:.2g}_k{:.2g}_nz{:d}_nx{:d}'.format(args['--Rayleigh'], tau, k, nz, nx)
+data_dir = case+'/rainy_benard_Ra{:}_tau{:.2g}_k{:.2g}_nz{:d}_nx{:d}_a{:}'.format(args['--Rayleigh'], tau, k, nz, nx, args['--aspect'])
 
 if args['--full_case_label']:
     if args['--tanh']:
@@ -329,7 +331,7 @@ Q_eq = (q-qs)*H(q - qs)
 m = b+γ*q
 
 if not args['--no-output']:
-    snap_dt = 5
+    snap_dt = float(args['--output_dt'])
     snapshots = solver.evaluator.add_file_handler(data_dir+'/snapshots', sim_dt=snap_dt, max_writes=20)
     snapshots.add_task(b, name='b')
     snapshots.add_task(q, name='q')
@@ -359,18 +361,18 @@ if not args['--no-output']:
     averages.add_task(x_avg(ω@ω), name='enstrophy')
     averages.add_task(x_avg((ω-x_avg(ω))@(ω-x_avg(ω))), name='enstrophy_rms')
 
-    slice = solver.evaluator.add_file_handler(data_dir+'/slice', sim_dt=snap_dt, max_writes=None)
-    slice.add_task(b(z=0.5), name='b')
-    slice.add_task(q(z=0.5), name='q')
-    slice.add_task(m(z=0.5), name='m')
-    slice.add_task(rh(z=0.5), name='rh')
-    slice.add_task(Q_eq(z=0.5), name='Q_eq')
-    slice.add_task((ez@u*q)(z=0.5), name='uq')
-    slice.add_task((ez@u*b)(z=0.5), name='ub')
-    slice.add_task((ez@u)(z=0.5), name='uz')
-    slice.add_task((np.sqrt((u-x_avg(u))@(u-x_avg(u))))(z=0.5), name='u_rms')
-    slice.add_task((ω@ω)(z=0.5), name='enstrophy')
-    slice.add_task(((ω-x_avg(ω))@(ω-x_avg(ω)))(z=0.5), name='enstrophy_rms')
+    slices = solver.evaluator.add_file_handler(data_dir+'/slices', sim_dt=snap_dt, max_writes=None)
+    slices.add_task(b(z=0.5), name='b')
+    slices.add_task(q(z=0.5), name='q')
+    slices.add_task(m(z=0.5), name='m')
+    slices.add_task(rh(z=0.5), name='rh')
+    slices.add_task(Q_eq(z=0.5), name='Q_eq')
+    slices.add_task((ez@u*q)(z=0.5), name='uq')
+    slices.add_task((ez@u*b)(z=0.5), name='ub')
+    slices.add_task((ez@u)(z=0.5), name='uz')
+    slices.add_task((np.sqrt((u-x_avg(u))@(u-x_avg(u))))(z=0.5), name='u_rms')
+    slices.add_task((ω@ω)(z=0.5), name='enstrophy')
+    slices.add_task(((ω-x_avg(ω))@(ω-x_avg(ω)))(z=0.5), name='enstrophy_rms')
 
     trace_dt = snap_dt/5
     traces = solver.evaluator.add_file_handler(data_dir+'/traces', sim_dt=trace_dt, max_writes=None)
