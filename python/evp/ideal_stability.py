@@ -61,8 +61,8 @@ Lz = 1
 coords = de.CartesianCoordinates('x', 'y', 'z')
 dist = de.Distributor(coords, dtype=dtype)
 zb = de.ChebyshevT(coords.coords[2], size=nz, bounds=(0, Lz), dealias=dealias)
-z = zb.local_grid(1)
-zd = zb.local_grid(dealias)
+z = dist.local_grid(zb)
+zd = dist.local_grid(zb, scale=dealias)
 
 dz = lambda A: de.Differentiate(A, coords['z'])
 
