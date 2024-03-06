@@ -163,29 +163,52 @@ print("periodogram analysis")
 fig, ax = plt.subplots(figsize=[6,6],nrows=2)
 
 i_5 = int(0.21*data[benchmark_set[0]].shape[0])
-ts = np.copy(t[i_5:])
-f_min = 2*np.pi/(np.max(ts)-np.min(ts))
+if subrange:
+    mask = ((t>=t_min) & (t<=t_max))
+    print(f'subrange {t_min}--{t_max}')
+else:
+    mask = (t >= t[i_5])
+ts = t[mask]
+f_min = 2*2*np.pi/(np.max(ts)-np.min(ts))
 f_max = 1e2*f_min
-print(f'{f_min:.2g}, {2*np.pi/f_min:.2g}')
-print(f'{f_max:.2g}, {2*np.pi/f_max:.2g}')
-N_freq = int(1e5)
+print(f'f_min: {f_min:6.2g}, P(f_min): {2*np.pi/f_min:6.2g}')
+print(f'f_max: {f_max:6.2g}, P(f_max): {2*np.pi/f_max:6.2g}')
+N_freq = int(1e4)
+print(f'sampling with N = {N_freq} log-sampled freqs')
+
+def Nuttal_window(x_in):
+    # implementing our own window to handle non-uniform grid spacing
+    # https://en.wikipedia.org/wiki/Window_function
+    a_0=0.355768
+    a_1=0.487396
+    a_2=0.144232
+    a_3=0.012604
+    x = x_in - np.min(x_in)
+    Δx = np.max(x)-np.min(x)
+    return a_0 - a_1*np.cos(2*np.pi*x/Δx) + a_2*np.cos(4*np.pi*x/Δx) - a_3*np.cos(6*np.pi*x/Δx)
+
 import scipy.signal as scs
-for q in ['KE', 'PE', 'QE']:#, 'Re', 'enstrophy']:
-    # try:
-        ds = np.copy(data[q][i_5:])
-        ds -= np.mean(ds)
-        ds /= np.std(ds)
-        freqs = np.geomspace(f_min, f_max, N_freq)
-        LSP = scs.lombscargle(ds, ts, freqs, normalize=True, precenter=True)
-        i_max = np.argmax(LSP)
-        print("{:3s} = {:.3g} ({:.3g})".format(q, 1/freqs[i_max], 2*np.pi/freqs[i_max]))
-        ax[0].plot(2*np.pi/freqs, LSP)
-        ax[0].scatter(2*np.pi/freqs[i_max], LSP[i_max], marker='o', label=q)
-        ax[1].plot(ts, ds, label=q)
+for q in ['KE', 'PE', 'QE', 'Re', 'enstrophy']:
+    ds = np.copy(data[q][mask])
+    ds -= np.mean(ds)
+    ds /= np.std(ds)
+    ds *= Nuttal_window(ts)
+    freqs = np.geomspace(f_min, f_max, N_freq)
+    LSP = scs.lombscargle(ts, ds, freqs, normalize=True, precenter=True)
+    i_max = np.argmax(LSP)
+    print("{:3s} = {:.3g} ({:.3g})".format(q, 1/freqs[i_max], 2*np.pi/freqs[i_max]))
+    # ax[0].scatter(2*np.pi/freqs, LSP)
+    # ax[0].scatter(2*np.pi/freqs[i_max], LSP[i_max], marker='o', label=q)
+    ax[0].plot(freqs, LSP, alpha=0.5)
+    ax[0].scatter(freqs[i_max], LSP[i_max], marker='o', label=q)
+    for i in range(3):
+        ax[0].axvline(x=(i+1)*freqs[i_max], linestyle='dashed', color='xkcd:dark grey', alpha=0.1)
+    ax[1].plot(ts, ds, label=q)
     # except:
     #     print("{:3s} missing".format(1))
 ax[0].legend()
 ax[0].set_yscale('log')
 ax[0].set_xscale('log')
+ax[0].set_ylim(1e-4,1)
 fig.tight_layout()
 fig.savefig('{:s}/lombscargle_periodogram.png'.format(str(output_path)), dpi=300)
