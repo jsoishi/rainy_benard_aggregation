@@ -162,12 +162,11 @@ for benchmark in benchmark_set:
 print("periodogram analysis")
 fig, ax = plt.subplots(figsize=[6,6],nrows=2)
 
-i_5 = int(0.21*data[benchmark_set[0]].shape[0])
-if subrange:
-    mask = ((t>=t_min) & (t<=t_max))
-    print(f'subrange {t_min}--{t_max}')
-else:
-    mask = (t >= t[i_5])
+if not subrange:
+    t_min = 0.2*np.max(t-np.min(t))+np.min(t)
+    t_max = np.max(t)
+mask = ((t>=t_min) & (t<=t_max))
+print(f'analyzing time subrange: {t_min:.2g}--{t_max:.2g}')
 ts = t[mask]
 f_min = 2*2*np.pi/(np.max(ts)-np.min(ts))
 f_max = 1e2*f_min
@@ -187,6 +186,8 @@ def Nuttal_window(x_in):
     Δx = np.max(x)-np.min(x)
     return a_0 - a_1*np.cos(2*np.pi*x/Δx) + a_2*np.cos(4*np.pi*x/Δx) - a_3*np.cos(6*np.pi*x/Δx)
 
+print("  quantity | freq (period)")
+print("--------------------------")
 import scipy.signal as scs
 for q in ['KE', 'PE', 'QE', 'Re', 'enstrophy']:
     ds = np.copy(data[q][mask])
@@ -196,7 +197,7 @@ for q in ['KE', 'PE', 'QE', 'Re', 'enstrophy']:
     freqs = np.geomspace(f_min, f_max, N_freq)
     LSP = scs.lombscargle(ts, ds, freqs, normalize=True, precenter=True)
     i_max = np.argmax(LSP)
-    print("{:3s} = {:.3g} ({:.3g})".format(q, 1/freqs[i_max], 2*np.pi/freqs[i_max]))
+    print("{:>10s} = {:.3g} ({:.3g})".format(q, 1/freqs[i_max], 2*np.pi/freqs[i_max]))
     # ax[0].scatter(2*np.pi/freqs, LSP)
     # ax[0].scatter(2*np.pi/freqs[i_max], LSP[i_max], marker='o', label=q)
     ax[0].plot(freqs, LSP, alpha=0.5)
