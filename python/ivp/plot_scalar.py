@@ -7,6 +7,8 @@ Usage:
 Options:
     --times=<times>      Range of times to plot over; pass as a comma separated list with t_min,t_max.  Default is whole timespan.
     --output=<output>    Output directory; if blank, a guess based on <file> location will be made.
+
+    --lombscargle        Do an explicit lombscargle periodogram (we always do a FFT autocorrelation)
 """
 import numpy as np
 
@@ -159,6 +161,17 @@ for benchmark in benchmark_set:
     except:
         print("{:3s} missing".format(benchmark))
 
+def Nuttal_window(x_in):
+    # implementing our own window to handle non-uniform grid spacing
+    # https://en.wikipedia.org/wiki/Window_function
+    a_0=0.355768
+    a_1=0.487396
+    a_2=0.144232
+    a_3=0.012604
+    x = x_in - np.min(x_in)
+    Δx = np.max(x)-np.min(x)
+    return a_0 - a_1*np.cos(2*np.pi*x/Δx) + a_2*np.cos(4*np.pi*x/Δx) - a_3*np.cos(6*np.pi*x/Δx)
+
 print("periodogram analysis")
 fig, ax = plt.subplots(figsize=[6,6],nrows=2)
 
@@ -175,16 +188,7 @@ print(f'f_max: {f_max:6.2g}, P(f_max): {2*np.pi/f_max:6.2g}')
 N_freq = int(1e4)
 print(f'sampling with N = {N_freq} log-sampled freqs')
 
-def Nuttal_window(x_in):
-    # implementing our own window to handle non-uniform grid spacing
-    # https://en.wikipedia.org/wiki/Window_function
-    a_0=0.355768
-    a_1=0.487396
-    a_2=0.144232
-    a_3=0.012604
-    x = x_in - np.min(x_in)
-    Δx = np.max(x)-np.min(x)
-    return a_0 - a_1*np.cos(2*np.pi*x/Δx) + a_2*np.cos(4*np.pi*x/Δx) - a_3*np.cos(6*np.pi*x/Δx)
+
 
 print("  quantity | freq (period)")
 print("--------------------------")
@@ -194,24 +198,33 @@ for q in ['KE', 'PE', 'QE', 'Re', 'enstrophy']:
     ds -= np.mean(ds)
     ds /= np.std(ds)
     ds *= Nuttal_window(ts)
-    freqs = np.geomspace(f_min, f_max, N_freq)
-    LSP = scs.lombscargle(ts, ds, freqs, normalize=True, precenter=True)
-    i_max = np.argmax(LSP)
-    print("{:>10s} = {:.3g} ({:.3g})".format(q, freqs[i_max], 2*np.pi/freqs[i_max]))
-    # ax[0].scatter(2*np.pi/freqs, LSP)
-    # ax[0].scatter(2*np.pi/freqs[i_max], LSP[i_max], marker='o', label=q)
-    ax[0].plot(freqs, LSP, alpha=0.5)
-    ax[0].scatter(freqs[i_max], LSP[i_max], marker='o', label=f'{q:s} = {2*np.pi/freqs[i_max]:.2g}')
+    if args['--lombscargle']:
+        freqs = np.geomspace(f_min, f_max, N_freq)
+        power = scs.lombscargle(ts, ds, freqs, normalize=True, precenter=True)
+        freqs /= 2*np.pi # same approach as FFT frequencies
+    else:
+        coeffs = np.fft.rfft(ds, norm='ortho')
+        power = (coeffs*np.conj(coeffs)).real
+        n = ds.size
+        dt = np.mean(ts[1:-1]-ts[0:-2])
+        freqs = np.fft.rfftfreq(n, d=1/dt)
+
+    i_max = np.argmax(power)
+    print("{:>10s} = {:.3g} ({:.3g})".format(q, freqs[i_max], 1/freqs[i_max]))
+
+    ax[0].plot(freqs, power, alpha=0.5)
+    ax[0].scatter(freqs[i_max], power[i_max], marker='o', label=f'{q:s} = {1/freqs[i_max]:.3g}')
     for i in range(3):
         ax[0].axvline(x=(i+1)*freqs[i_max], linestyle='dashed', color='xkcd:dark grey', alpha=0.1)
-    ax[1].plot(ts, ds, label=q)
+    ax[-1].plot(ts, ds, label=q)
 ax[0].legend(framealpha=0.2, fontsize=8)
 ax[0].set_yscale('log')
 ax[0].set_xscale('log')
 ax[0].set_ylabel('periodogram')
 ax[0].set_xlabel('frequency')
-ax[0].set_ylim(1e-4,1)
-ax[1].set_ylabel('scaled quantity')
-ax[1].set_xlabel('time')
+if args['--lombscargle']:
+    ax[0].set_ylim(1e-4,1)
+ax[-1].set_ylabel('scaled quantity')
+ax[-1].set_xlabel('time')
 fig.tight_layout()
-fig.savefig('{:s}/lombscargle_periodogram.png'.format(str(output_path)), dpi=300)
+fig.savefig('{:s}/periodogram.png'.format(str(output_path)), dpi=300)
