@@ -201,14 +201,14 @@ class SplitRainyBenardEVP():
             d = data[v]/phase_correction
             axes[v].plot(d[0,:].real, self.z)
             axes[v].plot(d[0,:].imag, self.z, ':')
-            axes[v].set_xlabel(f"${name}$")
+            axes[v].set_xlabel(f"${name[:-1]}$")
             axes[v].set_ylabel(r"$z$")
             axes[v].axhline(self.zc, color='k',alpha=0.3)
 
         axes['bzoom'].plot(d[0,:].real, self.z,'x-')
         axes['bzoom'].plot(d[0,:].imag, self.z, ':')
         axes['bzoom'].set_ylim(0.47,0.4775)
-        axes['bzoom'].set_xlabel(f"${name}$")
+        axes['bzoom'].set_xlabel(f"${name[:-1]}$")
         axes['bzoom'].set_ylabel(r"$z$")
         axes['bzoom'].axhline(self.zc, color='k',alpha=0.3)
 
