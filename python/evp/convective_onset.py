@@ -159,7 +159,7 @@ def compute_growth_rate(kx, Ra, target=0, plot_fastest_mode=False):
         peak_eval = np.conj(peak_eval)
 
     if plot_fastest_mode:
-        lo_res.plot_eigenfunctions(indx[-1])
+        lo_res.plot_eigenmode(indx[-1])
     return peak_eval
 
 

@@ -404,7 +404,7 @@ class RainyBenardEVP():
             self.zb = de.Legendre(self.coords.coords[-1], size=self.nz, bounds=(0, self.Lz), dealias=self.dealias)
         else:
             self.zb = de.ChebyshevT(self.coords.coords[-1], size=self.nz, bounds=(0, self.Lz), dealias=self.dealias)
-            self.z = self.dist.local_grid(zb).squeeze()
+        self.z = self.dist.local_grid(self.zb).squeeze()
         # protection against array type-casting via scipy.optimize;
         # important when updating Lx during that loop.
         kx = np.float64(kx_in).squeeze()[()]
@@ -467,8 +467,8 @@ class RainyBenardEVP():
         qs0.change_scales(1)
         self.b0.change_scales(1)
         self.q0.change_scales(1)
-        z = self.dist.local_grid(zb)
-        zd = self.dist.local_grid(zb, scale=self.dealias)
+        z = self.dist.local_grid(self.zb)
+        zd = self.dist.local_grid(self.zb, scale=self.dealias)
         p0 = ax[0].plot(self.b0['g'].squeeze().real, z.squeeze(), label=r'$b$')
         p1 = ax[0].plot(self.γ*self.q0['g'].squeeze().real, z.squeeze(), label=r'$\gamma q$')
         p2 = ax[0].plot(self.b0['g'].squeeze().real+self.γ*self.q0['g'].squeeze().real, z.squeeze(), label=r'$m = b + \gamma q$')
@@ -557,8 +557,8 @@ class RainyBenardEVP():
 
         trans = lambda A: de.TransposeComponents(A)
 
-        z = self.dist.local_grid(zb)
-        zd = self.dist.local_grid(zb, scale=self.dealias)
+        z = self.dist.local_grid(self.zb)
+        zd = self.dist.local_grid(self.zb, scale=self.dealias)
 
         bases = (self.xb, self.zb)
         bases_p = (self.xb)
