@@ -60,7 +60,7 @@ def saturated(dist, zb, β, γ,
 
 def saturated_VPT19(dist, zb, β, γ,
               dealias=1, q0=1, α=3,
-              K2=4e-10, T0=5.5):
+              K2=4e-10, T0=5.5, qc = 3.8e-3):
 
     z = dist.Field(bases=zb)
     z['g'] = dist.local_grid(zb)
@@ -70,8 +70,10 @@ def saturated_VPT19(dist, zb, β, γ,
     b2 = T0 + β + ΔT
     q1 = K2*np.exp(α*T0)*q0
     q2 = K2*np.exp(α*T0)*np.exp(α*ΔT)
-    M = γ/3.8e-3
-
+    print(f'q1, q2: {q1:.3g}, {q2:.3g}')
+    print(f'scaled: {q1/qc:.3g}, {q2/qc:.3g}')
+    print(f'b1, b2: {b1:.3g}, {b2:.3g}')
+    M = γ/qc
     P = b1 + M*q1
     Q = ((b2-b1) + M*(q2-q1))
 
@@ -82,8 +84,8 @@ def saturated_VPT19(dist, zb, β, γ,
     T = dist.Field(bases=zb)
     T['g'] = C - W(α*M*K2*np.exp(α*C)).real/α
     b = (T + β*z).evaluate()
-    q = ((m-b)/M).evaluate()
-    rh = (q*np.exp(-α*T)).evaluate()
+    q = ((m-b)/M/qc).evaluate()
+    rh = (q*qc/K2*np.exp(-α*T)).evaluate()
 
     grad_b = dz(b.copy())
     grad_q = dz(q.copy())
@@ -91,6 +93,42 @@ def saturated_VPT19(dist, zb, β, γ,
 
     return {'b':b, 'q':q, 'm':m, 'T':T, 'rh':rh, 'z':z, 'γ':γ,
             'grad_b':grad_b, 'grad_q':grad_q, 'grad_m':grad_m}
+
+def saturated_VPT19_gamma(dist, zb, β, γ,
+              dealias=1, q0=1, α=3,
+              K2=4e-10, T0=5.5, qc = 3.8e-3):
+
+    z = dist.Field(bases=zb)
+    z['g'] = dist.local_grid(zb)
+    dz = lambda A: de.Differentiate(A, dist.coords[-1]) # assumes z is last coord
+
+    b1 = T0
+    b2 = T0 + β + ΔT
+    q1 = 1/qc*K2*np.exp(α*T0)*q0
+    q2 = 1/qc*K2*np.exp(α*T0)*np.exp(α*ΔT)
+    # print(f'q1, q2: {q1:.3g}, {q2:.3g}')
+    # print(f'b1, b2: {b1:.3g}, {b2:.3g}')
+    M = γ
+    P = b1 + M*q1
+    Q = ((b2-b1) + M*(q2-q1))
+
+    C = P + (Q-β)*z['g']
+
+    m = (P+Q*z).evaluate()
+
+    T = dist.Field(bases=zb)
+    T['g'] = C - W(α*M*1/qc*K2*np.exp(α*C)).real/α
+    b = (T + β*z).evaluate()
+    q = ((m-b)/M).evaluate()
+    rh = (q*qc/K2*np.exp(-α*T)).evaluate()
+    # print(rh.evaluate()['g'])
+    grad_b = dz(b.copy())
+    grad_q = dz(q.copy())
+    grad_m = dz(m.copy())
+
+    return {'b':b, 'q':q, 'm':m, 'T':T, 'rh':rh, 'z':z, 'γ':γ,
+            'grad_b':grad_b, 'grad_q':grad_q, 'grad_m':grad_m}
+
 
 def unsaturated(dist, zb, β, γ, zc, Tc,
                 dealias=1, q0=0.6, α=3):
@@ -222,21 +260,50 @@ if __name__=="__main__":
     dist = de.Distributor(coords, dtype=dtype)
     zb = de.ChebyshevT(coords.coords[2], size=nz, bounds=(0, Lz), dealias=dealias)
 
-#    dz = lambda A: de.Differentiate(A, coords['z'])
-
-    sol = saturated_VPT19(dist, zb, β, γ, α=α, dealias=dealias)
+    sol = saturated_VPT19_gamma(dist, zb, β, γ, α=α, dealias=dealias)
     fig, ax = plot_solution(sol)
     ax[0].set_xlim(5.5,5.8)
-    ax[1].set_xlim(4.5,5.5)
+    ax[-1].set_xlim(4.5,5.5)
+
+    xlims = ax[1].get_xlim()
+    ylims = ax[1].get_ylim()
+    ax[1].fill_between((0,xlims[1]), ylims[0], ylims[1], zorder=0, alpha=0.7, color='xkcd:grey')
+    ax[1].set_xlim(xlims)
+    ax[1].set_ylim(ylims)
+    ax[1].axvline(x=0, color='xkcd:dark grey',linewidth=0.9)
+    ax[1].set_xlim(-.2,.2)
+
     fig.tight_layout()
     fig.savefig(f'analytic_VPT19_alpha{α}_beta{β}_gamma{γ}.png', dpi=300)
+
+    m = sol['m']
+    m_bot = m(z=0).evaluate()['g'][0,0,0]
+    m_top = m(z=1).evaluate()['g'][0,0,0]
+
+    q = sol['q']
+    q_bot = q(z=0).evaluate()['g'][0,0,0]
+    q_top = q(z=1).evaluate()['g'][0,0,0]
+
+    T = sol['T']
+    T_bot = T(z=0).evaluate()['g'][0,0,0]
+    T_top = T(z=1).evaluate()['g'][0,0,0]
+
+    b = sol['b']
+    b_bot = b(z=0).evaluate()['g'][0,0,0]
+    b_top = b(z=1).evaluate()['g'][0,0,0]
+
+    print("VPT19 atmosphere properties:")
+    print("m_bot = {:.4g}, m_top = {:.4g}, Δm = {:.2g}".format(m_bot, m_top, m_top-m_bot))
+    print("q_bot = {:.4g}, q_top = {:.4g}".format(q_bot, q_top))
+    print("T_bot = {:.4g}, T_top = {:.4g}".format(T_bot, T_top))
+    print("b_bot = {:.4g}, b_top = {:.4g}".format(b_bot, b_top))
 
     sol = saturated(dist, zb, β, γ, α=α, dealias=dealias)
     fig, ax = plot_solution(sol)
     fig.tight_layout()
     fig.savefig(f'analytic_saturated_alpha{α}_beta{β}_gamma{γ}.png', dpi=300)
 
-    m = (sol['b'] + γ*sol['q']).evaluate()
+    m = sol['m']
     m_bot = m(z=0).evaluate()['g'][0,0,0]
     m_top = m(z=1).evaluate()['g'][0,0,0]
     print("saturated atmosphere properties:")
@@ -255,7 +322,7 @@ if __name__=="__main__":
     fig.tight_layout()
     fig.savefig(f'analytic_unsaturated_q{q0}_alpha{α}_beta{β}_gamma{γ}.png', dpi=300)
 
-    m = (sol['b'] + γ*sol['q']).evaluate()
+    m = sol['m']
     m_bot = m(z=0).evaluate()['g'][0,0,0]
     m_top = m(z=1).evaluate()['g'][0,0,0]
     print("unsaturated atmosphere properties:")
