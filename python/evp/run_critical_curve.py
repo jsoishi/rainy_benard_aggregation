@@ -10,6 +10,7 @@ Usage:
 Options:
      --gamma=<gamma>      gamma to solve at
      --beta=<beta>        beta to solve at
+     --q0=<q0>            Lower atmosphere moisture [default: 1]
 
      --min_Ra=<mnRa>      Min Ra to search [default: 1e3]
      --max_Ra=<mxRa>      Max Ra to search [default: 1e7]
@@ -27,6 +28,8 @@ import subprocess as sp
 import numpy as np
 from docopt import docopt
 args = docopt(__doc__)
+
+q0 = float(args['--q0'])
 
 min_Ra = float(args['--min_Ra'])
 max_Ra = float(args['--max_Ra'])
@@ -53,7 +56,7 @@ elif args['--beta']:
     betas = [float(args['--beta'])]
 
     min_γ = 0.025
-    max_γ = 0.4
+    max_γ = 0.6
     Δγ = 0.025
     num_γ = int(np.round((max_γ - min_γ)/Δγ)+1)
     print(f"sweeping γ = [{min_γ, max_γ}] with a total of {num_γ} samples")
@@ -66,7 +69,7 @@ else:
 for γ in gammas:
     for β in betas:
         print(f"solving γ = {γ}, β = {β}:")
-        run_command = f"python3 convective_onset.py --beta={β} --gamma={γ} --q0=1 \
+        run_command = f"python3 convective_onset.py --beta={β} --gamma={γ} --q0={q0} \
                  --nz={nz} --k=1e4 --tau=0.1 \
                  --min_Ra={min_Ra} --max_Ra={max_Ra} --num_Ra={num_Ra} \
                  --min_kx={min_kx} --max_kx={max_kx} --num_kx={num_kx} \
