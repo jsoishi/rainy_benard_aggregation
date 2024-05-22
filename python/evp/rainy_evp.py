@@ -80,14 +80,10 @@ class SplitRainyBenardEVP():
         #    raise NotImplementedError("Only α = 3.0, β = 1.2, and lower_q0 = 0.6 currently supported.")
         if self.α != 3.0 or self.lower_q0 !=0.6:
             raise NotImplementedError("Only α = 3.0 and lower_q0 = 0.6 currently supported.")
-        if self.γ == 0.3:
-            self.zc = 0.483289354408442
-            self.Tc = -0.4588071140209613
-        elif self.γ == 0.19:
-            self.zc = 0.4751621541611023
-            self.Tc = -0.4588071140209616
-        else:
-            raise NotImplementedError(f"gamma = {self.gamma:.3f} is not supported.")
+        from analytic_zc import f_zc as zc_analytic
+        from analytic_zc import f_Tc as Tc_analytic
+        self.zc = zc_analytic()(self.γ)
+        self.Tc = Tc_analytic()(self.γ)
 
     def build_atmosphere(self):
         logger.info("Building atmosphere")
