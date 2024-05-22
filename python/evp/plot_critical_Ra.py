@@ -5,6 +5,7 @@ Usage:
     plot_critical_Ra <case>... [options]
 
 Options:
+    --q0=<q0>              Moisture at base of atmosphere [default: 1]
     --overlay_VPT19        Overlay points from VPT19
 """
 import h5py
@@ -30,10 +31,17 @@ data.sort_values('β', inplace=True)
 
 ΔT = -1
 α = 3
-q0 = 1
+q0 = float(args['--q0'])
 γ_crit = lambda β: -(β+ΔT)/(np.exp(α*ΔT)-q0)
 β_crit = lambda γ: -γ*(np.exp(α*ΔT)-q0) - ΔT
 our_m = lambda β, γ, z: γ + ((β+ΔT) + γ*(np.exp(α*ΔT)-1))*z
+
+if q0 == 1:
+    βs = [1, 1.2]
+    label = 'saturated'
+else:
+    βs = [1, 1.1]
+    label = f'unsaturated_q{args["--q0"]}'
 
 # VPT19 conversions
 M_convert = 1/3.8e-3
@@ -58,7 +66,7 @@ ax2.set_ylim(1,3)
 ax.set_xlabel(r'$\beta$')
 ax.legend(loc='center left')
 fig.tight_layout()
-fig.savefig('critical_Ra_and_k_all_gamma.png', dpi=300)
+fig.savefig(f'critical_Ra_and_k_all_gamma_{label}.png', dpi=300)
 
 
 fig, ax = plt.subplots(figsize=[6,6/1.6])
@@ -78,12 +86,12 @@ ax2.set_ylim(1,3)
 ax.set_xlabel(r'$\beta$')
 ax.legend(loc='center left')
 fig.tight_layout()
-fig.savefig('critical_Ra_and_k_gamma.png', dpi=300)
+fig.savefig(f'critical_Ra_and_k_gamma_{label}.png', dpi=300)
 
 data.sort_values('γ', inplace=True)
 fig, ax = plt.subplots(figsize=[6,6/1.6])
 ax2 = ax.twinx()
-for β in [1, 1.2]:
+for β in βs:
     curve = data[data['β']==β]
     p = ax.plot(curve['γ'], curve['Ra'], label=rf'$\beta = {β}$', marker='o', alpha=0.5)
     ax2.plot(curve['γ'], curve['k'], color=p[0].get_color(),
@@ -111,8 +119,9 @@ if args['--overlay_VPT19']:
                label=r'Vallis, $\beta=1.2$', color='xkcd:dark red', marker='o', alpha=0.5)
 ax.legend(loc='lower left')
 fig.tight_layout()
-fig.savefig('critical_Ra_and_k_beta.png', dpi=300)
+fig.savefig(f'critical_Ra_and_k_beta_{label}.png', dpi=300)
 print(VPT_γ_convert)
 
 print('gamma crit')
-print(γ_crit(1.2))
+for β in βs:
+    print(f'β = {β:.2g}, γ_c = {γ_crit(β):.2g}')
