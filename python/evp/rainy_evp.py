@@ -221,9 +221,10 @@ class SplitRainyBenardEVP():
         axes['uz'].plot(u[-1,0,...,:].squeeze().imag, self.z, ':')
         axes['uz'].set_xlabel(r"$u_z$")
         axes['uz'].set_ylabel(r"$z$")
-        axes['q'].set_title(f"phase {phase_correction.real:.3e}+{phase_correction.imag:.3e}i")
+        logger.info(f"Phase = {phase_correction.real:.3e}+{phase_correction.imag:.3e}i")
         sigma = self.solver.eigenvalues[index]
-        fig.suptitle(f"$\sigma = {sigma.real:.2f} {sigma.imag:+.2e} i$")
+        #fig.suptitle(f"$\sigma = {sigma.real:.2f} {sigma.imag:+.2e} i$")
+        logger.info(f"$\sigma = {sigma.real:.2f} {sigma.imag:+.2e} i$")
         if not mode_label:
             mode_label = index
         kx = 2*np.pi/self.Lx
