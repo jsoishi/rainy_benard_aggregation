@@ -6,6 +6,7 @@ axes.labelsize : 20
 axes.titlesize : 18
 legend.fontsize : 18
 lines.linewidth : 2
-lines.markersize : 6
+lines.markersize : 12
 xtick.labelsize : 16
 ytick.labelsize : 16
+font.size : 20

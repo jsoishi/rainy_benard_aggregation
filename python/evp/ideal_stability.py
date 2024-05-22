@@ -36,6 +36,10 @@ logger = logging.getLogger(__name__)
 for system in ['h5py._conv', 'matplotlib', 'PIL']:
     logging.getLogger(system).setLevel(logging.WARNING)
 
+import matplotlib.pyplot as plt
+#plt.style.use("../../prl.mplstyle")
+plt.style.use("prl.mplstyle")
+
 import numpy as np
 import dedalus.public as de
 import h5py
@@ -77,22 +81,28 @@ grad_m = np.zeros((nβ, nγ))
 grad_b = np.zeros((nβ, nγ))
 grad_b_max = np.zeros((nβ, nγ))
 
+ε=0.622
+e0=611 #Pa
+p0=1e5 #Pa
+K2 = 4e-10
+T0 = 5.5
+qc = ε*e0/p0
+G = K2*np.exp(α*T0)/qc
+
 case = args['<atmosphere>']
 if args['<atmosphere>'] == 'saturated':
-    cases_2d = [(0.19, 1.2), (0.19, 1.175), (0.19, 1.15), (0.19, 1.1),
-                (0.3, 1.15), (0.3, 1.25)]
-    cases_3d = [(0.19, 1.1)]
+    cases       = [(0.19, 1.2), (0.19, 1.175), (0.19, 1.1), (0.19, 1.0)]
+    cases_VPT19 = [(0.19*G, 1.2)]
     if args['--zoom']:
-         β0 = 1.05
-         β1 = 1.3
-    label_stable = (0.25, 1.275)
+         β0 = 0.975
+         β1 = 1.275
+    label_stable = (0.25, 1.2575)
     label_moist = (0.25, 1.2125)
     label_unstable = (0.25, 1.125)
-    label_rot = 20
+    label_rot = 18 # measured via Krita, 16deg for grad_b_min, 20deg for grad_m
 elif args['<atmosphere>'] == 'unsaturated':
-    cases_2d = [(0.19, 1.1), (0.19, 1.05), (0.19, 1.0),
-                (0.3, 1.15)]
-    cases_3d = [(None, None)]
+    cases = [(0.19, 1.15), (0.19, 1.1), (0.19, 1.05), (0.19, 1.0)]
+    cases_VPT19 = [(None, None)]
     if args['--zoom']:
          β0 = 0.95
          β1 = 1.2
@@ -145,6 +155,11 @@ def fmt(x):
     if s.endswith("0"):
         s = f"{x:.0f}"
     return rf"{s}"
+def fmt_tick(x):
+    s = f"{x:.3f}"
+    if s.endswith("0"):
+        s = f"{x:.2f}"
+    return rf"{s}"
 def fmt_m(x):
     return r"$\nabla m = "+rf"{fmt(x)}"+r"$"
 def fmt_b_min(x):
@@ -152,7 +167,7 @@ def fmt_b_min(x):
 def fmt_b_max(x):
     return r"$\nabla b_\mathrm{max} = "+rf"{fmt(x)}"+r"$"
 
-fig, ax = plt.subplots(figsize=[4,4/1.6])
+fig, ax = plt.subplots(figsize=[8,8/1.6])
 if args['--one_contour']:
     nlev = 1
     mag = 0
@@ -178,18 +193,27 @@ ax.set_ylabel(r'$\beta$')
 ax.set_xlabel(r'$\gamma$')
 if not args['--no_mark']:
     color = 'xkcd:forest green'
-    for gamma, beta in cases_2d:
+    for gamma, beta in cases:
         ax.scatter(gamma, beta, marker='s', alpha=0.5, color=color)
-    for gamma, beta in cases_3d:
-        ax.scatter(gamma, beta, marker='.', color='black')
-    ax.text(*label_stable, 'stable', fontsize='small',
+    for gamma, beta in cases_VPT19:
+        ax.scatter(gamma, beta, marker='^', alpha=0.5, color=color)
+    ax.text(*label_stable, 'stable',
             horizontalalignment='center', verticalalignment='center', rotation=0)
-    ax.text(*label_moist, 'dry stable, moist unstable', fontsize='small',
+    ax.text(*label_moist, 'dry stable, moist unstable',
             horizontalalignment='center', verticalalignment='center', rotation=label_rot)
-    ax.text(*label_unstable, 'unstable', fontsize='small',
+    ax.text(*label_unstable, 'unstable',
             horizontalalignment='center', verticalalignment='center', rotation=0)
 ax.clabel(csm, csm.levels, fmt=fmt_m, fontsize='small')
 ax.clabel(csb, csb.levels, fmt=fmt_b_min, fontsize='small')
+if args['--zoom']:
+    # xticks = np.linspace(γ0, γ1, num=9)
+    xticks = ax.get_xticks()
+    xlabels = [fmt_tick(x) for x in xticks]
+    ax.set_xticks(xticks, labels=xlabels)
+    for n, label in enumerate(ax.xaxis.get_ticklabels()):
+        if n % 2 != 0:
+            label.set_visible(False)
+
 fig.tight_layout()
 
 filename = 'ideal_stability_{:s}_alpha{:}'.format(case, α)
