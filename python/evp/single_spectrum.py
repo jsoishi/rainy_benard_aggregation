@@ -42,6 +42,7 @@ Options:
 
     --dense                Solve densely for all eigenvalues (slow)
     --emode=<emode>        Index for eigenmode to visualize
+    --annotate             Print mode indices on plot for identification
 """
 import logging
 logger = logging.getLogger(__name__)
@@ -54,6 +55,7 @@ import dedalus.public as de
 import h5py
 import matplotlib.pyplot as plt
 #plt.style.use("../../prl.mplstyle")
+plt.style.use("prl")
 
 from rainy_evp import RainyBenardEVP, mode_reject
 from docopt import docopt
@@ -71,7 +73,7 @@ elif args['--top-stress-free']:
 else:
     bc_type = None # default no-slip
 kx = float(args['--kx'])
-
+annotate = args['--annotate']
 Prandtlm = 1
 Prandtl = 1
 dealias = 2
@@ -93,42 +95,42 @@ def evp_amp_reject(evp, indices, tol=1e-8):
     print(indices)
     return evp.solver.eigenvalues[indx], indx
 
-def plot_eigenmode(evp, index, mode_label=None):
-    evp.solver.set_state(index,0)
-    fig, axes = plt.subplot_mosaic([['ux','.','uz'],
-                                    ['b', 'q','p']], layout='constrained')
+# def plot_eigenmode(evp, index, mode_label=None):
+#     evp.solver.set_state(index,0)
+#     fig, axes = plt.subplot_mosaic([['ux','.','uz'],
+#                                     ['b', 'q','p']], layout='constrained')
 
-    z = evp.zb.local_grid(1).squeeze()
-    nz = z.shape[-1]
-    for v in ['b','q','p']:
-        if v == 'b':
-            i_max = np.argmax(np.abs(evp.fields[v]['g'].squeeze()))
-            phase_correction = evp.fields[v]['g'][0,...,i_max].squeeze()
-        evp.fields[v].change_scales(1)
-        name = evp.fields[v].name
-        data = evp.fields[v]['g'][0,...,:].squeeze()/phase_correction
-        axes[v].plot(data.real, z)
-        axes[v].plot(data.imag, z, ':')
-        axes[v].set_xlabel(f"${name}$")
-        axes[v].set_ylabel(r"$z$")
-    evp.fields['u'].change_scales(1)
-    u = evp.fields['u']['g']/phase_correction
-    axes['ux'].plot(u[0,0,...,:].squeeze().real, z)
-    axes['ux'].plot(u[0,0,...,:].squeeze().imag, z,':')
-    axes['ux'].set_xlabel(r"$u_x$")
-    axes['ux'].set_ylabel(r"$z$")
-    axes['uz'].plot(u[-1,0,...,:].squeeze().real, z)
-    axes['uz'].plot(u[-1,0,...,:].squeeze().imag, z, ':')
-    axes['uz'].set_xlabel(r"$u_z$")
-    axes['uz'].set_ylabel(r"$z$")
-    axes['q'].set_title(phase_correction)
-    sigma = evp.solver.eigenvalues[index]
-    fig.suptitle(f"$\sigma = {sigma.real:.3f} {sigma.imag:+.3e} i$")
-    if not mode_label:
-        mode_label = index
-    fig_filename=f"emode_indx_{mode_label}_Ra_{Rayleigh:.2e}_nz_{nz}_kx_{kx:.3f}_bc_{bc_type}"
-    fig.savefig(evp.case_name +'/'+fig_filename+'.png', dpi=300)
-    logger.info("eigenmode {:d} saved in {:s}".format(index, evp.case_name +'/'+fig_filename+'.png'))
+#     z = evp.zb.local_grid(1).squeeze()
+#     nz = z.shape[-1]
+#     for v in ['b','q','p']:
+#         if v == 'b':
+#             i_max = np.argmax(np.abs(evp.fields[v]['g'].squeeze()))
+#             phase_correction = evp.fields[v]['g'][0,...,i_max].squeeze()
+#         evp.fields[v].change_scales(1)
+#         name = evp.fields[v].name
+#         data = evp.fields[v]['g'][0,...,:].squeeze()/phase_correction
+#         axes[v].plot(data.real, z)
+#         axes[v].plot(data.imag, z, ':')
+#         axes[v].set_xlabel(f"${name}$")
+#         axes[v].set_ylabel(r"$z$")
+#     evp.fields['u'].change_scales(1)
+#     u = evp.fields['u']['g']/phase_correction
+#     axes['ux'].plot(u[0,0,...,:].squeeze().real, z)
+#     axes['ux'].plot(u[0,0,...,:].squeeze().imag, z,':')
+#     axes['ux'].set_xlabel(r"$u_x$")
+#     axes['ux'].set_ylabel(r"$z$")
+#     axes['uz'].plot(u[-1,0,...,:].squeeze().real, z)
+#     axes['uz'].plot(u[-1,0,...,:].squeeze().imag, z, ':')
+#     axes['uz'].set_xlabel(r"$u_z$")
+#     axes['uz'].set_ylabel(r"$z$")
+#     axes['q'].set_title(phase_correction)
+#     sigma = evp.solver.eigenvalues[index]
+#     fig.suptitle(f"$\sigma = {sigma.real:.3f} {sigma.imag:+.3e} i$")
+#     if not mode_label:
+#         mode_label = index
+#     fig_filename=f"split_emode_indx_{mode_label}_Ra_{Rayleigh:.2e}_nz_{nz}_kx_{kx:.3f}_bc_{bc_type}"
+#     fig.savefig(evp.case_name +'/'+fig_filename+'.png', dpi=300)
+#     logger.info("eigenmode {:d} saved in {:s}".format(index, evp.case_name +'/'+fig_filename+'.png'))
 
 if __name__ == "__main__":
     Legendre = args['--Legendre']
@@ -196,23 +198,26 @@ if __name__ == "__main__":
     eps = 1e-7
     logger.info(f"good fastest oscillating modes: {evals_good[np.argmax(np.abs(evals_good.imag))]}")
     col = np.where(np.abs(evals_ok.imag) > eps, 'g', np.where(evals_ok.real > 0, 'r','k'))
-    spec_ax.scatter(evals_ok.real, evals_ok.imag, marker='o', c=col, label=f'ok modes ($\delta_t$ = {drift_threshold:.1e})', alpha=0.5, s=25)
+    spec_ax.scatter(evals_ok.real, evals_ok.imag, marker='o', c=col, label=f'good modes ($\delta_t$ = {drift_threshold:.1e})',s=100)#, alpha=0.5, s=25)
     col = np.where(np.abs(evals_good.imag) > eps, 'g', np.where(evals_good.real > 0, 'r','k'))
-    spec_ax.scatter(evals_good.real, evals_good.imag, marker='s', c=col, label=f'good modes ($\delta_t$ = {drift_threshold:.1e}, $|q| > $ 1e-8)', alpha=0.5,zorder=0, s=100)
-    spec_ax.scatter(lo_res.eigenvalues.real, lo_res.eigenvalues.imag, marker='x', label='low res', alpha=0.4)
-    spec_ax.scatter(hi_res.eigenvalues.real, hi_res.eigenvalues.imag, marker='+', label='hi res', alpha=0.4)
+    #spec_ax.scatter(evals_good.real, evals_good.imag, marker='s', c=col, label=f'good modes ($\delta_t$ = {drift_threshold:.1e}, $|q| > $ 1e-8)', alpha=0.5,zorder=0, s=100)
+    #spec_ax.scatter(lo_res.eigenvalues.real, lo_res.eigenvalues.imag, marker='x', label='low res', alpha=0.4)
+    #spec_ax.scatter(hi_res.eigenvalues.real, hi_res.eigenvalues.imag, marker='+', label='hi res', alpha=0.4)
 
-    for n,ev in enumerate(evals_ok):
-        logger.info(f"ok ev = {ev}, index = {indx_ok[n]}")
-        spec_ax.annotate(indx_ok[n], (ev.real, ev.imag), fontsize=8, ha='left',va='top')
+    if annotate:
+        for n,ev in enumerate(evals_ok):
+            logger.info(f"ok ev = {ev}, index = {indx_ok[n]}")
+            spec_ax.annotate(indx_ok[n], (ev.real, ev.imag), fontsize=8, ha='left',va='top')
 
-    for n,ev in enumerate(evals_good):
-        logger.info(f"gd ev = {ev}, index = {indx[n]}")
-        spec_ax.annotate(indx[n], (ev.real, ev.imag), fontsize=8, ha='left', va='bottom')
-    spec_ax.legend()
-    spec_ax.set_xlabel(r"$\Re{\sigma}$")
-    spec_ax.set_ylabel(r"$\Im{\sigma}$")
-    spec_ax.set_xlim(-10,1)
+        # for n,ev in enumerate(evals_good):
+        #     logger.info(f"gd ev = {ev}, index = {indx[n]}")
+        #     spec_ax.annotate(indx[n], (ev.real, ev.imag), fontsize=8, ha='left', va='bottom')
+    #spec_ax.legend()
+    # spec_ax.set_xlabel(r"$\Re{\sigma}$")
+    # spec_ax.set_ylabel(r"$\Im{\sigma}$")
+    spec_ax.set_xlabel(r"Growth Rate")
+    spec_ax.set_ylabel(r"Frequency")
+    spec_ax.set_xlim(-1,0.1)
     spec_filename = lo_res.case_name+'/'+fig_filename+'.png'
     logger.info(f"saving file to {spec_filename}")
     fig.tight_layout()
@@ -224,8 +229,8 @@ if __name__ == "__main__":
     fig.savefig(spec_filename, dpi=300)
 
     if emode is not None:
-        plot_eigenmode(lo_res,emode)
+        lo_res.plot_eigenmode(emode)
     else:
         for i in [-1, -2, -3, -4, -5]:
             emode = indx[i]
-            plot_eigenmode(lo_res,emode)
+            lo_res.plot_eigenmode(emode)
