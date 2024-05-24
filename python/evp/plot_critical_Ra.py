@@ -7,6 +7,7 @@ Usage:
 Options:
     --q0=<q0>              Moisture at base of atmosphere [default: 1]
     --overlay_VPT19        Overlay points from VPT19
+    --no_gamma_correction  Use original plots from VPT19, without gamma correction
 """
 import h5py
 import pandas as pd
@@ -47,9 +48,7 @@ else:
 M_convert = 1/3.8e-3
 K2 = 4e-10
 T0 = 5.5
-VPT_γ_convert = (M_convert*K2*np.exp(α*T0))
-VPT_Ra_convert = lambda β, γ: -1*((β+ΔT) + γ*M_convert*(np.exp(α*ΔT)-1))
-VPT_m = lambda β, γ, z: T0 + VPT_γ_convert + ((β+ΔT) + γ*M_convert*(np.exp(α*ΔT)-1))*z
+VPT_γ_convert = G = (M_convert*K2*np.exp(α*T0))
 
 fig, ax = plt.subplots(figsize=[6,6/1.6])
 ax2 = ax.twinx()
@@ -105,17 +104,15 @@ ax2.set_ylabel('critical k')
 ax2.set_ylim(1,3)
 ax.set_xlabel(r'$\gamma$')
 if args['--overlay_VPT19']:
+    if args['--no_gamma_correction']:
+        G = 1
     Vallis_12 = pd.read_csv('Vallis_et_al_2019_data/beta_1.2.csv', names=['γ', 'Ra_c'])
     Vallis_10 = pd.read_csv('Vallis_et_al_2019_data/beta_1.0.csv', names=['γ', 'Ra_c'])
-    γ = Vallis_10['γ']*VPT_γ_convert
-    C = (our_m(1.0, γ, 1)-our_m(1.0, γ, 0))/(VPT_m(1.0, γ, 1)-VPT_m(1.0, γ, 0))
-    C = 1/VPT_γ_convert
-    ax.scatter(γ, C*Vallis_10['Ra_c'],#*VPT_Ra_convert(1.0, γ),
+    γ = Vallis_10['γ']*G
+    ax.scatter(γ, 1/G*Vallis_10['Ra_c'],#*VPT_Ra_convert(1.0, γ),
                label=r'Vallis, $\beta=1.0$', color='xkcd:dark green', marker='o', alpha=0.5)
-    γ = Vallis_12['γ']*VPT_γ_convert
-    C = (our_m(1.2, γ, 1)-our_m(1.2, γ, 0))/(VPT_m(1.2, γ, 1)-VPT_m(1.2, γ, 0))
-    C = 1/VPT_γ_convert
-    ax.scatter(γ, C*Vallis_12['Ra_c'], #*VPT_Ra_convert(1.2, γ),
+    γ = Vallis_12['γ']*G
+    ax.scatter(γ, 1/G*Vallis_12['Ra_c'], #*VPT_Ra_convert(1.2, γ),
                label=r'Vallis, $\beta=1.2$', color='xkcd:dark red', marker='o', alpha=0.5)
 ax.legend(loc='lower left')
 fig.tight_layout()
