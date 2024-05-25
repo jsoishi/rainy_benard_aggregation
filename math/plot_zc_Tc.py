@@ -28,7 +28,8 @@ data = np.genfromtxt(gamma_data, delimiter=',')
 zc = data[:,1]
 Tc = data[:,2]
 
-fig, ax = plt.subplots(figsize=[8,8/1.6])
+#fig, ax = plt.subplots(figsize=[8,8/1.6])
+fig, ax = plt.subplots(figsize=[6,6/1.6])
 ax.plot(γ, zc, label=r'$z_c$')
 ax.plot(γ, -Tc, label=r'$-T_c$')
 ax.set_xlabel(r'$\gamma$')
@@ -45,7 +46,8 @@ q0 = data[:,0]
 zc = data[:,1]
 Tc = data[:,2]
 
-fig, ax = plt.subplots(figsize=[8,8/1.6])
+#fig, ax = plt.subplots(figsize=[8,8/1.6])
+fig, ax = plt.subplots(figsize=[6,6/1.6])
 mask = (zc <=1) & (-Tc <= 1)
 ax.plot(q0[mask], zc[mask], label=r'$z_c$')
 ax.plot(q0[mask], -Tc[mask], label=r'$-T_c$')
@@ -60,3 +62,5 @@ ax.set_xlim(0,1)
 fig.tight_layout()
 filename = 'zc_Tc_vs_q0'
 fig.savefig(filename +'.png', dpi=300)
+
+print(f'critical q_min = {q_min} ')
