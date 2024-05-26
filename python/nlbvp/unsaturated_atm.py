@@ -85,7 +85,7 @@ Lz = 1
 # Create bases and domain
 coords = de.CartesianCoordinates('x', 'y', 'z')
 dist = de.Distributor(coords, dtype=np.float64)
-dealias = 2
+dealias = 1 #2
 if args['--Legendre']:
     zb = de.Legendre(coords.coords[2], size=nz, bounds=(0, Lz), dealias=dealias)
 else:
@@ -171,18 +171,9 @@ def compute_analytic(z_in, zc, Tc):
     rh = (q*np.exp(-α*T)).evaluate()
     return {'b':b, 'q':q, 'm':m, 'T':T, 'rh':rh, 'z':z, 'γ':γ}
 
-
-#0.4832893544084419	-0.4588071140209613
-if γ == 0.3:
-    zc_analytic = 0.4832893544084419
-    Tc_analytic = -0.4588071140209613
-elif γ == 0.19:
-    zc_analytic = 0.4751621541611023
-    Tc_analytic = -0.4588071140209616
-else:
-    raise ValueError("γ = {:} not yet supported".format(γ))
-
-analytic = compute_analytic(zd, zc_analytic, Tc_analytic)
+from analytic_zc import f_zc as zc_analytic
+from analytic_zc import f_Tc as Tc_analytic
+analytic = compute_analytic(zd, zc_analytic()(γ), Tc_analytic()(γ))
 
 def plot_solution(z, solution, title=None, mask=None, linestyle=None, ax=None):
     b = solution['b']['g']
@@ -226,6 +217,12 @@ def plot_solution(z, solution, title=None, mask=None, linestyle=None, ax=None):
 fig, ax = plot_solution(zd, analytic)
 fig.savefig(data_dir+'/'+case_dir+'/analytic_solution.png', dpi=300)
 
+dz = lambda A: de.Differentiate(A, dist.coords[-1])
+lap = lambda A: dz(dz(A))
+
+vars = [b, q]
+taus = [τb1, τb2, τq1, τq2]
+
 if args['--use_analytic']:
     b.change_scales(dealias)
     q.change_scales(dealias)
@@ -233,7 +230,7 @@ if args['--use_analytic']:
     q['g'] = analytic['q']['g']
 else:
     # Stable linear solution as an intial guess
-    problem = de.LBVP([b, q, τb1, τb2, τq1, τq2], namespace=locals())
+    problem = de.LBVP(vars + taus, namespace=locals())
     problem.add_equation('dt(b) - P*lap(b) + lift(τb1, -1) + lift(τb2, -2) = 0')
     problem.add_equation('dt(q) - S*lap(q) + lift(τq1, -1) + lift(τq2, -2) = 0')
     problem.add_equation('b(z=0) = 0')
@@ -243,9 +240,8 @@ else:
     solver = problem.build_solver()
     solver.solve()
 
-
 # Stable nonlinear solution
-problem = de.NLBVP([b, q, τb1, τb2, τq1, τq2], namespace=locals())
+problem = de.NLBVP(vars+taus, namespace=locals())
 problem.add_equation('dt(b) - tau*P*lap(b) + lift(τb1, -1) + lift(τb2, -2) = γ*H(q-qs)*(q-qs)')
 problem.add_equation('dt(q) - tau*S*lap(q) + lift(τq1, -1) + lift(τq2, -2) = - H(q-qs)*(q-qs)')
 problem.add_equation('b(z=0) = 0')
@@ -263,6 +259,7 @@ solver = problem.build_solver()
 pert_norm = np.inf
 stop_iteration = int(args['--niter'])
 
+fig, ax = plot_solution(zd, analytic)
 while pert_norm > tol and solver.iteration <= stop_iteration:
     solver.newton_iteration(damping=float(args['--damping']))
     pert_norm = sum(pert.allreduce_data_norm('c', 2) for pert in solver.perturbations)
@@ -272,8 +269,14 @@ while pert_norm > tol and solver.iteration <= stop_iteration:
     τq1_max = np.max(np.abs(τq1['g']))
     τq2_max = np.max(np.abs(τq2['g']))
     logger.debug("τ L2 errors: τb1={:.1g}, τb2={:.1g}, τq1={:.1g}, τq2={:.1g}".format(τb1_max,τb2_max,τq1_max,τq2_max))
+    m = (b + γ*q).evaluate()
+    sol = {'b':b, 'q':q, 'm':m, 'T':temp.evaluate(), 'rh':rh.evaluate(), 'γ':γ}
+    plot_solution(zd, analytic, ax=ax, linestyle='dashed')
+fig.savefig('atmosphere_convergence.png', dpi=300)
+
 end_time = time.time()
 logger.info("time to solve: {:.3g}s, with {:d} iterations".format(end_time-start_time, solver.iteration))
+
 
 if solver.iteration > stop_iteration or not np.isfinite(pert_norm):
     logger.info("solution failed to converge")
