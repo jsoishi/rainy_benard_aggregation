@@ -90,17 +90,11 @@ if __name__=="__main__":
         zb = de.Legendre(coords.coords[-1], size=nz, bounds=(0, Lz), dealias=dealias)
     else:
         zb = de.ChebyshevT(coords.coords[-1], size=nz, bounds=(0, Lz), dealias=dealias)
-    if γ == 0.3:
-        zc_analytic = 0.4832893544084419
-        Tc_analytic = -0.4588071140209613
-    elif γ == 0.19:
-        zc_analytic = 0.4751621541611023
-        Tc_analytic = -0.4588071140209616
-    else:
-        raise ValueError("γ = {:} not yet supported".format(γ))
-
-    zc = zc_analytic
-    Tc = Tc_analytic
+        
+    from analytic_zc import f_zc as zc_analytic
+    from analytic_zc import f_Tc as Tc_analytic
+    zc = zc_analytic()(γ)
+    Tc = Tc_analytic()(γ)
     analytic = unsaturated(dist, zb, β, γ, zc, Tc, α=α, dealias=dealias)
 
     integ = lambda A: de.Integrate(A, 'z')
