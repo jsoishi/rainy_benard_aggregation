@@ -54,8 +54,8 @@ nz = int(args['--nz'])
 ΔT = -1
 
 start_tau = 1e-3
-stop_tau = 1e-4 #5e-5
-taus = np.geomspace(start_tau, stop_tau, num=5) #10)
+stop_tau = 1e-5
+taus = np.geomspace(start_tau, stop_tau, num=5)
 ks = np.logspace(3, 5, num=11)
 
 Prandtl = 1
@@ -164,17 +164,9 @@ def compute_analytic(z_in, zc, Tc):
     return {'b':b, 'q':q, 'm':m, 'T':T, 'rh':rh, 'z':z, 'γ':γ}
 
 
-#0.4832893544084419	-0.4588071140209613
-if γ == 0.3:
-    zc_analytic = 0.4832893544084419
-    Tc_analytic = -0.4588071140209613
-elif γ == 0.19:
-    zc_analytic = 0.4751621541611023
-    Tc_analytic = -0.4588071140209616
-else:
-    raise ValueError("γ = {:} not yet supported".format(γ))
-
-analytic = compute_analytic(zd, zc_analytic, Tc_analytic)
+from analytic_zc import f_zc as zc_analytic
+from analytic_zc import f_Tc as Tc_analytic
+analytic = compute_analytic(zd, zc_analytic()(γ), Tc_analytic()(γ))
 
 def plot_solution(z, solution, title=None, mask=None, linestyle=None, ax=None):
     b = solution['b']['g']
@@ -223,13 +215,19 @@ q.change_scales(dealias)
 b['g'] = analytic['b']['g']
 q['g'] = analytic['q']['g']
 
+dz = lambda A: de.Differentiate(A, dist.coords[-1])
+lap = lambda A: dz(dz(A))
+
+vars = [b, q]
+nlbvp_taus = [τb1, τb2, τq1, τq2]
+
 # Stable nonlinear solution
-problem = de.NLBVP([b, q, τb1, τb2, τq1, τq2], namespace=locals())
+problem = de.NLBVP(vars+nlbvp_taus, namespace=locals())
 problem.add_equation('dt(b) - tau*P*lap(b) + lift(τb1, -1) + lift(τb2, -2) = γ*H(q-qs)*(q-qs)')
 problem.add_equation('dt(q) - tau*S*lap(q) + lift(τq1, -1) + lift(τq2, -2) = - H(q-qs)*(q-qs)')
 problem.add_equation('b(z=0) = 0')
 problem.add_equation('b(z=Lz) = β + ΔT') # technically β*Lz
-problem.add_equation('q(z=0) = q_surface*qs(z=0)')
+problem.add_equation('q(z=0) = q_surface') #*qs(z=0)')
 problem.add_equation('q(z=Lz) = np.exp(α*ΔT)')
 
 for system in ['subsystems']:
@@ -244,7 +242,7 @@ sol = {}
 
 for i, tau_i in enumerate(taus):
     # reverse order on k solves
-    k_set = ks[::-1]
+    k_set = ks #[::-1]
 
     for j, k_j in enumerate(k_set):
         case_dir = 'tau_{:.2g}_k{:.2g}_nz{:d}'.format(tau_i, k_j, nz)
@@ -254,8 +252,8 @@ for i, tau_i in enumerate(taus):
             case_dir += '_Legendre'
 
         # confused why we need this mkdir call, given filehandler, but let's go with it
-        if not os.path.exists('{:s}/'.format(data_dir+'/'+case_dir)):
-            os.mkdir('{:s}/'.format(data_dir+'/'+case_dir))
+        # if not os.path.exists('{:s}/'.format(data_dir+'/'+case_dir)):
+        #     os.mkdir('{:s}/'.format(data_dir+'/'+case_dir))
 
         if need_guess:
             logger.info('solving tau={:}, k={:}, starting from analytic'.format(tau_i, k_j))
@@ -285,8 +283,10 @@ for i, tau_i in enumerate(taus):
 
         if solver.iteration > stop_iteration or not np.isfinite(pert_norm):
             logger.info("solution failed to converge")
-            logger.info("reverting to analytic solution as guess for next iteration")
-            need_guess = True
+            # logger.info("reverting to analytic solution as guess for next iteration")
+            # need_guess = True
+            logger.info(f"breaking k loop for tau = {tau_i}")
+            break
         else:
             solution = solver.evaluator.add_file_handler(data_dir+'/'+case_dir+'/'+'drizzle_sol', mode='overwrite')
             solution.add_task(b)
