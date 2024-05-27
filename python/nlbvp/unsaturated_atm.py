@@ -30,6 +30,8 @@ Options:
     --niter=<n>          Max iterations before stopping [default: 15]
     --damping=<d>        Damping rate for newton iterations [default: 1]
 
+    --dealias=<dealias>    Dealias padding factor [default: 2]
+
     --nz=<nz>            Vertical (z) grid resolution [default: 256]
 """
 import logging
@@ -85,7 +87,7 @@ Lz = 1
 # Create bases and domain
 coords = de.CartesianCoordinates('x', 'y', 'z')
 dist = de.Distributor(coords, dtype=np.float64)
-dealias = 1 #2
+dealias = float(args['--dealias'])
 if args['--Legendre']:
     zb = de.Legendre(coords.coords[2], size=nz, bounds=(0, Lz), dealias=dealias)
 else:
