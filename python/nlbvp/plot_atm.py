@@ -109,10 +109,22 @@ if __name__=="__main__":
         fig, ax = plot_solution(sol, mask=mask, linestyle='solid')
         mask = (sol['rh'] < 1-ε)
         plot_solution(sol, mask=mask, linestyle='dashed', ax=ax)
-        zc = find_zc(sol, ε=ε)
+        try:
+            zc = find_zc(sol, ε=ε)
+        except:
+            zc = 0
+            logger.warning(f'no zc solution found, setting zc = {zc}')
         ax[1].scatter(1, zc, marker='*')
         fig.tight_layout()
         fig.savefig(case+'/atm.png', dpi=300)
         fig.savefig(case+'/atm.pdf')
         logger.info('tau = {:.1g}, k = {:.0g}, zc = {:.4g}'.format(sol['tau'][0], sol['k'][0], zc))
         plt.close(fig)
+
+        fig, ax = plt.subplots(figsize=[6,6/1.6])
+        ax.plot(sol['z'], np.abs(sol['rh']-1))
+        ax.axhline(y=ε, alpha=0.5, color='xkcd:dark grey')
+        ax.set_yscale('log')
+        ax.set_ylabel(r'$|r_h - 1|$')
+        ax.set_xlabel('z')
+        fig.savefig(case+'/rh.png', dpi=300)

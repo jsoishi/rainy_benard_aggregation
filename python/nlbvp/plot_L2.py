@@ -16,8 +16,12 @@ Options:
     --beta=<b>      β value [default: 1.1]
     --alpha=<a>     α value [default: 3]
 
+    --q0=<q0>       q0 value [default: 0.6]
+
     --Legendre
     --nz=<nz>       Z resolution [default: 384]
+
+    --verbose
 """
 import logging
 logger = logging.getLogger(__name__)
@@ -80,6 +84,8 @@ if __name__=="__main__":
     α = float(args['--alpha'])
     ΔT = -1
 
+    q0 = float(args['--q0'])
+
     nz = int(float(args['--nz']))
     Lz = 1
     dealias=1 #3/2
@@ -90,12 +96,15 @@ if __name__=="__main__":
         zb = de.Legendre(coords.coords[-1], size=nz, bounds=(0, Lz), dealias=dealias)
     else:
         zb = de.ChebyshevT(coords.coords[-1], size=nz, bounds=(0, Lz), dealias=dealias)
-        
-    from analytic_zc import f_zc as zc_analytic
-    from analytic_zc import f_Tc as Tc_analytic
-    zc = zc_analytic()(γ)
-    Tc = Tc_analytic()(γ)
-    analytic = unsaturated(dist, zb, β, γ, zc, Tc, α=α, dealias=dealias)
+
+    if q0 < 1:
+        from analytic_zc import f_zc as zc_analytic
+        from analytic_zc import f_Tc as Tc_analytic
+        zc = zc_analytic()(γ)
+        Tc = Tc_analytic()(γ)
+        analytic = unsaturated(dist, zb, β, γ, zc, Tc, q0=q0, α=α, dealias=dealias)
+    else:
+        analytic = unsaturated(dist, zb, β, γ, 0, 0, q0=q0, α=α, dealias=dealias)        
 
     integ = lambda A: de.Integrate(A, 'z')
     def compute_L2_err(sol, analytic):
@@ -120,12 +129,22 @@ if __name__=="__main__":
             q['g'] = sol['q']
             b['g'] = sol['b']
             rh['g'] = sol['rh']
-
+            z = sol['z']
             L2_q = compute_L2_err(q, analytic['q'])
             L2_b = compute_L2_err(b, analytic['b'])
             L2_rh = compute_L2_err(rh, analytic['rh'])
             L2_results = "L2:  q = {:.2g}, b={:.2g}, rh={:.2g}".format(L2_q, L2_b, L2_rh)
-
+            if args['--verbose']:
+                fig_atm, ax_atm = plt.subplots(figsize=[6,6/1.6])
+                p = ax_atm.plot(q['g'], z, alpha=0.5)
+                ax_atm.plot(analytic['q']['g'], z, color=p[0].get_color(), linestyle='dashed', alpha=0.5)
+                p = ax_atm.plot(b['g'], z, alpha=0.5)
+                ax_atm.plot(analytic['b']['g'], z, color=p[0].get_color(), linestyle='dashed', alpha=0.5)
+                ax_atm.set_xlabel(r'$q$, $b$')
+                ax_atm.set_ylabel(r'$z$')
+                fig_atm.tight_layout()
+                fig_atm.savefig(case+'/atm_vs_analytic.png')
+                plt.close(fig_atm)
             if tau in data:
                 data[tau]['k'].append(k)
                 data[tau]['L2_q'].append(L2_q)
@@ -138,6 +157,7 @@ if __name__=="__main__":
             logger.debug('{:}:'.format(case))
             logger.info('tau = {:.1g}, k = {:.0g}, {:s}'.format(tau, k,  L2_results))
         except:
+            raise
             logger.warning('error in case {:}'.format(case))
     for tau in data:
         data[tau]['L2_q'] = np.array(data[tau]['L2_q'])
