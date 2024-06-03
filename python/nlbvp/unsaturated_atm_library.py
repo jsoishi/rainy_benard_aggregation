@@ -18,6 +18,12 @@ Options:
     --gamma=<gamma>      Gamma parameter [default: 0.3]
     --beta=<beta>        Beta parameter  [default: 1.2]
 
+    --start_tau=<st>     Starting value for tau sweep [default: 1e-3]
+    --end_tau=<et>       Ending value for tau sweep [default: 1e-5]
+    --num_tau=<nt>       Number of taus to sample in tau sweep [default: 5]
+
+    --reverse_search_ks  Reverse direction of k search (from high to low)
+
     --Legendre
 
     --erf                Use erf, not tanh
@@ -53,9 +59,10 @@ nz = int(args['--nz'])
 
 ΔT = -1
 
-start_tau = 1e-3
-stop_tau = 1e-5
-taus = np.geomspace(start_tau, stop_tau, num=5)
+start_tau = float(args['--start_tau'])
+stop_tau = float(args['--end_tau'])
+num_tau = int(float(args['--num_tau']))
+taus = np.geomspace(start_tau, stop_tau, num=num_tau)
 ks = np.logspace(3, 5, num=11)
 
 Prandtl = 1
@@ -242,18 +249,15 @@ sol = {}
 
 for i, tau_i in enumerate(taus):
     # reverse order on k solves
-    k_set = ks #[::-1]
+    if args['--reverse_search_ks']:
+        ks = ks[::-1]
 
-    for j, k_j in enumerate(k_set):
+    for j, k_j in enumerate(ks):
         case_dir = 'tau_{:.2g}_k{:.2g}_nz{:d}'.format(tau_i, k_j, nz)
         if args['--erf']:
             case_dir += '_erf'
         if args['--Legendre']:
             case_dir += '_Legendre'
-
-        # confused why we need this mkdir call, given filehandler, but let's go with it
-        # if not os.path.exists('{:s}/'.format(data_dir+'/'+case_dir)):
-        #     os.mkdir('{:s}/'.format(data_dir+'/'+case_dir))
 
         if need_guess:
             logger.info('solving tau={:}, k={:}, starting from analytic'.format(tau_i, k_j))
