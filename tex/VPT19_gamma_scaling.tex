@@ -1,0 +1,179 @@
+\documentclass[11pt]{article}
+\usepackage{graphicx}
+\usepackage[letterpaper, centering, top=1in, bottom=1in, left=1in, right=1in]{geometry}
+\usepackage{times}
+\usepackage{amssymb}
+\usepackage{amsmath}
+\usepackage{empheq}
+\usepackage{xcolor}             % Colors
+\usepackage[bookmarks,colorlinks,breaklinks]{hyperref}  % PDF
+\usepackage{makecell}
+\usepackage{minted}
+\urlstyle{same}
+\hypersetup{
+  colorlinks,
+  linkcolor=red,
+  urlcolor=olive
+}
+
+\newcommand{\Rayleigh}{\mathrm{Ra}}
+\title{$\gamma$ values in VPT19}
+\begin{document}
+\author{Jeff Oishi \& Ben Brown}
+\maketitle
+
+\section{The issue}
+\label{sec:issue}
+
+
+An issue we have discovered recently is a seeming offset between some of the parameters reported in VPT19 and our own calculations. In particular, figure 4 of VPT19 shows a stability diagram giving $\Rayleigh_c$ as a function of $\gamma$ calculated using IVP solutions at two different $\beta$ values, 1.0 and 1.2. Our own calculations using solutions to the eigenvalue problem for the same atmospheres (figure~\ref{fig:stability}) show a slight disagreement about the stability boundary. In and of itself, this isn't a very big deal given the very different methods for computing the stability bounds. However, for $\beta = 1.2$ it disagrees with what we believe is the ideal stability boundary, that is, the value of $\gamma$ at which a given $\beta$ has $\nabla m = 0$. This is given by the vertical dotted lines on figure~\ref{fig:stability}. The data from VPT19 shows instability well below left this critical $\gamma_0 \simeq 0.21$--this should not be possible at all. Throughout this note, we will refer to what we think the actual value should be $\gamma$ and the values used in the \emph{code} from VPT19 as $\gamma^{code}$.
+This suggests that there is an offset between what we believe the $\gamma$ values to be and what VPT19 \emph{calculates} them to be. 
+\begin{figure}[!h]
+  \centering
+  \includegraphics[width=0.7\textwidth]{critical_Ra_and_k_beta_saturated_no_shift.png}
+  \caption{Stability diagrams for drizzle solutions at $\beta = 1,1.2$. The red and green circles are data from figure 4 of VPT19; note the discrepancy with eigenvalue solutions (blue and orange lines). Vertical dotted lines show the ideal stability boundary using our values. The discrepancy appears stronger for $\beta=1.2$ but the same offset is present in each solution.}
+  \label{fig:stability}
+\end{figure}
+\section{Equations}
+\label{sec:eqns}
+For completeness and future reference, here are the complete set of Rainy-Benard equations in dimensionless form as we use them (equations 4.3-4.6 of VPT19)
+
+\begin{align}
+  \label{eq:NS}
+  D_t \mathbf{u} &= -\nabla \phi + \mathrm{Ra} \mathrm{Pr}\ b \hat{\mathbf{e}}_z + \mathrm{Pr} \nabla^2 \mathbf{u}\\
+  \nabla \cdot \mathbf{u} &= 0\\
+  \label{eq:buoyancy}
+  D_t b &= \gamma \frac{(q-q_s) \mathcal{H}(q-q_s)}{\tau} + \nabla^2 b\\
+  \label{eq:moisture}
+  D_t q &= -\frac{(q-q_s) \mathcal{H}(q-q_s)}{\tau} + \nabla^2 q,
+\end{align}
+which constitutes a closed set with the relationship between buoyancy and temperature
+\begin{equation}
+  \label{eq:b_temp}
+  \delta T = b - \beta z
+\end{equation}
+and the equation for the saturation humidity,
+\begin{equation}
+  \label{eq:saturation}
+  q_s(\delta T) = q_0 \exp{\alpha \delta T};
+\end{equation}
+this is equivalent to equation 2.19 in VPT19. Our calculations (and VPT19's text) nondimensionalizes equation~(\ref{eq:saturation}) with $q_0$.
+
+\section{Steve's script}
+\label{sec:steve}
+Inspecting the script kindly provided by Steve, we find 
+\begin{minted}[fontsize=\footnotesize]{python}
+problem.add_equation("dt(b) - (dx(dx(b)) + dz(bz)) = - u*dx(b) - w*bz 
+       + M*0.5*(1.0+tanh(100000.*(q-K2*exp(aDT*temp))))*(q-K2*exp(aDT*temp))/tau")
+problem.add_equation("dt(q) - S*(dx(dx(q)) + dz(qz)) = - u*dx(q) 
+       - w*qz-0.5*(1.0+tanh(100000.*(q-K2*exp(aDT*temp))))*(q-K2*exp(aDT*temp))/tau")
+problem.add_equation("dz(temp)-bz = -beta")
+\end{minted}
+which shows that the code for calculating the saturation humidity is given by \texttt{K2*exp(aDT*temp)}. The script uses \texttt{M} where $\gamma$ would appear and uses a dimensional version of $q_s(\delta T)$, so $M = \gamma/q_0$ here. We have verified that this is correct by extracting the values of the moist static energy $m$ at the boundaries from figure 18c of VPT19, where the $\gamma$ correction we propose below is inapplicable as $q = q_s$ at those points. The value calculated using $M=\gamma/q_0$ agrees with the extracted values from the plots to better than 0.1\% for all three reported $\gamma$ values.
+
+The code would be correct if the script set $T_1 = 0$ at the lower boundary, since the third line integrates to equation~(\ref{eq:b_temp}), but instead it uses $T_1 = 5.5$. Using the VPT19 temperature scale of $\Delta T = 50$, this gives $T = 275$ K, which is pretty close to room temperature. This is a reasonable lower boundary condition if the \texttt{temp} variable represents the total temperature rather than the perturbation from the background, as our \texttt{T} variable does in our code (and consistent with the discussion below equation 2.22 on page 169 in VPT19 where $\delta T \to T$). 
+
+% While Steve's writes $q_s$ in dimensional form (i.e. including the factor of $q_0$), this is correctly taken care of in the definition of $M$ compared to $\gamma^{code}$, $M = \gamma^{code}/q_0$. We have verified this latter relationship numerically by using \texttt{webplotdigitizer} to extract the boundary values of the moist static energy $m$ from their figure 18c and then computing $m$ from
+% \begin{equation}
+%   \label{eq:m}
+% m = P + Q z,
+% \end{equation}
+% where
+% \begin{align}
+%   \label{eq:PQ}
+%   P &= b_1 + M q_1\\
+%   Q &= (b_2 - b_1) + M (q_2 - q_1).
+% \end{align}
+% These agree to better than 0.1\% for $\gamma^{code} = \{0.19, 0.38, 0.76\}$, corresponding to $M = \gamma^{code}/q_0 = \{50, 10, 200 \}$ with the value $q_0 = 3.8 \times 10^{-3}$ given in VPT section 4.3.
+
+\section{The correction}
+\label{sec:correction}
+In order to correct for the use of $T$ instead of $\delta T$ in the calculation of saturation humidity (equation~(\ref{eq:saturation})), we can see that
+\begin{equation}
+  \label{eq:steve_q}
+  q_s^{code}(T) = K_2 \exp{(\alpha (T_0 + \delta T))} = K_2 \exp{(\alpha T_0)} \exp{(\alpha \delta T)},
+\end{equation}
+leaving a factor of $K_2 \exp{\alpha T_0}$, with $T_0 = 5.5$. When we combine this with the $q_0$, we arrive at
+\begin{equation}
+  \label{eq:correction_q}
+  q_s = q_0 \exp{(\alpha \delta T)} = q_0 \frac{q_s^{code}}{K_2 \exp{(\alpha T_0)}}= \frac{q_s^{code}}{G},
+\end{equation}
+where $G = K_2 \exp{(\alpha \delta T)}/q_0 \simeq 1.542$ and the numerical approximation comes from the values found in Steve's script.
+
+Given that $q_s$ drives the values of $q$ in the fully saturated drizzle solution, effectively all $q$ has a scaling factor of $G$. The evolution equation for $q$ itself (equation~\ref{eq:moisture}) is then unaffected, since it contains such a factor in every term. However, $q$ appears only multiplied by $\gamma$ (or equivalently $M$) in the buoyancy equation (equation~\ref{eq:buoyancy}). This leads to our conclusion that $\gamma = G \gamma^{code}$. However, there is one further consequence of this shift in a somewhat surprising place, the Rayleigh number.
+
+\subsection{Rayleigh number scaling}
+\label{sec:Rayleigh}
+We assume that $\gamma = G \gamma^{code}$. Starting with VPT19 code values and substituting into equation~(\ref{eq:buoyancy}) we have
+\begin{equation}
+D_t b = \frac{\gamma}{G} \frac{(q-q_s) \mathcal{H}(q-q_s)}{\tau} + \nabla^2 b.
+\end{equation}
+Next, define $b' = G b$, and substitute,
+\begin{equation}
+D_t b' = \gamma \frac{(q-q_s) \mathcal{H}(q-q_s)}{\tau} + \nabla^2 b'.
+\end{equation}
+Using this $b'$ in the Navier-Stokes equations, we find
+\begin{equation}
+D_t \mathbf{u} = -\nabla \phi + \mathrm{Ra}^{code} \mathrm{Pr} \frac{b'}{G} \hat{\mathbf{e}}_z + \mathrm{Pr} \nabla^2 \mathbf{u}.
+\end{equation}
+Finally, we replace $\mathrm{Ra} = \mathrm{Ra}^{code}/G$ and drop the prime on $b$,
+\begin{align}
+D_t u &= -\nabla \phi + \mathrm{Ra} \mathrm{Pr} b \hat{\mathbf{e}}_z + \mathrm{Pr} \nabla^2 u\\
+D_t b &= \gamma \frac{(q-q_s) \mathcal{H}(q-q_s)}{\tau} + \nabla^2 b.
+\end{align}
+This gives our final conversion:
+\begin{empheq}[box=\fbox]{align}
+  \label{eq:gamma_corr}
+  \gamma &= G \gamma^{code}\\
+  \label{eq:Ra_corr}
+  \mathrm{Ra} &= \frac{\mathrm{Ra}^{code}}{G}.
+\end{empheq}
+
+\section{Final Scaled Results}
+\label{sec:final}
+
+Using the scaling laws, equations~(\ref{eq:gamma_corr}-\ref{eq:Ra_corr}), we find that our results and VPT's stability results match up nearly exactly, as seen clearly in figure~\ref{fig:stability_corrected}. We believe our values of $\gamma$ are what VPT19 \emph{intended} to use; to be clear we do not believe there is a difference in scaling between our calculations and VPT19. \textbf{This suggests to us that many (if not all) of the numerical calculations in VPT19 are actually at a $\gamma$ value about a factor of 1.54 higher and a $\mathrm{Ra}$ a factor 1.54 lower than intended.}
+
+\begin{figure}[!h]
+  \centering
+  \includegraphics[width=0.7\textwidth]{critical_Ra_and_k_beta_saturated_shifted.png}
+  \caption{Same as figure~\ref{fig:stability} but applying corrections to both $\gamma$ and $\mathrm{Ra}$ for the VPT19 data.}
+  \label{fig:stability_corrected}
+\end{figure}
+% \section{Ideal stability bound}
+% \label{sec:ideal_stab}
+
+% Let's now determine the critical values of $\gamma$ and $\beta$, for ideal stability, by finding when $\nabla m = 0$.
+% Given $m$ defined in equations~(\ref{eq:m}-\ref{eq:PQ}) above,
+% \begin{equation}
+% \nabla m = Q = (b_2-b_1) + M (q_2-q_1) = 0
+% \end{equation}
+% and
+% \begin{equation}
+% Q = (\beta - 1) + M K_2 \exp{(\alpha T_0)}(\exp{(-\alpha)}-1) 
+% \end{equation}
+% \begin{equation}
+% Q = (\beta - 1) + \gamma \left(\frac{K_2 \exp{(\alpha T_0)}}{q_0}\right)(\exp{(-\alpha)}-1)
+% \end{equation}
+% then
+% \begin{equation}
+% Q = (\beta - 1) + \gamma G (\exp{(-\alpha)}-1) = 0
+% \end{equation}
+% with $G$ defined above gives
+% \begin{equation}
+% \beta = -\gamma G (\exp{(-\alpha)}-1) +1
+% \end{equation}
+% or
+% \begin{equation}
+% \gamma = \frac{-(\beta - 1)}{G (\exp{(-\alpha)}-1)}
+% \end{equation}
+% Calculating this explicitly, we find that for $\beta = 1$, $\gamma^{VPT} = 0$ and for $\beta = 1.2$, $\gamma^{VPT} = 0.1365$, consistent with the text of VPT19, which gives the ideal stability bound for the latter case as $\simeq 0.13$.
+
+
+
+\end{document}
+
+% LocalWords:  Oishi maketitle VPT19 IVP nabla VPT includegraphics eq
+% LocalWords:  textwidth png eqns Benard steve texttt K2 aDT 18c frac
+% LocalWords:  dimensionalization webplotdigitizer mathcal Navier PQ
+% LocalWords:  mathbf mathrm VPT's
