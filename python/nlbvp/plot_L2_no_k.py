@@ -18,8 +18,6 @@ Options:
 
     --q0=<q0>       q0 value [default: 1.0]
 
-    --Legendre
-
     --verbose
 """
 import logging
@@ -109,7 +107,8 @@ if __name__=="__main__":
     data = {}
     for case in args['<cases>']:
         nz = int(re.findall('nz\d+', case)[0].split('nz')[-1])
-        if args['--Legendre']:
+        Legendre = 'Legendre' in case
+        if Legendre:
             zb = de.Legendre(coords.coords[-1], size=nz, bounds=(0, Lz), dealias=dealias)
         else:
             zb = de.ChebyshevT(coords.coords[-1], size=nz, bounds=(0, Lz), dealias=dealias)
