@@ -18,9 +18,6 @@ Options:
 
     --q0=<q0>       q0 value [default: 0.6]
 
-    --Legendre
-    --nz=<nz>       Z resolution [default: 384]
-
     --verbose
 """
 import logging
@@ -71,6 +68,7 @@ if __name__=="__main__":
     from docopt import docopt
     args = docopt(__doc__)
 
+    import re
     import pandas as pd
     import h5py
     import dedalus.public as de
@@ -86,36 +84,38 @@ if __name__=="__main__":
 
     q0 = float(args['--q0'])
 
-    nz = int(float(args['--nz']))
     Lz = 1
-    dealias=1 #3/2
+    dealias=2
     dtype = np.float64
     coords = de.CartesianCoordinates('z')
     dist = de.Distributor(coords, dtype=dtype)
-    if args['--Legendre']:
-        zb = de.Legendre(coords.coords[-1], size=nz, bounds=(0, Lz), dealias=dealias)
-    else:
-        zb = de.ChebyshevT(coords.coords[-1], size=nz, bounds=(0, Lz), dealias=dealias)
 
     if q0 < 1:
         from analytic_zc import f_zc as zc_analytic
         from analytic_zc import f_Tc as Tc_analytic
         zc = zc_analytic()(γ)
         Tc = Tc_analytic()(γ)
-        analytic = unsaturated(dist, zb, β, γ, zc, Tc, q0=q0, α=α, dealias=dealias)
     else:
-        analytic = unsaturated(dist, zb, β, γ, 0, 0, q0=q0, α=α, dealias=dealias)        
+        zc = 0
+        Tc = 0
 
     integ = lambda A: de.Integrate(A, 'z')
     def compute_L2_err(sol, analytic):
         return (integ(np.abs(sol-analytic))/integ(analytic)).evaluate()['g'][0]
 
-    q = dist.Field(bases=zb)
-    b = dist.Field(bases=zb)
-    rh = dist.Field(bases=zb)
-
-    data = {} #{'tau':[],'k':[],'zc':[]}
+    data = {}
     for case in args['<cases>']:
+        nz = int(re.findall('nz\d+', case)[0].split('nz')[-1])
+        if 'Legendre' in case:
+            zb = de.Legendre(coords.coords[-1], size=nz, bounds=(0, Lz), dealias=dealias)
+        else:
+            zb = de.ChebyshevT(coords.coords[-1], size=nz, bounds=(0, Lz), dealias=dealias)
+
+        q = dist.Field(bases=zb)
+        b = dist.Field(bases=zb)
+        rh = dist.Field(bases=zb)
+
+        analytic = unsaturated(dist, zb, β, γ, zc, Tc, q0=q0, α=α, dealias=dealias)
         try:
             f = h5py.File(case+'/drizzle_sol/drizzle_sol_s1.h5', 'r')
             sol = {}
