@@ -1,3 +1,4 @@
+
 """
 Dedalus script for solving static drizzle solutions to the Rainy-Benard system of equations.
 
@@ -21,7 +22,7 @@ Options:
 """
 from scipy.special import lambertw as W
 import numpy as np
-
+import matplotlib.pyplot as plt
 import dedalus.public as de
 
 ΔT = -1
@@ -182,7 +183,7 @@ def unsaturated(dist, zb, β, γ, zc, Tc,
             'grad_b':grad_b, 'grad_q':grad_q, 'grad_m':grad_m}
 
 def plot_solution(solution, title=None, mask=None, markup=None,
-                  b_color='xkcd:dark red', m_color='xkcd:dark sage', q_color='xkcd:french blue',
+                  b_color='xkcd:dark red', m_color='xkcd:dark sage', q_color='xkcd:french blue', T_color='xkcd:electric pink', rh_color='xkcd:perrywinkle',
                   linestyle=None, ax=None, **kwargs):
     b = solution['b']['g']
     q = solution['q']['g']
@@ -210,27 +211,30 @@ def plot_solution(solution, title=None, mask=None, markup=None,
             markup = False
         return_fig = False
 
-    ax[0].plot(b[mask],z[mask], label='$b$', linestyle=linestyle, color=b_color, **kwargs)
-    ax[0].plot(γ*q[mask],z[mask], label='$\gamma q$', linestyle=linestyle, color=q_color, **kwargs)
-    ax[0].plot(m[mask],z[mask], label='$m$', linestyle=linestyle, color=m_color, **kwargs)
+    ax[0].plot(b[mask],z[mask], label=r'$b$', linestyle=linestyle, color=b_color, **kwargs)
+    ax[0].plot(γ*q[mask],z[mask], label=r'$\gamma q$', linestyle=linestyle, color=q_color, **kwargs)
+    ax[0].plot(m[mask],z[mask], label=r'$m$', linestyle=linestyle, color=m_color, **kwargs)
 
     ax[1].plot(grad_b[mask],z[mask], label=r'$\nabla b$', linestyle=linestyle, color=b_color, **kwargs)
     ax[1].plot(γ*grad_q[mask],z[mask], label=r'$\gamma \nabla q$', linestyle=linestyle, color=q_color, **kwargs)
     ax[1].plot(grad_m[mask],z[mask], label=r'$\nabla m$', linestyle=linestyle, color=m_color, **kwargs)
 
-    ax[-1].plot(T[mask],z[mask], label='$T$', linestyle=linestyle, color='xkcd:electric pink', **kwargs)
+    ax[-1].plot(T[mask],z[mask], label='$T$', linestyle=linestyle, color=T_color, **kwargs)
     ax[-1].plot(q[mask],z[mask], label='$q$', linestyle=linestyle, color=q_color, **kwargs)
-    ax[-1].plot(rh[mask],z[mask], label='$r_h$', linestyle=linestyle, color='xkcd:perrywinkle', **kwargs)
+    ax[-1].plot(rh[mask],z[mask], label='$r_h$', linestyle=linestyle, color=rh_color, **kwargs)
 
     ax[-1].axvline(x=1, linestyle='dotted', color='xkcd:dark grey', alpha=0.15)
 
     if markup:
-        ax[0].set_ylabel('z', fontsize=20)
+        ax[0].set_ylabel('z', fontsize=20, rotation=0)
         ax[0].legend(loc='lower right', handlelength=1)
         ax[1].legend(loc='lower right', handlelength=1)
         ax[-1].legend(loc='lower left', handlelength=1)
         if title:
             ax[0].set_title(title)
+    xlim = ax[1].get_xlim()
+    ax[1].axvspan(0,xlim[-1], color='k',alpha=0.3)
+    ax[1].set_xlim(xlim)
 
     if return_fig:
         return fig, ax
@@ -238,9 +242,8 @@ def plot_solution(solution, title=None, mask=None, markup=None,
         return ax
 
 if __name__=="__main__":
-    import matplotlib.pyplot as plt
     #plt.style.use("../../prl.mplstyle")
-    plt.style.use("prl.mplstyle")
+    plt.style.use("prl")
 
     from docopt import docopt
     args = docopt(__doc__)
