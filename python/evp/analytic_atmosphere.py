@@ -200,7 +200,7 @@ def plot_solution(solution, title=None, mask=None, markup=None,
     if mask is None:
         mask = np.ones_like(z, dtype=bool)
     if ax is None:
-        fig, ax = plt.subplots(ncols=3, sharey=True, figsize=[8,8/1.6])
+        fig, ax = plt.subplots(ncols=3, sharey=True, figsize=[8,8/1.6+0.5], constrained_layout=True)
         if markup is None:
             markup = True
         return_fig = True
@@ -211,25 +211,28 @@ def plot_solution(solution, title=None, mask=None, markup=None,
             markup = False
         return_fig = False
 
-    ax[0].plot(b[mask],z[mask], label=r'$b$', linestyle=linestyle, color=b_color, **kwargs)
-    ax[0].plot(γ*q[mask],z[mask], label=r'$\gamma q$', linestyle=linestyle, color=q_color, **kwargs)
-    ax[0].plot(m[mask],z[mask], label=r'$m$', linestyle=linestyle, color=m_color, **kwargs)
+    ax[0].plot(b[mask],z[mask], label='$b$,', linestyle=linestyle, color=b_color, **kwargs)
+    ax[0].plot(γ*q[mask],z[mask], label='$\gamma q$,', linestyle=linestyle, color=q_color, **kwargs)
+    ax[0].plot(m[mask],z[mask], label='$m$', linestyle=linestyle, color=m_color, **kwargs)
 
-    ax[1].plot(grad_b[mask],z[mask], label=r'$\nabla b$', linestyle=linestyle, color=b_color, **kwargs)
-    ax[1].plot(γ*grad_q[mask],z[mask], label=r'$\gamma \nabla q$', linestyle=linestyle, color=q_color, **kwargs)
+    ax[1].plot(grad_b[mask],z[mask], label=r'$\nabla b$,', linestyle=linestyle, color=b_color, **kwargs)
+    ax[1].plot(γ*grad_q[mask],z[mask], label=r'$\gamma \nabla q$,', linestyle=linestyle, color=q_color, **kwargs)
     ax[1].plot(grad_m[mask],z[mask], label=r'$\nabla m$', linestyle=linestyle, color=m_color, **kwargs)
 
-    ax[-1].plot(T[mask],z[mask], label='$T$', linestyle=linestyle, color=T_color, **kwargs)
-    ax[-1].plot(q[mask],z[mask], label='$q$', linestyle=linestyle, color=q_color, **kwargs)
-    ax[-1].plot(rh[mask],z[mask], label='$r_h$', linestyle=linestyle, color=rh_color, **kwargs)
+    ax[-1].plot(T[mask],z[mask], label='$T$,', linestyle=linestyle, color='xkcd:electric pink', **kwargs)
+    ax[-1].plot(q[mask],z[mask], label='$q$,', linestyle=linestyle, color=q_color, **kwargs)
+    ax[-1].plot(rh[mask],z[mask], label='$r_h$', linestyle=linestyle, color='xkcd:perrywinkle', **kwargs)
 
     ax[-1].axvline(x=1, linestyle='dotted', color='xkcd:dark grey', alpha=0.15)
 
     if markup:
         ax[0].set_ylabel('z', fontsize=20, rotation=0)
-        ax[0].legend(loc='lower right', handlelength=1)
-        ax[1].legend(loc='lower right', handlelength=1)
-        ax[-1].legend(loc='lower left', handlelength=1)
+        ax[0].legend(loc='center', bbox_to_anchor=(0,-0.15,1,0),
+                     handlelength=0.75, ncols=3, handletextpad=0.25, columnspacing=0.5)
+        ax[1].legend(loc='center', bbox_to_anchor=(0,-0.15,1,0),
+                     handlelength=0.75, ncols=3, handletextpad=0.25, columnspacing=0.5)
+        ax[-1].legend(loc='center', bbox_to_anchor=(0,-0.15,1,0),
+                     handlelength=0.75, ncols=3, handletextpad=0.25, columnspacing=0.5)
         if title:
             ax[0].set_title(title)
     xlim = ax[1].get_xlim()
@@ -276,7 +279,6 @@ if __name__=="__main__":
     ax[1].axvline(x=0, color='xkcd:dark grey',linewidth=0.9)
     ax[1].set_xlim(-.2,.2)
 
-    fig.tight_layout()
     fig.savefig(f'analytic_VPT19_alpha{α}_beta{β}_gamma{γ}.png', dpi=300)
 
     m = sol['m']
@@ -303,7 +305,6 @@ if __name__=="__main__":
 
     sol = saturated(dist, zb, β, γ, α=α, dealias=dealias)
     fig, ax = plot_solution(sol)
-    fig.tight_layout()
     fig.savefig(f'analytic_saturated_alpha{α}_beta{β}_gamma{γ}.png', dpi=300)
 
     m = sol['m']
@@ -322,7 +323,6 @@ if __name__=="__main__":
     mask = (sol['z']['g'] >= zc(γ))
     fig, ax = plot_solution(sol, mask=mask)
     plot_solution(sol, ax=ax, mask=~mask, linestyle='dotted')
-    fig.tight_layout()
     fig.savefig(f'analytic_unsaturated_q{q0}_alpha{α}_beta{β}_gamma{γ}.png', dpi=300)
 
     m = sol['m']
@@ -349,14 +349,16 @@ if __name__=="__main__":
             plot_solution(sol, ax=ax, alpha=alpha_f[β], b_color=b_colors[β], m_color=m_colors[β], q_color=q_color)
         else:
             fig, ax = plot_solution(sol, alpha=alpha_f[β], b_color=b_colors[β], m_color=m_colors[β], q_color=q_color)
-        if i <3:
-            ax[0].text(sol['m']['g'][0,0,-1], 1.025, f'{β:.4g}', horizontalalignment='right')
+        if i==0:
+            ax[0].text(sol['m']['g'][0,0,-1], 1.025, fr'$\beta$ ={β:.4g}', horizontalalignment='center', fontsize='x-small')
+        elif i==2:
+            ax[0].text(sol['m']['g'][0,0,-1], 1.025, f'{β:.4g}', horizontalalignment='right', fontsize='x-small')
         else:
-            ax[0].text(sol['m']['g'][0,0,-1], 1.025, f'{β:.4g}', horizontalalignment='left')
-        # draw a bracket line from b to m for each of these, at 1.01 or so
-        # suppress z=1 label
+            ax[0].text(sol['m']['g'][0,0,-1], 1.025, f'{β:.4g}', horizontalalignment='center', fontsize='x-small')
+        bracket_coords = ((sol['m']['g'][0,0,-1],sol['b']['g'][0,0,-1]),(1.01,1.01))
+        p = ax[0].plot(*bracket_coords,color='xkcd:dark grey', alpha=0.5)
+        p[0].set_clip_on(False)
     xlims = ax[0].get_xlim()
-    ax[0].text(xlims[0], 1.025, r'$\beta$ = ', alpha=1, horizontalalignment='center')
     for axi in ax:
         ylims = axi.get_ylim()
         axi.set_ylim(0,1)
@@ -367,8 +369,6 @@ if __name__=="__main__":
     ax[1].set_ylim(ylims)
     ax[1].axvline(x=0, color='xkcd:dark grey',linewidth=0.9)
     ax[1].set_xlim(-.2,.2)
-
-    fig.tight_layout()
     fig.savefig(f'many_beta_analytic_saturated_alpha{α}_gamma{γ}.png', dpi=300)
 
 
@@ -390,9 +390,15 @@ if __name__=="__main__":
         else:
             fig, ax = plot_solution(sol, mask=mask, b_color=b_colors[β], m_color=m_colors[β], q_color=q_color)
         plot_solution(sol, ax=ax, mask=~mask, linestyle='dashed', alpha=alpha_f[β], b_color=b_colors[β], m_color=m_colors[β], q_color=q_color)
-        ax[0].text(sol['m']['g'][0,0,-1], 1.025, f'{β:.3g}', horizontalalignment='center')
+        if i==0:
+            ax[0].text(sol['m']['g'][0,0,-1], 1.025, fr'$\beta$ ={β:.3g}', horizontalalignment='center', fontsize='x-small')
+        else:
+            ax[0].text(sol['m']['g'][0,0,-1], 1.025, f'{β:.3g}', horizontalalignment='center', fontsize='x-small')
+        bracket_coords = ((sol['m']['g'][0,0,-1],sol['b']['g'][0,0,-1]),(1.01,1.01))
+        p = ax[0].plot(*bracket_coords,color='xkcd:dark grey', alpha=0.5)
+        p[0].set_clip_on(False)
+
     xlims = ax[0].get_xlim()
-    ax[0].text(xlims[0], 1.025, r'$\beta$ = ', alpha=1, horizontalalignment='center')
     for axi in ax:
         ylims = axi.get_ylim()
         axi.set_ylim(0,1)
@@ -403,5 +409,4 @@ if __name__=="__main__":
     ax[1].axvline(x=0, color='xkcd:dark grey',linewidth=0.9)
     ax[1].set_xlim(-.2,.2)
     ax[1].set_ylim(ylims)
-    fig.tight_layout()
     fig.savefig(f'many_beta_analytic_unsaturated_q{q0}_alpha{α}_gamma{γ}.png', dpi=300)

@@ -16,7 +16,7 @@ Options:
     --beta=<b>      β value [default: 1.1]
     --alpha=<a>     α value [default: 3]
 
-    --q0=<q0>       q0 value [default: 0.6]
+    --q0=<q0>       q0 value [default: 1.0]
 
     --verbose
 """
@@ -85,7 +85,7 @@ if __name__=="__main__":
     q0 = float(args['--q0'])
 
     Lz = 1
-    dealias=2
+    dealias=1 #3/2
     dtype = np.float64
     coords = de.CartesianCoordinates('z')
     dist = de.Distributor(coords, dtype=dtype)
@@ -103,19 +103,21 @@ if __name__=="__main__":
     def compute_L2_err(sol, analytic):
         return (integ(np.abs(sol-analytic))/integ(analytic)).evaluate()['g'][0]
 
+
     data = {}
     for case in args['<cases>']:
         nz = int(re.findall('nz\d+', case)[0].split('nz')[-1])
-        if 'Legendre' in case:
+        Legendre = 'Legendre' in case
+        if Legendre:
             zb = de.Legendre(coords.coords[-1], size=nz, bounds=(0, Lz), dealias=dealias)
         else:
             zb = de.ChebyshevT(coords.coords[-1], size=nz, bounds=(0, Lz), dealias=dealias)
-
         q = dist.Field(bases=zb)
         b = dist.Field(bases=zb)
         rh = dist.Field(bases=zb)
 
         analytic = unsaturated(dist, zb, β, γ, zc, Tc, q0=q0, α=α, dealias=dealias)
+
         try:
             f = h5py.File(case+'/drizzle_sol/drizzle_sol_s1.h5', 'r')
             sol = {}
@@ -124,7 +126,7 @@ if __name__=="__main__":
             sol['z'] = f['tasks']['b'].dims[3][0][:]
 
             tau = sol['tau'][0]
-            k = sol['k'][0]
+            #k = sol['k'][0]
             γ = sol['γ'][0]
             q['g'] = sol['q']
             b['g'] = sol['b']
@@ -146,16 +148,16 @@ if __name__=="__main__":
                 fig_atm.savefig(case+'/atm_vs_analytic.png')
                 plt.close(fig_atm)
             if tau in data:
-                data[tau]['k'].append(k)
+                #data[tau]['k'].append(k)
                 data[tau]['L2_q'].append(L2_q)
                 data[tau]['L2_b'].append(L2_b)
                 data[tau]['L2_rh'].append(L2_rh)
             else:
-                data[tau] = {'k':[k], 'L2_q':[L2_q], 'L2_b':[L2_b], 'L2_rh':[L2_rh]}
+                data[tau] = {'L2_q':[L2_q], 'L2_b':[L2_b], 'L2_rh':[L2_rh]}
                 min_tau = min(tau, min_tau)
                 max_tau = max(tau, max_tau)
             logger.debug('{:}:'.format(case))
-            logger.info('tau = {:.1g}, k = {:.0g}, {:s}'.format(tau, k,  L2_results))
+            logger.info('tau = {:.1g}, {:s}'.format(tau,  L2_results))
         except:
             raise
             logger.warning('error in case {:}'.format(case))
@@ -170,11 +172,12 @@ if __name__=="__main__":
     for quant in ['q', 'b', 'rh']:
         fig, ax = plt.subplots(figsize=[6,6/1.6])
         for tau in data:
-            p = ax.scatter(data[tau]['k'], data[tau]['L2_{:s}'.format(quant)], c=tau*np.ones_like(data[tau]['k']), norm=norm)
-        ax.set_xlabel(r'$k$')
+            taus = tau*np.ones_like(data[tau][f'L2_{quant:s}'])
+            p = ax.scatter(taus, data[tau][f'L2_{quant:s}'], c=taus, norm=norm)
+        ax.set_xlabel(r'$\tau$')
         ax.set_ylabel(r'$|{:s}_c - {:s}_a|/|{:s}_a|$'.format(quant,quant,quant))
         fig.colorbar(mappable=p, ax=ax, orientation='horizontal', location='top', label=r'$\tau$', norm=norm)
         ax.set_xscale('log')
         ax.set_yscale('log')
         fig.tight_layout()
-        fig.savefig(case+'/../L2_{:s}.png'.format(quant), dpi=300)
+        fig.savefig(case+'/../L2_{:s}_no_k.png'.format(quant), dpi=300)
