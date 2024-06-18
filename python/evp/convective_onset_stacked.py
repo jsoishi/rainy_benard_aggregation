@@ -18,14 +18,15 @@ Options:
     --gamma=<gamma>   gamma value [default: 0.19]
     --q0=<q0>         basal q value [default: 0.6]
 
-    --tau=<tau>       If set, override value of tau
-    --k=<k>           If set, override value of k
+    --tau=<tau>       If set, override value of tau [default: 1e-3]
+    --k=<k>           If set, override value of k [default: 1e4]
 
     --nondim=<n>      Non-Nondimensionalization [default: buoyancy]
 
     --min_Ra=<minR>   Minimum Rayleigh number to sample [default: 1e4]
     --max_Ra=<maxR>   Maximum Rayleigh number to sample [default: 1e5]
     --num_Ra=<nRa>    How many Rayleigh numbers to sample [default: 5]
+    --Ra_list=<ra_list>    List of Rayleigh numbers to sample [default: None]
 
     --min_kx=<mnkx>   Min kx [default: 0.1]
     --max_kx=<mxkx>   Max kx [default: 33]
@@ -34,7 +35,7 @@ Options:
     --top-stress-free     Stress-free upper boundary
     --stress-free         Stress-free both boundaries
 
-    --nz=<nz>         Number of coeffs to use in eigenvalue search; if not set, uses resolution of background
+    --nz=<nz>         Number of coeffs to use in eigenvalue search [default: 128]
     --target=<targ>   Target value for sparse eigenvalue search [default: 0]
     --eigs=<eigs>     Target number of eigenvalues to search for [default: 20]
 
@@ -44,8 +45,7 @@ Options:
     --dense           Solve densely for all eigenvalues (slow)
 
     --tol_crit_Ra=<tol>    Tolerance on frequency for critical growth [default: 1e-5]
-
-    --verbose         Show plots on screen
+    --plot_type=<plot_type>   File type for plots [default: pdf]
 """
 import logging
 logger = logging.getLogger(__name__)
@@ -60,13 +60,14 @@ import h5py
 from rainy_evp import SplitRainyBenardEVP, mode_reject
 from etools import Eigenproblem
 import matplotlib.pyplot as plt
-
+plt.style.use('prl')
 from docopt import docopt
 args = docopt(__doc__)
 
 Legendre = args['--Legendre']
 erf = args['--erf']
 nondim = args['--nondim']
+plot_type = args['--plot_type']
 N_evals = int(float(args['--eigs']))
 target = float(args['--target'])
 
@@ -104,7 +105,7 @@ nz = int(float(args['--nz']))
 
 logger.info('α={:}, β={:}, γ={:}, tau={:}, k={:}'.format(α,β,γ,tau, k))
 
-def compute_growth_rate(kx, Ra, target=0, plot_fastest_mode=False):
+def compute_growth_rate(kx, Ra, target=0, plot_fastest_mode=False, plot_type='png'):
     lo_res = SplitRainyBenardEVP(nz, Ra, tau, kx, γ, α, β, q0, k, Legendre=Legendre, erf=erf, bc_type=bc_type, nondim=nondim, dealias=dealias,Lz=1)
     hi_res = SplitRainyBenardEVP(int(3*nz/2), Ra, tau, kx, γ, α, β, q0, k, Legendre=Legendre, erf=erf, bc_type=bc_type, nondim=nondim, dealias=dealias,Lz=1)
     for solver in [lo_res, hi_res]:
@@ -122,7 +123,7 @@ def compute_growth_rate(kx, Ra, target=0, plot_fastest_mode=False):
         peak_eval = np.conj(peak_eval)
 
     if plot_fastest_mode:
-        lo_res.plot_eigenmode(indx[-1])
+        lo_res.plot_eigenmode(indx[-1], plot_type=plot_type)
     return peak_eval
 
 def peak_growth_rate(*args):
@@ -131,7 +132,13 @@ def peak_growth_rate(*args):
     return -1*rate.real
 
 growth_rates = {}
-Ras = np.geomspace(float(args['--min_Ra']),float(args['--max_Ra']),num=int(float(args['--num_Ra'])))
+ra_list = args['--Ra_list']
+if ra_list != 'None':
+    Ras = [float(r) for r in ra_list.split(',')]
+    print("Ra_list = ", ra_list)
+    print("number of Ras = ",len(ra_list))
+else:
+    Ras = np.geomspace(float(args['--min_Ra']),float(args['--max_Ra']),num=int(float(args['--num_Ra'])))
 kxs = np.geomspace(min_kx, max_kx, num=nkx)
 print(Ras)
 for Ra in Ras:
@@ -140,14 +147,14 @@ for Ra in Ras:
     target = float(args['--target'])
     kx = kxs[0]
     lo_res = SplitRainyBenardEVP(nz, Ra, tau, kx, γ, α, β, q0, k, Legendre=Legendre, erf=erf, bc_type=bc_type, nondim=nondim, dealias=dealias,Lz=1)
-    lo_res.plot_background()
+    lo_res.plot_background(plot_type=plot_type)
     hi_res = SplitRainyBenardEVP(int(3*nz/2), Ra, tau, kx, γ, α, β, q0, k, Legendre=Legendre, erf=erf, bc_type=bc_type, nondim=nondim, dealias=dealias,Lz=1)
-    hi_res.plot_background()
+    hi_res.plot_background(plot_type=plot_type)
     for system in ['rainy_evp']:
          logging.getLogger(system).setLevel(logging.WARNING)
 
     for kx in kxs:
-        σ_i = compute_growth_rate(kx, Ra, target=target)
+        σ_i = compute_growth_rate(kx, Ra, target=target, plot_type=plot_type)
         σ.append(σ_i)
         logger.info('Ra = {:.2g}, kx = {:.2g}, σ = {:.2g}'.format(Ra, kx, σ_i))
         if σ_i.imag > 0:
@@ -189,6 +196,7 @@ ax.set_title(r'$\gamma$ = {:}, $\beta$ = {:}, $\tau$ = {:}'.format(γ,β,tau))
 ax.set_xlabel('$k_x$')
 ax.set_ylim(-0.1,0.1)
 ax.set_title('{:} timescales'.format(nondim))
+plt.tight_layout()
 fig.savefig(lo_res.case_name+'/'+fig_filename+'.png', dpi=300)
 
 for system in ['rainy_evp']:
@@ -196,11 +204,11 @@ for system in ['rainy_evp']:
 
 import scipy.optimize as sciop
 bounds = sciop.Bounds(lb=1, ub=10)
-def find_continous_peak(Ra, kx, plot_fastest_mode=False):
+def find_continous_peak(Ra, kx, plot_fastest_mode=False, plot_type='png'):
 
     result = sciop.minimize(peak_growth_rate, kx, args=(Ra), bounds=bounds, method='Nelder-Mead', tol=1e-5)
     # obtain full complex rate
-    σ = compute_growth_rate(result.x[0], Ra, plot_fastest_mode=plot_fastest_mode)
+    σ = compute_growth_rate(result.x[0], Ra, plot_fastest_mode=plot_fastest_mode, plot_type=plot_type)
     return result.x[0], σ
 
 # find Ra bracket
@@ -223,7 +231,7 @@ for Ra in [lower_Ra, upper_Ra]:
     σ = growth_rates[Ra]['σ']
     peak_i = np.argmax(σ.real)
     kx0 = kxs[peak_i] # initial guess
-    kx, σ = find_continous_peak(Ra, kx0)
+    kx, σ = find_continous_peak(Ra, kx0, plot_type=plot_type)
     peaks[Ra] = {'σ':σ, 'k':kx}
 
 # conduct a bracketing search with interpolation to find critical Ra
@@ -270,8 +278,9 @@ if args['--top-stress-free']:
     fig_filename += '_TSF'
 if args['--dense']:
     fig_filename += '_dense'
-fig.savefig(lo_res.case_name+'/'+fig_filename+'.png', dpi=300)
-logger.info("peaks plotted in {:}".format(lo_res.case_name+'/'+fig_filename+'.png'))
+fig_filename = f"{lo_res.case_name}/{fig_filename}.{plot_type}"
+fig.savefig(fig_filename, dpi=300)
+logger.info("peaks plotted in {:}".format(fig_filename))
 
 f_curves = lo_res.case_name+'/critical_curves_nz_{:d}.h5'.format(nz)
 with h5py.File(f_curves,'w') as f:

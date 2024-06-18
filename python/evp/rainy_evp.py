@@ -137,7 +137,7 @@ class SplitRainyBenardEVP():
     def concatenate_bases(self, field1, field2):
         return np.concatenate([field1['g'],field2['g']], axis=-1)
 
-    def plot_background(self,label=None):
+    def plot_background(self,label=None, plot_type='png'):
         fig, ax = plt.subplots(ncols=2, figsize=[12,6])
         for b0,q0 in zip(self.b0, self.q0):
             b0.change_scales(1)
@@ -172,9 +172,9 @@ class SplitRainyBenardEVP():
         filebase = self.case_name+f'/nz_{self.nz}_k_{self.k}_tau_{tau_val:0.1e}_Ra_{Ra_val:0.2e}_evp_background_stacked'
         if label:
             filebase += f'_{label}'
-        fig.savefig(filebase+'.png', dpi=300)
+        fig.savefig(f"{filebase}.{plot_type}", dpi=300)
 
-    def plot_eigenmode(self, index, mode_label=None):
+    def plot_eigenmode(self, index, mode_label=None, plot_type='png'):
         self.solver.set_state(index,0)
         fields = ['b','q','p','u']
         names = {}
@@ -225,8 +225,9 @@ class SplitRainyBenardEVP():
             mode_label = index
         kx = 2*np.pi/self.Lx
         fig_filename=f"emode_indx_{mode_label}_Ra_{self.Rayleigh['g'].squeeze().real:.2e}_nz_{self.nz}_kx_{kx:.3f}_bc_{self.bc_type}"
-        fig.savefig(self.case_name +'/'+fig_filename+'.pdf')
-        logger.info("eigenmode {:d} saved in {:s}".format(index, self.case_name +'/'+fig_filename+'.png'))
+        total_filename = f"{self.case_name}/{fig_filename}.{plot_type}"
+        fig.savefig(total_filename)
+        logger.info("eigenmode {:d} saved in {:s}".format(index, total_filename))
 
 
     def build_solver(self):
@@ -458,7 +459,7 @@ class RainyBenardEVP():
         if not os.path.exists('{:s}/'.format(self.case_name)) and self.dist.comm.rank == 0:
             os.makedirs('{:s}/'.format(self.case_name))
 
-    def plot_background(self,label=None):
+    def plot_background(self,label=None, plot_type='png'):
         fig, ax = plt.subplots(ncols=2, figsize=[12,6])
         qs0 = self.qs0.evaluate()
         qs0.change_scales(1)
@@ -494,9 +495,9 @@ class RainyBenardEVP():
         filebase = self.case_name+f'/nz_{self.nz}_k_{self.k}_tau_{tau_val:0.1e}_Ra_{Ra_val:0.2e}_evp_background'
         if label:
             filebase += f'_{label}'
-        fig.savefig(filebase+'.png', dpi=300)
+        fig.savefig(f"{filebase}.{plot_type}", dpi=300)
 
-    def plot_eigenmode(self, index, mode_label=None):
+    def plot_eigenmode(self, index, mode_label=None, plot_type='png'):
         self.solver.set_state(index,0)
         fields = ['b','q','p','u']
         names = {}
@@ -534,8 +535,9 @@ class RainyBenardEVP():
             mode_label = index
         kx = 2*np.pi/self.Lx
         fig_filename=f"emode_indx_{mode_label}_Ra_{self.Rayleigh['g'].squeeze().real:.2e}_nz_{self.nz}_kx_{kx:.3f}_bc_{self.bc_type}"
-        fig.savefig(self.case_name +'/'+fig_filename+'.pdf')
-        logger.info("eigenmode {:d} saved in {:s}".format(index, self.case_name +'/'+fig_filename+'.png'))
+        total_filename = f"{self.case_name}/{fig_filename}.{plot_type}"
+        fig.savefig(total_filename)
+        logger.info("eigenmode {:d} saved in {:s}".format(index, total_filename))
 
 
     def build_solver(self):
@@ -711,7 +713,7 @@ class RainyBenardEVP():
             self.solver.solve_sparse(self.solver.subproblems[1], N=N_evals, target=target, rebuild_matrices=True)
         self.eigenvalues = self.solver.eigenvalues
 
-def mode_reject(lo_res, hi_res, drift_threshold=1e6, plot_drift_ratios=True):
+def mode_reject(lo_res, hi_res, drift_threshold=1e6, plot_drift_ratios=True, plot_type='png'):
     ep = Eigenproblem(None,use_ordinal=False, drift_threshold=drift_threshold)
     ep.evalues_low   = lo_res.eigenvalues
     ep.evalues_high  = hi_res.eigenvalues
@@ -721,6 +723,7 @@ def mode_reject(lo_res, hi_res, drift_threshold=1e6, plot_drift_ratios=True):
         fig, ax = plt.subplots()
         ep.plot_drift_ratios(axes=ax)
         nz = lo_res.nz
-        fig.savefig(f'{lo_res.case_name}/nz_{nz}_drift_ratios.png', dpi=300)
+        filename=f'{lo_res.case_name}/nz_{nz}_drift_ratios.{plot_type}'
+        fig.savefig(filename, dpi=300)
 
     return evals_good, indx, ep
