@@ -25,7 +25,7 @@ Options:
 
     --nondim=<n>           Non-Nondimensionalization [default: buoyancy]
 
-    --Ra=<Ra>              Minimum Rayleigh number to sample [default: 1e4]
+    --Ra=<Ra>              Rayleigh number [default: 1e4]
     --kx=<kx>              x wavenumber [default: 0.1]
     --top-stress-free      Stress-free upper boundary
     --stress-free          Stress-free both boundaries
@@ -181,18 +181,20 @@ if __name__ == "__main__":
     dlog.setLevel(logging.WARNING)
     spectra = []
     fig = plt.figure(figsize=[12,6])
-    fig_filename=f"Ra_{Rayleigh:.2e}_nz_{nz}_kx_{kx:.3f}_bc_{bc_type}_spectrum"
     spec_ax = fig.add_axes([0.15,0.2,0.8,0.7])
     for solver in [lo_res, hi_res]:
         if args['--dense']:
+            sd_mode = 'dense'
             solver.solve(dense=True)
         else:
+            sd_mode = 'sparse'
             solver.solve(dense=False, N_evals=N_evals, target=target)
+    fig_filename=f"Ra_{Rayleigh:.2e}_nz_{nz}_kx_{kx:.3f}_bc_{bc_type}_{sd_mode}_spectrum"
     evals_ok, indx_ok, ep = mode_reject(lo_res, hi_res, plot_drift_ratios=True, drift_threshold=drift_threshold)
     evals_good = evals_ok
     indx = indx_ok
     #evals_good, indx = evp_amp_reject(lo_res, indx_ok)
-    logger.info(f"good modes ($\delta_t$ = {drift_threshold:.1e}):    max growth rate = {evals_good[-1]}")
+    logger.info(f"good modes ({{$\delta_t$}} = {drift_threshold:.1e}):    max growth rate = {evals_good[-1]}")
     lo_indx = np.argsort(lo_res.eigenvalues.real)
     logger.info(f"low res modes: max growth rate = {lo_res.eigenvalues[lo_indx][-1]}")
     eps = 1e-7
