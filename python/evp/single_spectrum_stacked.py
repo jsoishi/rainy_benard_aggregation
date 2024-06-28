@@ -20,8 +20,8 @@ Options:
     --gamma=<gamma>        gamma value [default: 0.19]
     --q0=<q0>              basal q value [default: 0.6]
 
-    --tau=<tau>            If set, override value of tau
-    --k=<k>                If set, override value of k
+    --tau=<tau>            If set, override value of tau [default: 1e-3]
+    --k=<k>                If set, override value of k [default: 1e4]
 
     --nondim=<n>           Non-Nondimensionalization [default: buoyancy]
 
@@ -30,7 +30,7 @@ Options:
     --top-stress-free      Stress-free upper boundary
     --stress-free          Stress-free both boundaries
 
-    --nz=<nz>              Number of coeffs to use in eigenvalue search; if not set, uses resolution of background
+    --nz=<nz>              Number of coeffs to use in eigenvalue search; if not set, uses resolution of background [default: 128]
     --target=<targ>        Target value for sparse eigenvalue search [default: 0]
     --eigs=<eigs>          Target number of eigenvalues to search for [default: 20]
 
