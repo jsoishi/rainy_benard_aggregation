@@ -46,6 +46,7 @@ Options:
 
     --tol_crit_Ra=<tol>    Tolerance on frequency for critical growth [default: 1e-5]
     --plot_type=<plot_type>   File type for plots [default: pdf]
+    --use-heaviside        Use the Heaviside function 
 """
 import logging
 logger = logging.getLogger(__name__)
@@ -68,6 +69,7 @@ Legendre = args['--Legendre']
 erf = args['--erf']
 nondim = args['--nondim']
 plot_type = args['--plot_type']
+use_heaviside = args['--use-heaviside']
 N_evals = int(float(args['--eigs']))
 target = float(args['--target'])
 
@@ -83,7 +85,7 @@ else:
     bc_type = None # default no-slip
 
 
-dealias = 3/2
+dealias = 1
 dtype = np.complex128
 
 Prandtlm = 1
@@ -92,7 +94,6 @@ Prandtl = 1
 Lz = 1
 coords = de.CartesianCoordinates('x', 'y', 'z')
 dist = de.Distributor(coords, dtype=dtype)
-dealias = 2
 
 α = float(args['--alpha'])
 β = float(args['--beta'])
@@ -105,9 +106,9 @@ nz = int(float(args['--nz']))
 
 logger.info('α={:}, β={:}, γ={:}, tau={:}, k={:}'.format(α,β,γ,tau, k))
 
-def compute_growth_rate(kx, Ra, target=0, plot_fastest_mode=False, plot_type='png'):
-    lo_res = SplitRainyBenardEVP(nz, Ra, tau, kx, γ, α, β, q0, k, Legendre=Legendre, erf=erf, bc_type=bc_type, nondim=nondim, dealias=dealias,Lz=1)
-    hi_res = SplitRainyBenardEVP(int(3*nz/2), Ra, tau, kx, γ, α, β, q0, k, Legendre=Legendre, erf=erf, bc_type=bc_type, nondim=nondim, dealias=dealias,Lz=1)
+def compute_growth_rate(kx, Ra, target=0, plot_fastest_mode=False, plot_type='png', use_heaviside=False):
+    lo_res = SplitRainyBenardEVP(nz, Ra, tau, kx, γ, α, β, q0, k, Legendre=Legendre, erf=erf, bc_type=bc_type, nondim=nondim, dealias=dealias,Lz=1, use_heaviside=use_heaviside)
+    hi_res = SplitRainyBenardEVP(int(3*nz/2), Ra, tau, kx, γ, α, β, q0, k, Legendre=Legendre, erf=erf, bc_type=bc_type, nondim=nondim, dealias=dealias,Lz=1, use_heaviside=use_heaviside)
     for solver in [lo_res, hi_res]:
         if args['--dense']:
             solver.solve(dense=True)
@@ -154,9 +155,9 @@ if __name__ == "__main__":
         # reset to base target for each Ra loop
         target = float(args['--target'])
         kx = kxs[0]
-        lo_res = SplitRainyBenardEVP(nz, Ra, tau, kx, γ, α, β, q0, k, Legendre=Legendre, erf=erf, bc_type=bc_type, nondim=nondim, dealias=dealias,Lz=1)
+        lo_res = SplitRainyBenardEVP(nz, Ra, tau, kx, γ, α, β, q0, k, Legendre=Legendre, erf=erf, bc_type=bc_type, nondim=nondim, dealias=dealias,Lz=1, use_heaviside=use_heaviside)
         lo_res.plot_background(plot_type=plot_type)
-        hi_res = SplitRainyBenardEVP(int(3*nz/2), Ra, tau, kx, γ, α, β, q0, k, Legendre=Legendre, erf=erf, bc_type=bc_type, nondim=nondim, dealias=dealias,Lz=1)
+        hi_res = SplitRainyBenardEVP(int(3*nz/2), Ra, tau, kx, γ, α, β, q0, k, Legendre=Legendre, erf=erf, bc_type=bc_type, nondim=nondim, dealias=dealias,Lz=1, use_heaviside=use_heaviside)
         hi_res.plot_background(plot_type=plot_type)
         for system in ['rainy_evp']:
              logging.getLogger(system).setLevel(logging.WARNING)

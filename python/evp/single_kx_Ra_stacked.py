@@ -41,6 +41,7 @@ Options:
     --dense           Solve densely for all eigenvalues (slow)
 
     --plot_type=<plot_type>   File type for plots [default: pdf]
+    --use-heaviside        Use the Heaviside function 
 """
 import logging
 logger = logging.getLogger(__name__)
@@ -65,6 +66,8 @@ Legendre = args['--Legendre']
 erf = args['--erf']
 nondim = args['--nondim']
 plot_type = args['--plot_type']
+use_heaviside = args['--use-heaviside']
+
 N_evals = int(float(args['--eigs']))
 target = float(args['--target'])
 
@@ -113,7 +116,7 @@ for kx in kxs:
 σ = np.array(σ)
 
 # just for filename
-lo_res = SplitRainyBenardEVP(nz, Ra, tau, kx, γ, α, β, q0, k, Legendre=Legendre, erf=erf, bc_type=bc_type, nondim=nondim, dealias=dealias,Lz=1)
+lo_res = SplitRainyBenardEVP(nz, Ra, tau, kx, γ, α, β, q0, k, Legendre=Legendre, erf=erf, bc_type=bc_type, nondim=nondim, dealias=dealias,Lz=1, use_heaviside=use_heaviside)
 lo_res.build_atmosphere()
 
 # make plot
