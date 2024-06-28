@@ -18,7 +18,7 @@ from analytic_zc import f_zc as zc_analytic
 from analytic_zc import f_Tc as Tc_analytic
 
 class SplitRainyBenardEVP():
-    def __init__(self, nz, Ra, tau_in, kx_in, γ, α, β, lower_q0, k, Legendre=True, erf=True, nondim='buoyancy', bc_type=None, Prandtl=1, Prandtlm=1, Lz=1, dealias=3/2, dtype=np.complex128, twoD=True):
+    def __init__(self, nz, Ra, tau_in, kx_in, γ, α, β, lower_q0, k, Legendre=True, erf=True, nondim='buoyancy', bc_type=None, Prandtl=1, Prandtlm=1, Lz=1, dealias=3/2, dtype=np.complex128, twoD=True, use_heaviside=False):
         logger.info('Ra = {:}, kx = {:}, α={:}, β={:}, γ={:}, tau={:}, k={:}'.format(Ra,kx_in,α,β,γ,tau_in, k))
         self.nz = nz
         self.Lz = Lz
@@ -47,7 +47,7 @@ class SplitRainyBenardEVP():
         self.Legendre = Legendre
         self.nondim = nondim
         self.bc_type = bc_type
-
+        self.use_heaviside = use_heaviside
         self.get_zc_Tc()
         if self.Legendre:
             self.zb1 = de.Legendre(self.coords['z'], size=self.nz, bounds=(0, self.zc), dealias=self.dealias)
@@ -89,12 +89,14 @@ class SplitRainyBenardEVP():
         logger.info("Building atmosphere")
         atm_name = 'unsaturated'
 
-        self.case_name = 'analytic_{:s}/stacked_alpha{:1.0f}_beta{:}_gamma{:}_q{:1.1f}'.format(atm_name, self.α,self.β,self.γ, self.lower_q0)
-        self.case_name += '/tau{:}_k{:.3e}'.format(self.tau['g'].squeeze().real,self.k)
+        self.case_name = f'analytic_{atm_name:s}/stacked_alpha{self.α:1.0f}_beta{self.β:}_gamma{self.γ:}_q{self.lower_q0:1.1f}'
+        self.case_name += f'/tau{self.tau['g'].squeeze().real:}_k{self.k:.3e}'
         if self.erf:
             self.case_name += '_erf'
         if self.Legendre:
             self.case_name += '_Legendre'
+        if self.use_heaviside:
+            self.case_name += '_heaviside'
         z1 = self.dist.local_grid(self.zb1)
         z2 = self.dist.local_grid(self.zb2)
         ΔT = -1
@@ -174,7 +176,7 @@ class SplitRainyBenardEVP():
             filebase += f'_{label}'
         fig.savefig(f"{filebase}.{plot_type}", dpi=300)
 
-    def plot_eigenmode(self, index, mode_label=None, plot_type='png'):
+    def plot_eigenmode(self, index, mode_label=None, plot_type='png', inset=False):
         self.solver.set_state(index,0)
         fields = ['b','q','p','u']
         names = {}
@@ -187,26 +189,35 @@ class SplitRainyBenardEVP():
             data[f] = self.concatenate_bases(lower_field,upper_field)
             names[f] = lower_field.name
 
-        fig, axes = plt.subplot_mosaic([['ux','bzoom','uz'],
-                                        ['b', 'q','p']], layout='constrained')
+        fig, axes = plt.subplot_mosaic([['ux','uz','b', 'q'],], layout='constrained',figsize=(8,4))
         i_max = np.argmax(np.abs(data['b'][self.z_slice]))
         phase_correction = data['b'][self.z_slice][i_max]
 
-        for v in ['q','p','b']:
+        for v in ['q','b']:
             name = names[v]
             d = data[v]/phase_correction
-            axes[v].plot(d[0,:].real, self.z)
-            axes[v].plot(d[0,:].imag, self.z, ':')
+            axes[v].plot(d[0,:].real, self.z, label=r'$\cos$')
+            axes[v].plot(d[0,:].imag, self.z, ':', label=r'$\sin$')
             axes[v].set_xlabel(f"${name[:-1]}$")
             axes[v].set_ylabel(r"$z$")
-            axes[v].axhline(self.zc, color='k',alpha=0.3)
+            
+        axes['q'].legend()
+        if inset:
+            b_inset_x1 = 0.99
+            b_inset_y1 = 0.475
+            b_inset_x2 = 1.002
+            b_inset_y2 = 0.479
+            axins = axes['b'].inset_axes([0.6,0.65,0.25,0.25], xlim=(b_inset_x1, b_inset_x2), ylim=(b_inset_y1, b_inset_y2), xticklabels=[], yticklabels=[])
+            axins.plot(d[0,:].real, self.z, 'x-')
+            axins.axhline(self.zc, color='k',alpha=0.3)
+            axes['b'].indicate_inset_zoom(axins, edgecolor="black")
 
-        axes['bzoom'].plot(d[0,:].real, self.z,'x-')
-        axes['bzoom'].plot(d[0,:].imag, self.z, ':')
-        axes['bzoom'].set_ylim(0.47,0.4775)
-        axes['bzoom'].set_xlabel(f"${name[:-1]}$")
-        axes['bzoom'].set_ylabel(r"$z$")
-        axes['bzoom'].axhline(self.zc, color='k',alpha=0.3)
+        # axes['bzoom'].plot(d[0,:].real, self.z,'x-')
+        # axes['bzoom'].plot(d[0,:].imag, self.z, ':')
+        # axes['bzoom'].set_ylim(0.47,0.4775)
+        # axes['bzoom'].set_xlabel(f"${name[:-1]}$")
+        # axes['bzoom'].set_ylabel(r"$z$")
+        # axes['bzoom'].axhline(self.zc, color='k',alpha=0.3)
 
         u = data['u']/phase_correction
         axes['ux'].plot(u[0,0,...,:].squeeze().real, self.z)
@@ -217,6 +228,11 @@ class SplitRainyBenardEVP():
         axes['uz'].plot(u[-1,0,...,:].squeeze().imag, self.z, ':')
         axes['uz'].set_xlabel(r"$u_z$")
         axes['uz'].set_ylabel(r"$z$")
+        for k,v in axes.items():
+            v.axhline(self.zc, color='k',alpha=0.3)
+            v.set_ylim(0,1)
+            if k != 'ux':
+                v.get_yaxis().set_visible(False)
         logger.info(f"Phase = {phase_correction.real:.3e}+{phase_correction.imag:.3e}i")
         sigma = self.solver.eigenvalues[index]
         #fig.suptitle(f"$\sigma = {sigma.real:.2f} {sigma.imag:+.2e} i$")
@@ -291,6 +307,7 @@ class SplitRainyBenardEVP():
 
         grad_q01 = self.grad_q0[0]
         grad_b01 = self.grad_b0[0]
+        qs01 = self.qs0[0]
         qs02 = self.qs0[1]
         grad_q02 = self.grad_q0[1]
         grad_b02 = self.grad_b0[1]
@@ -310,6 +327,20 @@ class SplitRainyBenardEVP():
         else:
             raise ValueError('nondim {:} not in valid set [diffusion, buoyancy]'.format(nondim))
 
+        if self.use_heaviside:
+            self.scrN = []
+            if self.erf:
+                H = lambda A: 0.5*(1+erf(self.k*A))
+                for i in range(2):
+                    self.scrN.append((H(self.q0[i] - self.qs0[i]) + 1/2*(self.q0[i] - self.qs0[i])*self.k*2*(np.pi)**(-1/2)*np.exp(-self.k**2*(self.q0[i] - self.qs0[i])**2)).evaluate())
+                    self.scrN[i].name=f'scrN{i}'
+            else:
+                H = lambda A: 0.5*(1+np.tanh(self.k*A))
+                for i in range(2):
+                    self.scrN.append((H(self.q0[i] - self.qs0[i]) + 1/2*(self.q0[i] - self.qs0[i])*self.k*(1-(np.tanh(self.k*(self.q0[i] - self.qs0[i])))**2)).evaluate())
+
+            scrN1 = self.scrN[0]
+            scrN2 = self.scrN[1]
         ω = self.dist.Field(name='ω')
         dt = lambda A: ω*A
 
@@ -317,16 +348,17 @@ class SplitRainyBenardEVP():
         for i in [1, 2]:
             self.problem.add_equation(f'div(u{i}) + τp + 1/PdR*dot(lift{i}(τu2{i},-1),ez) = 0')
             self.problem.add_equation(f'dt(u{i}) - PdR*lap(u{i}) + grad(p{i}) - PtR*b{i}*ez + lift{i}(τu1{i}, -1) + lift{i}(τu2{i}, -2) = 0')
-        # self.problem.add_equation('div(u1) + τp1 + 1/PdR*dot(lift1(τu21,-1),ez) = 0')
-        # self.problem.add_equation('dt(u1) - PdR*lap(u1) + grad(p1) - PtR*b1*ez + lift1(τu11, -1) + lift1(τu21, -2) = 0')
-        # self.problem.add_equation('div(u2) + τp2 + 1/PdR*dot(lift2(τu22,-1),ez) = 0')
-        # self.problem.add_equation('dt(u2) - PdR*lap(u2) + grad(p2) - PtR*b2*ez + lift2(τu12, -1) + lift2(τu22, -2) = 0')
-        # unsaturated layer
-        self.problem.add_equation('dt(b1) - P*lap(b1) + u1@grad_b01 + lift1(τb11, -1) + lift1(τb21, -2) = 0')
-        self.problem.add_equation('dt(q1) - S*lap(q1) + u1@grad_q01 + lift1(τq11, -1) + lift1(τq21, -2) = 0')
-        # saturated layer
-        self.problem.add_equation('dt(b2) - P*lap(b2) + u2@grad_b02 - γ/tau*(q2-α*qs02*b2) + lift2(τb12, -1) + lift2(τb22, -2) = 0')
-        self.problem.add_equation('dt(q2) - S*lap(q2) + u2@grad_q02 + 1/tau*(q2-α*qs02*b2) + lift2(τq12, -1) + lift2(τq22, -2) = 0')
+        if self.use_heaviside:
+            for i in [1, 2]:
+                self.problem.add_equation(f'dt(b{i}) - P*lap(b{i}) + u{i}@grad_b0{i} - γ/tau*(q{i}-α*qs0{i}*b{i})*scrN{i} + lift{i}(τb1{i}, -1) + lift{i}(τb2{i}, -2) = 0')
+                self.problem.add_equation(f'dt(q{i}) - S*lap(q{i}) + u{i}@grad_q0{i} + 1/tau*(q{i}-α*qs0{i}*b{i})*scrN{i} + lift{i}(τq1{i}, -1) + lift{i}(τq2{i}, -2) = 0')
+        else:
+            # unsaturated layer
+            self.problem.add_equation('dt(b1) - P*lap(b1) + u1@grad_b01 + lift1(τb11, -1) + lift1(τb21, -2) = 0')
+            self.problem.add_equation('dt(q1) - S*lap(q1) + u1@grad_q01 + lift1(τq11, -1) + lift1(τq21, -2) = 0')
+            # saturated layer
+            self.problem.add_equation('dt(b2) - P*lap(b2) + u2@grad_b02 - γ/tau*(q2-α*qs02*b2) + lift2(τb12, -1) + lift2(τb22, -2) = 0')
+            self.problem.add_equation('dt(q2) - S*lap(q2) + u2@grad_q02 + 1/tau*(q2-α*qs02*b2) + lift2(τq12, -1) + lift2(τq22, -2) = 0')
 
         # matching conditions
         self.problem.add_equation('p1(z=zc) - p2(z=zc) = 0')

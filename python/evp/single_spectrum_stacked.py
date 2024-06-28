@@ -43,6 +43,8 @@ Options:
     --dense                Solve densely for all eigenvalues (slow)
     --emode=<emode>        Index for eigenmode to visualize
     --annotate             Print mode indices on plot for identification
+    --plot_type=<plot_type>   File type for plots [default: pdf]
+    --use-heaviside        Use the Heaviside function 
 """
 import logging
 logger = logging.getLogger(__name__)
@@ -74,9 +76,11 @@ else:
     bc_type = None # default no-slip
 kx = float(args['--kx'])
 annotate = args['--annotate']
+plot_type = args['--plot_type']
+use_heaviside = args['--use-heaviside']
 Prandtlm = 1
 Prandtl = 1
-dealias = 2
+dealias = 1#2
 
 emode = args['--emode']
 if emode:
@@ -167,13 +171,13 @@ if __name__ == "__main__":
     if args['--tau']:
         tau_in = float(args['--tau'])
     # build solvers
-    lo_res = SplitRainyBenardEVP(nz, Rayleigh, tau, kx, γ, α, β, lower_q0, k, Legendre=Legendre, erf=erf, bc_type=bc_type, nondim=nondim, dealias=dealias,Lz=1)
+    lo_res = SplitRainyBenardEVP(nz, Rayleigh, tau, kx, γ, α, β, lower_q0, k, Legendre=Legendre, erf=erf, bc_type=bc_type, nondim=nondim, dealias=dealias,Lz=1, use_heaviside=use_heaviside)
     lo_res.plot_background()
     if args['--rejection_method'] == 'resolution':
-        hi_res = SplitRainyBenardEVP(int(2*nz), Rayleigh, tau, kx, γ, α, β, lower_q0, k, Legendre=Legendre, erf=erf, bc_type=bc_type, nondim=nondim, dealias=dealias,Lz=1)
+        hi_res = SplitRainyBenardEVP(int(2*nz), Rayleigh, tau, kx, γ, α, β, lower_q0, k, Legendre=Legendre, erf=erf, bc_type=bc_type, nondim=nondim, dealias=dealias,Lz=1, use_heaviside=use_heaviside)
         hi_res.plot_background()
     elif args['--rejection_method'] == 'bases':
-        hi_res = SplitRainyBenardEVP(nz, Rayleigh, tau, kx, γ, α, β, lower_q0, k, Legendre=not(Legendre), erf=erf, bc_type=bc_type, nondim=nondim, dealias=dealias,Lz=1)
+        hi_res = SplitRainyBenardEVP(nz, Rayleigh, tau, kx, γ, α, β, lower_q0, k, Legendre=not(Legendre), erf=erf, bc_type=bc_type, nondim=nondim, dealias=dealias,Lz=1, use_heaviside=use_heaviside)
         hi_res.plot_background(label='alternative-basis')
     else:
         raise NotImplementedError('rejection method {:s}'.format(args['--rejection_method']))
@@ -220,19 +224,19 @@ if __name__ == "__main__":
     spec_ax.set_xlabel(r"Growth Rate")
     spec_ax.set_ylabel(r"Frequency")
     spec_ax.set_xlim(-1,0.1)
-    spec_filename = lo_res.case_name+'/'+fig_filename+'.png'
+    spec_filename = f'{lo_res.case_name}/{fig_filename}.{plot_type}'
     logger.info(f"saving file to {spec_filename}")
     fig.tight_layout()
     fig.savefig(spec_filename, dpi=300)
     spec_ax.set_xlim(-0.2,0.5)
-    spec_filename = lo_res.case_name+'/'+fig_filename+'_zoom.png'
+    spec_filename = f'{lo_res.case_name}/{fig_filename}_zoom.{plot_type}'
     logger.info(f"saving zoomed file to {spec_filename}")
     fig.tight_layout()
     fig.savefig(spec_filename, dpi=300)
 
     if emode is not None:
-        lo_res.plot_eigenmode(emode)
+        lo_res.plot_eigenmode(emode, plot_type=plot_type)
     else:
         for i in [-1, -2, -3, -4, -5]:
             emode = indx[i]
-            lo_res.plot_eigenmode(emode)
+            lo_res.plot_eigenmode(emode, plot_type=plot_type)
