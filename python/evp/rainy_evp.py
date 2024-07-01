@@ -17,7 +17,78 @@ import analytic_atmosphere
 from analytic_zc import f_zc as zc_analytic
 from analytic_zc import f_Tc as Tc_analytic
 
-class SplitRainyBenardEVP():
+class RainyEVP():
+    def plot_eigenmode(self, index, mode_label=None, plot_type='png', inset=False):
+        self.solver.set_state(index,0)
+
+        fields = ['b','q','p','u']
+        names, data = self.get_names_data(fields)
+
+        fig, axes = plt.subplot_mosaic([['ux','uz','b', 'q'],], layout='constrained',figsize=(8,4))
+        i_max = np.argmax(np.abs(data['b'][self.z_slice]))
+        phase_correction = data['b'][self.z_slice][i_max]
+
+        for v in ['q','b']:
+            name = names[v]
+            d = data[v]/phase_correction
+            axes[v].plot(d[0,:].real, self.z, label=r'$\cos$')
+            axes[v].plot(d[0,:].imag, self.z, ':', label=r'$\sin$')
+            if self.zc:
+                field_name = name[:-1]
+            else:
+                field_name = name
+            axes[v].set_xlabel(f"${field_name}$")
+            axes[v].set_ylabel(r"$z$")
+            
+        axes['q'].legend()
+        if inset:
+            b_inset_x1 = 0.99
+            b_inset_y1 = 0.475
+            b_inset_x2 = 1.002
+            b_inset_y2 = 0.479
+            axins = axes['b'].inset_axes([0.6,0.65,0.25,0.25], xlim=(b_inset_x1, b_inset_x2), ylim=(b_inset_y1, b_inset_y2), xticklabels=[], yticklabels=[])
+            axins.plot(d[0,:].real, self.z, 'x-')
+            if self.zc:
+                axins.axhline(self.zc, color='k',alpha=0.3)
+            axes['b'].indicate_inset_zoom(axins, edgecolor="black")
+
+        # axes['bzoom'].plot(d[0,:].real, self.z,'x-')
+        # axes['bzoom'].plot(d[0,:].imag, self.z, ':')
+        # axes['bzoom'].set_ylim(0.47,0.4775)
+        # axes['bzoom'].set_xlabel(f"${name[:-1]}$")
+        # axes['bzoom'].set_ylabel(r"$z$")
+        # axes['bzoom'].axhline(self.zc, color='k',alpha=0.3)
+
+        u = data['u']/phase_correction
+        axes['ux'].plot(u[0,0,...,:].squeeze().real, self.z)
+        axes['ux'].plot(u[0,0,...,:].squeeze().imag, self.z,':')
+        axes['ux'].set_xlabel(r"$u_x$")
+        axes['ux'].set_ylabel(r"$z$")
+        axes['uz'].plot(u[-1,0,...,:].squeeze().real, self.z)
+        axes['uz'].plot(u[-1,0,...,:].squeeze().imag, self.z, ':')
+        axes['uz'].set_xlabel(r"$u_z$")
+        axes['uz'].set_ylabel(r"$z$")
+        for k,v in axes.items():
+            if self.zc:
+                v.axhline(self.zc, color='k',alpha=0.3)
+            v.set_ylim(0,1)
+            if k != 'ux':
+                v.get_yaxis().set_visible(False)
+        logger.info(f"Phase = {phase_correction.real:.3e}+{phase_correction.imag:.3e}i")
+        sigma = self.solver.eigenvalues[index]
+        #fig.suptitle(f"$\sigma = {sigma.real:.2f} {sigma.imag:+.2e} i$")
+        logger.info(f"$\sigma = {sigma.real:.2f} {sigma.imag:+.2e} i$")
+        if not mode_label:
+            mode_label = index
+        kx = 2*np.pi/self.Lx
+        fig_filename=f"emode_indx_{mode_label}_Ra_{self.Rayleigh['g'].squeeze().real:.2e}_nz_{self.nz}_kx_{kx:.3f}_bc_{self.bc_type}"
+        total_filename = f"{self.case_name}/{fig_filename}.{plot_type}"
+        fig.savefig(total_filename)
+        logger.info("eigenmode {:d} saved in {:s}".format(index, total_filename))
+
+    
+
+class SplitRainyBenardEVP(RainyEVP):
     def __init__(self, nz, Ra, tau_in, kx_in, γ, α, β, lower_q0, k, Legendre=True, erf=True, nondim='buoyancy', bc_type=None, Prandtl=1, Prandtlm=1, Lz=1, dealias=3/2, dtype=np.complex128, twoD=True, use_heaviside=False):
         logger.info('Ra = {:}, kx = {:}, α={:}, β={:}, γ={:}, tau={:}, k={:}'.format(Ra,kx_in,α,β,γ,tau_in, k))
         self.nz = nz
@@ -136,6 +207,18 @@ class SplitRainyBenardEVP():
         if not os.path.exists('{:s}/'.format(self.case_name)) and self.dist.comm.rank == 0:
             os.makedirs('{:s}/'.format(self.case_name))
 
+    def get_names_data(self, fields):
+        names = {}
+        data ={}
+        for f in fields:
+            lower_field = self.fields[f'{f}1']
+            lower_field.change_scales(1)
+            upper_field = self.fields[f'{f}2']
+            upper_field.change_scales(1)
+            data[f] = self.concatenate_bases(lower_field,upper_field)
+            names[f] = lower_field.name
+        return names, data
+
     def concatenate_bases(self, field1, field2):
         return np.concatenate([field1['g'],field2['g']], axis=-1)
 
@@ -175,76 +258,6 @@ class SplitRainyBenardEVP():
         if label:
             filebase += f'_{label}'
         fig.savefig(f"{filebase}.{plot_type}", dpi=300)
-
-    def plot_eigenmode(self, index, mode_label=None, plot_type='png', inset=False):
-        self.solver.set_state(index,0)
-        fields = ['b','q','p','u']
-        names = {}
-        data ={}
-        for f in fields:
-            lower_field = self.fields[f'{f}1']
-            lower_field.change_scales(1)
-            upper_field = self.fields[f'{f}2']
-            upper_field.change_scales(1)
-            data[f] = self.concatenate_bases(lower_field,upper_field)
-            names[f] = lower_field.name
-
-        fig, axes = plt.subplot_mosaic([['ux','uz','b', 'q'],], layout='constrained',figsize=(8,4))
-        i_max = np.argmax(np.abs(data['b'][self.z_slice]))
-        phase_correction = data['b'][self.z_slice][i_max]
-
-        for v in ['q','b']:
-            name = names[v]
-            d = data[v]/phase_correction
-            axes[v].plot(d[0,:].real, self.z, label=r'$\cos$')
-            axes[v].plot(d[0,:].imag, self.z, ':', label=r'$\sin$')
-            axes[v].set_xlabel(f"${name[:-1]}$")
-            axes[v].set_ylabel(r"$z$")
-            
-        axes['q'].legend()
-        if inset:
-            b_inset_x1 = 0.99
-            b_inset_y1 = 0.475
-            b_inset_x2 = 1.002
-            b_inset_y2 = 0.479
-            axins = axes['b'].inset_axes([0.6,0.65,0.25,0.25], xlim=(b_inset_x1, b_inset_x2), ylim=(b_inset_y1, b_inset_y2), xticklabels=[], yticklabels=[])
-            axins.plot(d[0,:].real, self.z, 'x-')
-            axins.axhline(self.zc, color='k',alpha=0.3)
-            axes['b'].indicate_inset_zoom(axins, edgecolor="black")
-
-        # axes['bzoom'].plot(d[0,:].real, self.z,'x-')
-        # axes['bzoom'].plot(d[0,:].imag, self.z, ':')
-        # axes['bzoom'].set_ylim(0.47,0.4775)
-        # axes['bzoom'].set_xlabel(f"${name[:-1]}$")
-        # axes['bzoom'].set_ylabel(r"$z$")
-        # axes['bzoom'].axhline(self.zc, color='k',alpha=0.3)
-
-        u = data['u']/phase_correction
-        axes['ux'].plot(u[0,0,...,:].squeeze().real, self.z)
-        axes['ux'].plot(u[0,0,...,:].squeeze().imag, self.z,':')
-        axes['ux'].set_xlabel(r"$u_x$")
-        axes['ux'].set_ylabel(r"$z$")
-        axes['uz'].plot(u[-1,0,...,:].squeeze().real, self.z)
-        axes['uz'].plot(u[-1,0,...,:].squeeze().imag, self.z, ':')
-        axes['uz'].set_xlabel(r"$u_z$")
-        axes['uz'].set_ylabel(r"$z$")
-        for k,v in axes.items():
-            v.axhline(self.zc, color='k',alpha=0.3)
-            v.set_ylim(0,1)
-            if k != 'ux':
-                v.get_yaxis().set_visible(False)
-        logger.info(f"Phase = {phase_correction.real:.3e}+{phase_correction.imag:.3e}i")
-        sigma = self.solver.eigenvalues[index]
-        #fig.suptitle(f"$\sigma = {sigma.real:.2f} {sigma.imag:+.2e} i$")
-        logger.info(f"$\sigma = {sigma.real:.2f} {sigma.imag:+.2e} i$")
-        if not mode_label:
-            mode_label = index
-        kx = 2*np.pi/self.Lx
-        fig_filename=f"emode_indx_{mode_label}_Ra_{self.Rayleigh['g'].squeeze().real:.2e}_nz_{self.nz}_kx_{kx:.3f}_bc_{self.bc_type}"
-        total_filename = f"{self.case_name}/{fig_filename}.{plot_type}"
-        fig.savefig(total_filename)
-        logger.info("eigenmode {:d} saved in {:s}".format(index, total_filename))
-
 
     def build_solver(self):
         if self.twoD:
@@ -401,7 +414,7 @@ class SplitRainyBenardEVP():
             self.solver.solve_sparse(self.solver.subproblems[1], N=N_evals, target=target, rebuild_matrices=True)
         self.eigenvalues = self.solver.eigenvalues
 
-class RainyBenardEVP():
+class RainyBenardEVP(RainyEVP):
     def __init__(self, nz, Ra, tau_in, kx_in, γ, α, β, lower_q0, k, atmosphere=None, relaxation_method=None, Legendre=True, erf=True, nondim='buoyancy', bc_type=None, Prandtl=1, Prandtlm=1, Lz=1, dealias=3/2, dtype=np.complex128, twoD=True, use_heaviside=False):
         logger.info('Ra = {:}, kx = {:}, α={:}, β={:}, γ={:}, tau={:}, k={:}'.format(Ra,kx_in,α,β,γ,tau_in, k))
         self.nz = nz
@@ -417,6 +430,8 @@ class RainyBenardEVP():
 
         self.Prandtl = Prandtl
         self.Prandtlm = Prandtlm
+
+        self.zc = None
 
         self.twoD = twoD
         if self.twoD:
@@ -491,6 +506,15 @@ class RainyBenardEVP():
         if not os.path.exists('{:s}/'.format(self.case_name)) and self.dist.comm.rank == 0:
             os.makedirs('{:s}/'.format(self.case_name))
 
+    def get_names_data(self, fields):
+        names = {}
+        data ={}
+        for f in fields:
+            data[f] = self.fields[f]['g']
+            names[f] = self.fields[f].name
+
+        return names, data
+
     def plot_background(self,label=None, plot_type='png'):
         fig, ax = plt.subplots(ncols=2, figsize=[12,6])
         qs0 = self.qs0.evaluate()
@@ -529,47 +553,6 @@ class RainyBenardEVP():
             filebase += f'_{label}'
         fig.savefig(f"{filebase}.{plot_type}", dpi=300)
 
-    def plot_eigenmode(self, index, mode_label=None, plot_type='png'):
-        self.solver.set_state(index,0)
-        fields = ['b','q','p','u']
-        names = {}
-        data ={}
-        for f in fields:
-            data[f] = self.fields[f]['g']
-            names[f] = self.fields[f].name
-
-        fig, axes = plt.subplot_mosaic([['ux','.','uz'],
-                                        ['b', 'q','p']], layout='constrained')
-        i_max = np.argmax(np.abs(data['b'][self.z_slice]))
-        phase_correction = data['b'][self.z_slice][i_max]
-
-        for v in ['b','q','p']:
-            name = names[v]
-            d = data[v]/phase_correction
-            axes[v].plot(d[0,:].real, self.z)
-            axes[v].plot(d[0,:].imag, self.z, ':')
-            axes[v].set_xlabel(f"${name}$")
-            axes[v].set_ylabel(r"$z$")
-
-        u = data['u']/phase_correction
-        axes['ux'].plot(u[0,0,...,:].squeeze().real, self.z)
-        axes['ux'].plot(u[0,0,...,:].squeeze().imag, self.z,':')
-        axes['ux'].set_xlabel(r"$u_x$")
-        axes['ux'].set_ylabel(r"$z$")
-        axes['uz'].plot(u[-1,0,...,:].squeeze().real, self.z)
-        axes['uz'].plot(u[-1,0,...,:].squeeze().imag, self.z, ':')
-        axes['uz'].set_xlabel(r"$u_z$")
-        axes['uz'].set_ylabel(r"$z$")
-        axes['q'].set_title(f"phase {phase_correction.real:.3e}+{phase_correction.imag:.3e}i")
-        sigma = self.solver.eigenvalues[index]
-        fig.suptitle(f"$\sigma = {sigma.real:.2f} {sigma.imag:+.2e} i$")
-        if not mode_label:
-            mode_label = index
-        kx = 2*np.pi/self.Lx
-        fig_filename=f"emode_indx_{mode_label}_Ra_{self.Rayleigh['g'].squeeze().real:.2e}_nz_{self.nz}_kx_{kx:.3f}_bc_{self.bc_type}"
-        total_filename = f"{self.case_name}/{fig_filename}.{plot_type}"
-        fig.savefig(total_filename)
-        logger.info("eigenmode {:d} saved in {:s}".format(index, total_filename))
 
 
     def build_solver(self):
