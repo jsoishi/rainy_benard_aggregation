@@ -19,7 +19,7 @@ Options:
     --q0=<q0>         basal q value [default: 0.6]
 
     --tau=<tau>       If set, override value of tau [default: 1e-3]
-    --k=<k>           If set, override value of k [default: 1e4]
+    --k=<k>           If set, override value of k   [default: 1e4]
 
     --nondim=<n>      Non-Nondimensionalization [default: buoyancy]
 
@@ -58,7 +58,7 @@ import numpy as np
 import dedalus.public as de
 import h5py
 
-from rainy_evp import SplitRainyBenardEVP, mode_reject
+from rainy_evp import SplitRainyBenardEVP, RainyBenardEVP, mode_reject
 from etools import Eigenproblem
 import matplotlib.pyplot as plt
 plt.style.use('prl')
@@ -107,8 +107,12 @@ nz = int(float(args['--nz']))
 logger.info('α={:}, β={:}, γ={:}, tau={:}, k={:}'.format(α,β,γ,tau, k))
 
 def compute_growth_rate(kx, Ra, target=0, plot_fastest_mode=False, plot_type='png', use_heaviside=False):
-    lo_res = SplitRainyBenardEVP(nz, Ra, tau, kx, γ, α, β, q0, k, Legendre=Legendre, erf=erf, bc_type=bc_type, nondim=nondim, dealias=dealias,Lz=1, use_heaviside=use_heaviside)
-    hi_res = SplitRainyBenardEVP(int(3*nz/2), Ra, tau, kx, γ, α, β, q0, k, Legendre=Legendre, erf=erf, bc_type=bc_type, nondim=nondim, dealias=dealias,Lz=1, use_heaviside=use_heaviside)
+    if q0 == 1:
+        EVP = RainyBenardEVP
+    else:
+        EVP = SplitRainyBenardEVP
+    lo_res = EVP(nz, Ra, tau, kx, γ, α, β, q0, k, Legendre=Legendre, erf=erf, bc_type=bc_type, nondim=nondim, dealias=dealias,Lz=1, use_heaviside=use_heaviside)
+    hi_res = EVP(int(3*nz/2), Ra, tau, kx, γ, α, β, q0, k, Legendre=Legendre, erf=erf, bc_type=bc_type, nondim=nondim, dealias=dealias,Lz=1, use_heaviside=use_heaviside)
     for solver in [lo_res, hi_res]:
         if args['--dense']:
             solver.solve(dense=True)
@@ -155,10 +159,14 @@ if __name__ == "__main__":
         # reset to base target for each Ra loop
         target = float(args['--target'])
         kx = kxs[0]
-        lo_res = SplitRainyBenardEVP(nz, Ra, tau, kx, γ, α, β, q0, k, Legendre=Legendre, erf=erf, bc_type=bc_type, nondim=nondim, dealias=dealias,Lz=1, use_heaviside=use_heaviside)
-        lo_res.plot_background(plot_type=plot_type)
-        hi_res = SplitRainyBenardEVP(int(3*nz/2), Ra, tau, kx, γ, α, β, q0, k, Legendre=Legendre, erf=erf, bc_type=bc_type, nondim=nondim, dealias=dealias,Lz=1, use_heaviside=use_heaviside)
-        hi_res.plot_background(plot_type=plot_type)
+        # if q0 == 1:
+        #     EVP = RainyBenardEVP
+        # else:
+        #     EVP = SplitRainyBenardEVP
+        # lo_res = EVP(nz, Ra, tau, kx, γ, α, β, q0, k, Legendre=Legendre, erf=erf, bc_type=bc_type, nondim=nondim, dealias=dealias,Lz=1, use_heaviside=use_heaviside)
+        # lo_res.plot_background(plot_type=plot_type)
+        # hi_res = EVP(int(3*nz/2), Ra, tau, kx, γ, α, β, q0, k, Legendre=Legendre, erf=erf, bc_type=bc_type, nondim=nondim, dealias=dealias,Lz=1, use_heaviside=use_heaviside)
+        # hi_res.plot_background(plot_type=plot_type)
         for system in ['rainy_evp']:
              logging.getLogger(system).setLevel(logging.WARNING)
 

@@ -55,7 +55,7 @@ import h5py
 from pathlib import Path
 
 from convective_onset_stacked import compute_growth_rate
-from rainy_evp import SplitRainyBenardEVP, mode_reject
+from rainy_evp import SplitRainyBenardEVP, RainyBenardEVP, mode_reject
 from etools import Eigenproblem
 import matplotlib.pyplot as plt
 plt.style.use('prl')
@@ -116,8 +116,13 @@ for kx in kxs:
 σ = np.array(σ)
 
 # just for filename
-lo_res = SplitRainyBenardEVP(nz, Ra, tau, kx, γ, α, β, q0, k, Legendre=Legendre, erf=erf, bc_type=bc_type, nondim=nondim, dealias=dealias,Lz=1, use_heaviside=use_heaviside)
-lo_res.build_atmosphere()
+if q0 == 1:
+    EVP = RainyBenardEVP
+else:
+    EVP = SplitRainyBenardEVP
+
+lo_res = EVP(nz, Ra, tau, kx, γ, α, β, q0, k, Legendre=Legendre, erf=erf, bc_type=bc_type, nondim=nondim, dealias=dealias,Lz=1, use_heaviside=use_heaviside)
+#lo_res.build_atmosphere()
 
 # make plot
 fig, ax = plt.subplots(figsize=[6,6/1.6])
@@ -137,7 +142,8 @@ if args['--dense']:
 plot_filename = Path(lo_res.case_name)/Path(f"{fig_filename}.pdf")
 ax.axhline(0, color='k', linestyle=':',linewidth=1)
 ax.legend()
-ax.set_ylim(-0.1,0.1)
+omega_r_max = np.max(σ.real)
+ax.set_ylim(-1.1*omega_r_max,1.1*omega_r_max)
 ax.set_xlim(0.1,100)
 ax.set_xlabel(r"$k_x$")
 ax.set_ylabel(r"$\omega_r$")
