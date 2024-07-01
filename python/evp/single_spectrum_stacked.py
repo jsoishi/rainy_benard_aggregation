@@ -37,7 +37,7 @@ Options:
     --erf                  Use an erf rather than a tanh for the phase transition
     --Legendre             Use Legendre polynomials
     --drift_threshold=<dt>        Drift threshold [default: 1e6]
-    --relaxation_method=<re>      Method for relaxing the background [default: IVP]
+    --relaxation_method=<re>      Method for relaxing the background [default: None]
     --rejection_method=<rej>      Method for rejecting modes [default: resolution]
 
     --dense                Solve densely for all eigenvalues (slow)
@@ -59,7 +59,7 @@ import matplotlib.pyplot as plt
 #plt.style.use("../../prl.mplstyle")
 plt.style.use("prl")
 
-from rainy_evp import SplitRainyBenardEVP, mode_reject
+from rainy_evp import SplitRainyBenardEVP, RainyBenardEVP, mode_reject
 from docopt import docopt
 args = docopt(__doc__)
 
@@ -171,13 +171,17 @@ if __name__ == "__main__":
     if args['--tau']:
         tau_in = float(args['--tau'])
     # build solvers
-    lo_res = SplitRainyBenardEVP(nz, Rayleigh, tau, kx, γ, α, β, lower_q0, k, Legendre=Legendre, erf=erf, bc_type=bc_type, nondim=nondim, dealias=dealias,Lz=1, use_heaviside=use_heaviside)
+    if lower_q0 == 1:
+        EVP = RainyBenardEVP
+    else:
+        EVP = SplitRainyBenardEVP
+    lo_res = EVP(nz, Rayleigh, tau, kx, γ, α, β, lower_q0, k, Legendre=Legendre, erf=erf, bc_type=bc_type, nondim=nondim, dealias=dealias,Lz=1, use_heaviside=use_heaviside)
     lo_res.plot_background()
     if args['--rejection_method'] == 'resolution':
-        hi_res = SplitRainyBenardEVP(int(2*nz), Rayleigh, tau, kx, γ, α, β, lower_q0, k, Legendre=Legendre, erf=erf, bc_type=bc_type, nondim=nondim, dealias=dealias,Lz=1, use_heaviside=use_heaviside)
+        hi_res = EVP(int(2*nz), Rayleigh, tau, kx, γ, α, β, lower_q0, k, Legendre=Legendre, erf=erf, bc_type=bc_type, nondim=nondim, dealias=dealias,Lz=1, use_heaviside=use_heaviside)
         hi_res.plot_background()
     elif args['--rejection_method'] == 'bases':
-        hi_res = SplitRainyBenardEVP(nz, Rayleigh, tau, kx, γ, α, β, lower_q0, k, Legendre=not(Legendre), erf=erf, bc_type=bc_type, nondim=nondim, dealias=dealias,Lz=1, use_heaviside=use_heaviside)
+        hi_res = EVP(nz, Rayleigh, tau, kx, γ, α, β, lower_q0, k, Legendre=not(Legendre), erf=erf, bc_type=bc_type, nondim=nondim, dealias=dealias,Lz=1, use_heaviside=use_heaviside)
         hi_res.plot_background(label='alternative-basis')
     else:
         raise NotImplementedError('rejection method {:s}'.format(args['--rejection_method']))
@@ -224,6 +228,7 @@ if __name__ == "__main__":
     spec_ax.set_xlabel(r"Growth Rate")
     spec_ax.set_ylabel(r"Frequency")
     spec_ax.set_xlim(-1,0.1)
+    spec_ax.set_ylim(-0.3,0.3)
     spec_filename = f'{lo_res.case_name}/{fig_filename}.{plot_type}'
     logger.info(f"saving file to {spec_filename}")
     fig.tight_layout()
