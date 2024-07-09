@@ -159,11 +159,11 @@ if __name__ == "__main__":
         # reset to base target for each Ra loop
         target = float(args['--target'])
         kx = kxs[0]
-        # if q0 == 1:
-        #     EVP = RainyBenardEVP
-        # else:
-        #     EVP = SplitRainyBenardEVP
-        # lo_res = EVP(nz, Ra, tau, kx, γ, α, β, q0, k, Legendre=Legendre, erf=erf, bc_type=bc_type, nondim=nondim, dealias=dealias,Lz=1, use_heaviside=use_heaviside)
+        if q0 == 1:
+            EVP = RainyBenardEVP
+        else:
+            EVP = SplitRainyBenardEVP
+        lo_res = EVP(nz, Ra, tau, kx, γ, α, β, q0, k, Legendre=Legendre, erf=erf, bc_type=bc_type, nondim=nondim, dealias=dealias,Lz=1, use_heaviside=use_heaviside)
         # lo_res.plot_background(plot_type=plot_type)
         # hi_res = EVP(int(3*nz/2), Ra, tau, kx, γ, α, β, q0, k, Legendre=Legendre, erf=erf, bc_type=bc_type, nondim=nondim, dealias=dealias,Lz=1, use_heaviside=use_heaviside)
         # hi_res.plot_background(plot_type=plot_type)
