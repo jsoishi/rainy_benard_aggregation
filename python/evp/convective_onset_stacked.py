@@ -136,11 +136,11 @@ def peak_growth_rate(*args):
     # flip sign so minimize finds maximum
     return -1*rate.real
 
-def find_continous_peak(Ra, kx, plot_fastest_mode=False, plot_type='png'):
+def find_continous_peak(Ra, kx, plot_fastest_mode=False, plot_type='png',use_heaviside=False):
 
     result = sciop.minimize(peak_growth_rate, kx, args=(Ra), bounds=bounds, method='Nelder-Mead', tol=1e-5)
     # obtain full complex rate
-    σ = compute_growth_rate(result.x[0], Ra, plot_fastest_mode=plot_fastest_mode, plot_type=plot_type)
+    σ = compute_growth_rate(result.x[0], Ra, plot_fastest_mode=plot_fastest_mode, plot_type=plot_type, use_heaviside=use_heaviside)
     return result.x[0], σ
 
 if __name__ == "__main__":
@@ -171,7 +171,7 @@ if __name__ == "__main__":
              logging.getLogger(system).setLevel(logging.WARNING)
 
         for kx in kxs:
-            σ_i = compute_growth_rate(kx, Ra, target=target, plot_type=plot_type)
+            σ_i = compute_growth_rate(kx, Ra, target=target, plot_type=plot_type, use_heaviside=use_heaviside)
             σ.append(σ_i)
             logger.info('Ra = {:.2g}, kx = {:.2g}, σ = {:.2g}'.format(Ra, kx, σ_i))
             if σ_i.imag > 0:
@@ -262,7 +262,7 @@ if __name__ == "__main__":
         logger.info('Critical point, based on interpolation:')
         logger.info('Ra = {:.3g}, k = {:}'.format(crit_Ra, crit_k))
 
-        kx, σ = find_continous_peak(crit_Ra, crit_k, plot_fastest_mode=True)
+        kx, σ = find_continous_peak(crit_Ra, crit_k, plot_fastest_mode=True, use_heaviside=use_heaviside)
         logger.info('σ = {:.2g}, {:.2g}i (calculated) at k = {:}'.format(σ.real, σ.imag, kx))
 
         if σ.real > 0:
