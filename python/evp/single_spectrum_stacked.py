@@ -37,7 +37,6 @@ Options:
     --erf                  Use an erf rather than a tanh for the phase transition
     --Legendre             Use Legendre polynomials
     --drift_threshold=<dt>        Drift threshold [default: 1e6]
-    --relaxation_method=<re>      Method for relaxing the background [default: None]
     --rejection_method=<rej>      Method for rejecting modes [default: resolution]
 
     --dense                Solve densely for all eigenvalues (slow)
@@ -141,7 +140,6 @@ if __name__ == "__main__":
     erf = args['--erf']
     case = args['<case>']
     nondim = args['--nondim']
-    relaxation_method = args['--relaxation_method']
     if case == 'analytic':
         α = float(args['--alpha'])
         β = float(args['--beta'])
