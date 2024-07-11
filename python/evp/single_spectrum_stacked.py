@@ -98,43 +98,6 @@ def evp_amp_reject(evp, indices, tol=1e-8):
     print(indices)
     return evp.solver.eigenvalues[indx], indx
 
-# def plot_eigenmode(evp, index, mode_label=None):
-#     evp.solver.set_state(index,0)
-#     fig, axes = plt.subplot_mosaic([['ux','.','uz'],
-#                                     ['b', 'q','p']], layout='constrained')
-
-#     z = evp.zb.local_grid(1).squeeze()
-#     nz = z.shape[-1]
-#     for v in ['b','q','p']:
-#         if v == 'b':
-#             i_max = np.argmax(np.abs(evp.fields[v]['g'].squeeze()))
-#             phase_correction = evp.fields[v]['g'][0,...,i_max].squeeze()
-#         evp.fields[v].change_scales(1)
-#         name = evp.fields[v].name
-#         data = evp.fields[v]['g'][0,...,:].squeeze()/phase_correction
-#         axes[v].plot(data.real, z)
-#         axes[v].plot(data.imag, z, ':')
-#         axes[v].set_xlabel(f"${name}$")
-#         axes[v].set_ylabel(r"$z$")
-#     evp.fields['u'].change_scales(1)
-#     u = evp.fields['u']['g']/phase_correction
-#     axes['ux'].plot(u[0,0,...,:].squeeze().real, z)
-#     axes['ux'].plot(u[0,0,...,:].squeeze().imag, z,':')
-#     axes['ux'].set_xlabel(r"$u_x$")
-#     axes['ux'].set_ylabel(r"$z$")
-#     axes['uz'].plot(u[-1,0,...,:].squeeze().real, z)
-#     axes['uz'].plot(u[-1,0,...,:].squeeze().imag, z, ':')
-#     axes['uz'].set_xlabel(r"$u_z$")
-#     axes['uz'].set_ylabel(r"$z$")
-#     axes['q'].set_title(phase_correction)
-#     sigma = evp.solver.eigenvalues[index]
-#     fig.suptitle(f"$\sigma = {sigma.real:.3f} {sigma.imag:+.3e} i$")
-#     if not mode_label:
-#         mode_label = index
-#     fig_filename=f"split_emode_indx_{mode_label}_Ra_{Rayleigh:.2e}_nz_{nz}_kx_{kx:.3f}_bc_{bc_type}"
-#     fig.savefig(evp.case_name +'/'+fig_filename+'.png', dpi=300)
-#     logger.info("eigenmode {:d} saved in {:s}".format(index, evp.case_name +'/'+fig_filename+'.png'))
-
 if __name__ == "__main__":
     Legendre = args['--Legendre']
     erf = args['--erf']
