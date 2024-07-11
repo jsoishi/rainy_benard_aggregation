@@ -33,6 +33,7 @@ Options:
     --nz=<nz>              Number of coeffs to use in eigenvalue search; if not set, uses resolution of background [default: 128]
     --target=<targ>        Target value for sparse eigenvalue search [default: 0]
     --eigs=<eigs>          Target number of eigenvalues to search for [default: 20]
+    --normalization=<norm>      Eigenmode plot Normalization [default: m]
 
     --erf                  Use an erf rather than a tanh for the phase transition
     --Legendre             Use Legendre polynomials
@@ -67,6 +68,7 @@ target = float(args['--target'])
 Rayleigh = float(args['--Ra'])
 tau_in = float(args['--tau'])
 drift_threshold = float(args['--drift_threshold'])
+normalization = args['--normalization']
 if args['--stress-free']:
     bc_type = 'stress-free'
 elif args['--top-stress-free']:
@@ -201,8 +203,8 @@ if __name__ == "__main__":
     fig.savefig(spec_filename, dpi=300)
 
     if emode is not None:
-        lo_res.plot_eigenmode(emode, plot_type=plot_type)
+        lo_res.plot_eigenmode(emode, plot_type=plot_type, normalization=normalization)
     else:
         for i in [-1, -2, -3, -4, -5]:
             emode = indx[i]
-            lo_res.plot_eigenmode(emode, plot_type=plot_type)
+            lo_res.plot_eigenmode(emode, plot_type=plot_type, normalization=normalization)

@@ -1,7 +1,7 @@
 import os
 import numpy as np
 from mpi4py import MPI
-from scipy.special import lambertw as W
+from scipy.special import lambertw as W, erf
 import dedalus.public as de
 import h5py
 import matplotlib.pyplot as plt
@@ -18,29 +18,55 @@ from analytic_zc import f_zc as zc_analytic
 from analytic_zc import f_Tc as Tc_analytic
 
 class RainyEVP():
-    def plot_eigenmode(self, index, mode_label=None, plot_type='png', inset=False):
+    def plot_eigenmode(self, index, mode_label=None, plot_type='png', inset=False, gamma=0.19, xlim=False, normalization='m'):
         self.solver.set_state(index,0)
 
         fields = ['b','q','p','u']
         names, data = self.get_names_data(fields)
 
-        fig, axes = plt.subplot_mosaic([['ux','uz','b', 'q'],], layout='constrained',figsize=(8,4))
-        i_max = np.argmax(np.abs(data['b'][self.z_slice]))
-        phase_correction = data['b'][self.z_slice][i_max]
-
+        fig, axes = plt.subplot_mosaic([['ux','uz','b', 'q','m','BLANK'],], layout='constrained',figsize=(9,3),empty_sentinel="BLANK",width_ratios=[1,1,1,1,1,0.25])
+        m = (data['b'] + gamma*data['q'])
+        if normalization == 'm':
+            logger.info("Normalizing to moist static energy.")
+            norm_data = m
+        else:
+            logger.info("Normalizing to buoyancy.")
+            norm_data = data['b']
+        i_max = np.argmax(np.abs(norm_data[self.z_slice]))
+        phase_correction = norm_data[self.z_slice][i_max]
+        
         for v in ['q','b']:
             name = names[v]
             d = data[v]/phase_correction
-            axes[v].plot(d[0,:].real, self.z, label=r'$\cos$')
-            axes[v].plot(d[0,:].imag, self.z, ':', label=r'$\sin$')
             if self.zc:
                 field_name = name[:-1]
             else:
                 field_name = name
-            axes[v].set_xlabel(f"${field_name}$")
+            if v == 'q':
+                d*= gamma
+                g = r'\gamma'
+                field_name = f'${g} {field_name}$'
+            else:
+                field_name = f'${field_name}$'
+
+            axes[v].plot(d[0,:].real, self.z, label=r'$\cos$')
+            axes[v].plot(d[0,:].imag, self.z, ':', label=r'$\sin$')
+
+            axes[v].set_xlabel(field_name)
             axes[v].set_ylabel(r"$z$")
-            
-        axes['q'].legend()
+            if xlim:
+                axes[v].set_xlim(-1.,1.)
+        m_plot = m[0,:]/phase_correction
+        axes['m'].plot(m_plot.real, self.z, label=r'$\cos$')
+        axes['m'].plot(m_plot.imag, self.z, ':', label=r'$\sin$')
+        axes['m'].set_xlabel(f"$m$")
+        axes['m'].set_ylabel(r"$z$")
+        if xlim:
+            axes['m'].set_xlim(-1.05,1.05)
+        axes['m'].legend(bbox_to_anchor=(1.05, 1),
+                         loc='upper left', borderaxespad=0.)
+        sigma = self.solver.eigenvalues[index]
+        fig.text(0.83,0.05,r"$\omega$"+ f" = {sigma.real:.2f}{sigma.imag:+.2f}i", fontsize=16)
         if inset:
             b_inset_x1 = 0.99
             b_inset_y1 = 0.475
@@ -75,9 +101,9 @@ class RainyEVP():
             if k != 'ux':
                 v.get_yaxis().set_visible(False)
         logger.info(f"Phase = {phase_correction.real:.3e}+{phase_correction.imag:.3e}i")
-        sigma = self.solver.eigenvalues[index]
+        
         #fig.suptitle(f"$\sigma = {sigma.real:.2f} {sigma.imag:+.2e} i$")
-        logger.info(f"$\sigma = {sigma.real:.2f} {sigma.imag:+.2e} i$")
+        logger.info(r"$\sigma"+ f" = {sigma.real:.2f}{sigma.imag:+.2e} i$")
         if not mode_label:
             mode_label = index
         kx = 2*np.pi/self.Lx
@@ -351,6 +377,7 @@ class SplitRainyBenardEVP(RainyEVP):
                 H = lambda A: 0.5*(1+np.tanh(self.k*A))
                 for i in range(2):
                     self.scrN.append((H(self.q0[i] - self.qs0[i]) + 1/2*(self.q0[i] - self.qs0[i])*self.k*(1-(np.tanh(self.k*(self.q0[i] - self.qs0[i])))**2)).evaluate())
+                    self.scrN[i].name=f'scrN{i}'
 
             scrN1 = self.scrN[0]
             scrN2 = self.scrN[1]
@@ -615,7 +642,6 @@ class RainyBenardEVP(RainyEVP):
         self.qs0 = qs0
         e = grad(u) + trans(grad(u))
 
-        from scipy.special import erf
         if self.nondim == 'diffusion':
             P = 1                      #  diffusion on buoyancy. Always = 1 in this scaling.
             S = self.Prandtlm               #  diffusion on moisture  k_q / k_b
