@@ -107,7 +107,7 @@ logger.info('α={:}, β={:}, γ={:}, tau={:}, k={:}'.format(α,β,γ,tau, k))
 kxs = np.geomspace(min_kx, max_kx, num=nkx)
 σ = []
 for kx in kxs:
-    σ_i = compute_growth_rate(kx, Ra, target=target, plot_type=plot_type)
+    σ_i = compute_growth_rate(kx, Ra, target=target, plot_type=plot_type, use_heaviside=use_heaviside)
     σ.append(σ_i)
     logger.info('Ra = {:.2g}, kx = {:.2g}, σ = {:.2g}'.format(Ra, kx, σ_i))
     if σ_i.imag > 0:
