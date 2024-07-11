@@ -149,7 +149,7 @@ if __name__ == "__main__":
     if ra_list != 'None':
         Ras = [float(r) for r in ra_list.split(',')]
         print("Ra_list = ", ra_list)
-        print("number of Ras = ",len(ra_list))
+        print("number of Ras = ",len(Ras))
     else:
         Ras = np.geomspace(float(args['--min_Ra']),float(args['--max_Ra']),num=int(float(args['--num_Ra'])))
     kxs = np.geomspace(min_kx, max_kx, num=nkx)
