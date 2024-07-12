@@ -18,6 +18,24 @@ from analytic_zc import f_zc as zc_analytic
 from analytic_zc import f_Tc as Tc_analytic
 
 class RainyEVP():
+    def save(self):
+        filename = f'{self.case_name}/{self.savefilename}'
+        logger.info(f"saving data to {filename:}")
+        with h5py.File(filename,"w") as df:
+            df['eigenvalues'] = self.solver.eigenvalues
+            df['eigenvectors'] = self.solver.eigenvectors
+
+    def load(self):
+        filename = f'{self.case_name}/{self.savefilename}'
+        logger.info(f"loading data from {filename:}")
+        sp = self.solver.subproblems[1]
+        self.solver.eigenvalue_subproblem = sp
+        with h5py.File(filename, "r") as df:
+            self.solver.eigenvalues = df['eigenvalues'][:]
+            self.solver.eigenvectors = df['eigenvectors'][:]
+
+        self.eigenvalues = self.solver.eigenvalues
+
     def plot_eigenmode(self, index, mode_label=None, plot_type='png', inset=False, gamma=0.19, xlim=False, normalization='m'):
         self.solver.set_state(index,0)
 
@@ -116,7 +134,9 @@ class RainyEVP():
 
 class SplitRainyBenardEVP(RainyEVP):
     def __init__(self, nz, Ra, tau_in, kx_in, γ, α, β, lower_q0, k, Legendre=True, erf=True, nondim='buoyancy', bc_type=None, Prandtl=1, Prandtlm=1, Lz=1, dealias=3/2, dtype=np.complex128, twoD=True, use_heaviside=False):
-        logger.info('Ra = {:}, kx = {:}, α={:}, β={:}, γ={:}, tau={:}, k={:}'.format(Ra,kx_in,α,β,γ,tau_in, k))
+        self.param_string = f'Ra={Ra:}_kx={kx_in:}_α={α:}_β={β:}_γ={γ:}_tau={tau_in:}_k={k:}_nz={nz:}'
+        logger.info(self.param_string.replace('_',', '))
+        self.savefilename = f'{self.param_string.replace('=','_'):}_eigenvectors.h5'
         self.nz = nz
         self.Lz = Lz
 
@@ -443,7 +463,9 @@ class SplitRainyBenardEVP(RainyEVP):
 
 class RainyBenardEVP(RainyEVP):
     def __init__(self, nz, Ra, tau_in, kx_in, γ, α, β, lower_q0, k, atmosphere=None, relaxation_method=None, Legendre=True, erf=True, nondim='buoyancy', bc_type=None, Prandtl=1, Prandtlm=1, Lz=1, dealias=3/2, dtype=np.complex128, twoD=True, use_heaviside=False):
-        logger.info('Ra = {:}, kx = {:}, α={:}, β={:}, γ={:}, tau={:}, k={:}'.format(Ra,kx_in,α,β,γ,tau_in, k))
+        self.param_string = f'Ra={Ra:}_kx={kx_in:}_α={α:}_β={β:}_γ={γ:}_tau={tau_in:}_k={k:}_nz={nz:}'
+        logger.info(self.param_string.replace('_',', '))
+        self.savefilename = f'{self.param_string.replace('=','_'):}_eigenvectors.h5'        
         self.nz = nz
         self.Lz = Lz
 

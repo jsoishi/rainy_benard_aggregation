@@ -44,7 +44,8 @@ Options:
     --emode=<emode>        Index for eigenmode to visualize
     --annotate             Print mode indices on plot for identification
     --plot_type=<plot_type>   File type for plots [default: pdf]
-    --use-heaviside        Use the Heaviside function 
+    --use-heaviside        Use the Heaviside function
+    --restart              Don't solve, use saved eigenmodes and eigenvalues
 """
 import logging
 logger = logging.getLogger(__name__)
@@ -79,6 +80,7 @@ kx = float(args['--kx'])
 annotate = args['--annotate']
 plot_type = args['--plot_type']
 use_heaviside = args['--use-heaviside']
+restart = args['--restart']
 Prandtlm = 1
 Prandtl = 1
 dealias = 1#2
@@ -156,11 +158,21 @@ if __name__ == "__main__":
     for solver in [lo_res, hi_res]:
         if args['--dense']:
             sd_mode = 'dense'
-            solver.solve(dense=True)
+            if restart:
+                solver.load()
+            else:
+                solver.solve(dense=True)
+                solver.save()
         else:
             sd_mode = 'sparse'
-            solver.solve(dense=False, N_evals=N_evals, target=target)
+            if restart:
+                solver.load()
+            else:
+                solver.solve(dense=False, N_evals=N_evals, target=target)
+                solver.save()
     fig_filename=f"Ra_{Rayleigh:.2e}_nz_{nz}_kx_{kx:.3f}_bc_{bc_type}_{sd_mode}_spectrum"
+    if restart:
+        fig_filename += "_restart"
     evals_ok, indx_ok, ep = mode_reject(lo_res, hi_res, plot_drift_ratios=True, drift_threshold=drift_threshold)
     evals_good = evals_ok
     indx = indx_ok
