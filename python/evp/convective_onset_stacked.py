@@ -107,6 +107,7 @@ nz = int(float(args['--nz']))
 logger.info('α={:}, β={:}, γ={:}, tau={:}, k={:}'.format(α,β,γ,tau, k))
 
 def compute_growth_rate(kx, Ra, target=0, plot_fastest_mode=False, plot_type='png', use_heaviside=False):
+    logger.info(f"use_heaviside = {use_heaviside}")
     if q0 == 1:
         EVP = RainyBenardEVP
     else:
@@ -132,13 +133,16 @@ def compute_growth_rate(kx, Ra, target=0, plot_fastest_mode=False, plot_type='pn
     return peak_eval
 
 def peak_growth_rate(*args):
-    rate = compute_growth_rate(*args)
+    kx = args[0]
+    Ra = args[1]
+    use_heaviside = args[2]
+    rate = compute_growth_rate(kx, Ra, use_heaviside=use_heaviside)
     # flip sign so minimize finds maximum
     return -1*rate.real
 
 def find_continous_peak(Ra, kx, plot_fastest_mode=False, plot_type='png',use_heaviside=False):
 
-    result = sciop.minimize(peak_growth_rate, kx, args=(Ra), bounds=bounds, method='Nelder-Mead', tol=1e-5)
+    result = sciop.minimize(peak_growth_rate, kx, args=(Ra,use_heaviside), bounds=bounds, method='Nelder-Mead', tol=1e-5)
     # obtain full complex rate
     σ = compute_growth_rate(result.x[0], Ra, plot_fastest_mode=plot_fastest_mode, plot_type=plot_type, use_heaviside=use_heaviside)
     return result.x[0], σ
@@ -241,7 +245,7 @@ if __name__ == "__main__":
         σ = growth_rates[Ra]['σ']
         peak_i = np.argmax(σ.real)
         kx0 = kxs[peak_i] # initial guess
-        kx, σ = find_continous_peak(Ra, kx0, plot_type=plot_type)
+        kx, σ = find_continous_peak(Ra, kx0, plot_type=plot_type, use_heaviside=use_heaviside)
         peaks[Ra] = {'σ':σ, 'k':kx}
 
     # conduct a bracketing search with interpolation to find critical Ra
