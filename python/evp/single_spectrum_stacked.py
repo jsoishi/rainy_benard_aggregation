@@ -91,17 +91,6 @@ if emode:
 
 import os
 
-def evp_amp_reject(evp, indices, tol=1e-8):
-    amp = []
-    for i in indices:
-        evp.solver.set_state(i,0)
-        amp.append(np.max(np.abs(evp.fields['b']['g'])))
-    amp = np.array(amp)
-    indx = indices[np.where(amp > tol)]
-    print(indx)
-    print(indices)
-    return evp.solver.eigenvalues[indx], indx
-
 if __name__ == "__main__":
     Legendre = args['--Legendre']
     erf = args['--erf']
@@ -176,7 +165,6 @@ if __name__ == "__main__":
     evals_ok, indx_ok, ep = mode_reject(lo_res, hi_res, plot_drift_ratios=True, drift_threshold=drift_threshold)
     evals_good = evals_ok
     indx = indx_ok
-    #evals_good, indx = evp_amp_reject(lo_res, indx_ok)
     logger.info(f"good modes ({{$\delta_t$}} = {drift_threshold:.1e}):    max growth rate = {evals_good[-1]}")
     lo_indx = np.argsort(lo_res.eigenvalues.real)
     logger.info(f"low res modes: max growth rate = {lo_res.eigenvalues[lo_indx][-1]}")
@@ -185,21 +173,12 @@ if __name__ == "__main__":
     col = np.where(np.abs(evals_ok.imag) > eps, 'g', np.where(evals_ok.real > 0, 'r','k'))
     spec_ax.scatter(evals_ok.real, evals_ok.imag, marker='o', c=col, label=f'good modes ($\delta_t$ = {drift_threshold:.1e})',s=100)#, alpha=0.5, s=25)
     col = np.where(np.abs(evals_good.imag) > eps, 'g', np.where(evals_good.real > 0, 'r','k'))
-    #spec_ax.scatter(evals_good.real, evals_good.imag, marker='s', c=col, label=f'good modes ($\delta_t$ = {drift_threshold:.1e}, $|q| > $ 1e-8)', alpha=0.5,zorder=0, s=100)
-    #spec_ax.scatter(lo_res.eigenvalues.real, lo_res.eigenvalues.imag, marker='x', label='low res', alpha=0.4)
-    #spec_ax.scatter(hi_res.eigenvalues.real, hi_res.eigenvalues.imag, marker='+', label='hi res', alpha=0.4)
 
     if annotate:
         for n,ev in enumerate(evals_ok):
             logger.info(f"ok ev = {ev}, index = {indx_ok[n]}")
             spec_ax.annotate(indx_ok[n], (ev.real, ev.imag), fontsize=8, ha='left',va='top')
 
-        # for n,ev in enumerate(evals_good):
-        #     logger.info(f"gd ev = {ev}, index = {indx[n]}")
-        #     spec_ax.annotate(indx[n], (ev.real, ev.imag), fontsize=8, ha='left', va='bottom')
-    #spec_ax.legend()
-    # spec_ax.set_xlabel(r"$\Re{\sigma}$")
-    # spec_ax.set_ylabel(r"$\Im{\sigma}$")
     spec_ax.set_xlabel(r"Growth Rate")
     spec_ax.set_ylabel(r"Frequency")
     spec_ax.set_xlim(-1,0.1)
