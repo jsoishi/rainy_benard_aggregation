@@ -57,7 +57,6 @@ import numpy as np
 import dedalus.public as de
 import h5py
 import matplotlib.pyplot as plt
-#plt.style.use("../../prl.mplstyle")
 plt.style.use("prl")
 
 from rainy_evp import SplitRainyBenardEVP, RainyBenardEVP, mode_reject
@@ -105,18 +104,6 @@ if __name__ == "__main__":
         tau = float(args['--tau'])
     else:
         raise NotImplementedError
-        # f = h5py.File(case+'/drizzle_sol/drizzle_sol_s1.h5', 'r')
-        # sol = {}
-        # for task in f['tasks']:
-        #     sol[task] = f['tasks'][task][0,0,0][:]
-        # sol['z'] = f['tasks']['b'].dims[3][0][:]
-        # tau_in = sol['tau'][0]
-        # k = sol['k'][0]
-        # α = sol['α'][0]
-        # β = sol['β'][0]
-        # γ = sol['γ'][0]
-        # nz_sol = sol['z'].shape[0]
-        # f.close()
     if args['--nz']:
         nz = int(float(args['--nz']))
     else:
