@@ -59,7 +59,7 @@ import h5py
 import matplotlib.pyplot as plt
 plt.style.use("prl")
 
-from rainy_evp import SplitRainyBenardEVP, RainyBenardEVP, mode_reject
+from rainy_evp import RainySpectrum
 from docopt import docopt
 args = docopt(__doc__)
 
@@ -83,6 +83,7 @@ restart = args['--restart']
 Prandtlm = 1
 Prandtl = 1
 dealias = 1#2
+dense = args['--dense']
 
 emode = args['--emode']
 if emode:
@@ -112,57 +113,26 @@ if __name__ == "__main__":
     if args['--tau']:
         tau_in = float(args['--tau'])
     # build solvers
-    if lower_q0 == 1:
-        EVP = RainyBenardEVP
-    else:
-        EVP = SplitRainyBenardEVP
-    lo_res = EVP(nz, Rayleigh, tau, kx, γ, α, β, lower_q0, k, Legendre=Legendre, erf=erf, bc_type=bc_type, nondim=nondim, dealias=dealias,Lz=1, use_heaviside=use_heaviside)
-    lo_res.plot_background()
-    if args['--rejection_method'] == 'resolution':
-        hi_res = EVP(int(2*nz), Rayleigh, tau, kx, γ, α, β, lower_q0, k, Legendre=Legendre, erf=erf, bc_type=bc_type, nondim=nondim, dealias=dealias,Lz=1, use_heaviside=use_heaviside)
-        hi_res.plot_background()
-    elif args['--rejection_method'] == 'bases':
-        hi_res = EVP(nz, Rayleigh, tau, kx, γ, α, β, lower_q0, k, Legendre=not(Legendre), erf=erf, bc_type=bc_type, nondim=nondim, dealias=dealias,Lz=1, use_heaviside=use_heaviside)
-        hi_res.plot_background(label='alternative-basis')
-    else:
-        raise NotImplementedError('rejection method {:s}'.format(args['--rejection_method']))
-    dlog = logging.getLogger('subsystems')
-    dlog.setLevel(logging.WARNING)
-    spectra = []
+    
+    spectrum = RainySpectrum(nz, Rayleigh, tau, kx, γ, α, β, lower_q0, k, Legendre=Legendre, erf=erf, bc_type=bc_type, nondim=nondim, dealias=dealias,Lz=1, use_heaviside=use_heaviside, restart=restart)
+    spectrum.solve(dense=dense, N_evals=N_evals, target=target)
+    
+    evals_good = spectrum.evals_good
+    indx = spectrum.indx
     fig = plt.figure(figsize=[6,6])
     spec_ax = fig.add_axes([0.15,0.2,0.8,0.7])
-    for solver in [lo_res, hi_res]:
-        if args['--dense']:
-            sd_mode = 'dense'
-            if restart:
-                solver.load()
-            else:
-                solver.solve(dense=True)
-                solver.save()
-        else:
-            sd_mode = 'sparse'
-            if restart:
-                solver.load()
-            else:
-                solver.solve(dense=False, N_evals=N_evals, target=target)
-                solver.save()
-    fig_filename=f"Ra_{Rayleigh:.2e}_nz_{nz}_kx_{kx:.3f}_bc_{bc_type}_{sd_mode}_spectrum"
+    fig_filename=f"Ra_{Rayleigh:.2e}_nz_{nz}_kx_{kx:.3f}_bc_{bc_type}_dense_{dense}_spectrum"
     if restart:
         fig_filename += "_restart"
-    evals_ok, indx_ok, ep = mode_reject(lo_res, hi_res, plot_drift_ratios=True, drift_threshold=drift_threshold)
-    evals_good = evals_ok
-    indx = indx_ok
-    logger.info(f"good modes ({{$\delta_t$}} = {drift_threshold:.1e}):    max growth rate = {evals_good[-1]}")
-    lo_indx = np.argsort(lo_res.eigenvalues.real)
-    logger.info(f"low res modes: max growth rate = {lo_res.eigenvalues[lo_indx][-1]}")
+    logger.info(f"good modes ({{$\delta_t$}} = {drift_threshold:.1e}):    max growth rate = {spectrum.evals_good[-1]}")
     eps = 1e-7
-    logger.info(f"good fastest oscillating modes: {evals_good[np.argmax(np.abs(evals_good.imag))]}")
-    col = np.where(np.abs(evals_ok.imag) > eps, 'g', np.where(evals_ok.real > 0, 'r','k'))
-    spec_ax.scatter(evals_ok.real, evals_ok.imag, marker='o', c=col, label=f'good modes ($\delta_t$ = {drift_threshold:.1e})',s=100)#, alpha=0.5, s=25)
+    logger.info(f"good fastest oscillating modes: {spectrum.evals_good[np.argmax(np.abs(spectrum.evals_good.imag))]}")
+    col = np.where(np.abs(evals_good.imag) > eps, 'g', np.where(evals_good.real > 0, 'r','k'))
+    spec_ax.scatter(evals_good.real, evals_good.imag, marker='o', c=col, label=f'good modes ($\delta_t$ = {drift_threshold:.1e})',s=100)#, alpha=0.5, s=25)
     col = np.where(np.abs(evals_good.imag) > eps, 'g', np.where(evals_good.real > 0, 'r','k'))
 
     if annotate:
-        for n,ev in enumerate(evals_ok):
+        for n,ev in enumerate(evals_good):
             logger.info(f"ok ev = {ev}, index = {indx_ok[n]}")
             spec_ax.annotate(indx_ok[n], (ev.real, ev.imag), fontsize=8, ha='left',va='top')
 
@@ -170,19 +140,19 @@ if __name__ == "__main__":
     spec_ax.set_ylabel(r"Frequency")
     spec_ax.set_xlim(-1,0.1)
     spec_ax.set_ylim(-0.3,0.3)
-    spec_filename = f'{lo_res.case_name}/{fig_filename}.{plot_type}'
+    spec_filename = f'{spectrum.lo_res.case_name}/{fig_filename}.{plot_type}'
     logger.info(f"saving file to {spec_filename}")
     fig.tight_layout()
     fig.savefig(spec_filename, dpi=300)
     spec_ax.set_xlim(-0.2,0.5)
-    spec_filename = f'{lo_res.case_name}/{fig_filename}_zoom.{plot_type}'
+    spec_filename = f'{spectrum.lo_res.case_name}/{fig_filename}_zoom.{plot_type}'
     logger.info(f"saving zoomed file to {spec_filename}")
     fig.tight_layout()
     fig.savefig(spec_filename, dpi=300)
 
     if emode is not None:
-        lo_res.plot_eigenmode(emode, plot_type=plot_type, normalization=normalization)
+        spectrum.lo_res.plot_eigenmode(emode, plot_type=plot_type, normalization=normalization)
     else:
         for i in [-1, -2, -3, -4, -5]:
             emode = indx[i]
-            lo_res.plot_eigenmode(emode, plot_type=plot_type, normalization=normalization)
+            spectrum.lo_res.plot_eigenmode(emode, plot_type=plot_type, normalization=normalization)

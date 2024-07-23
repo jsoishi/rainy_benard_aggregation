@@ -790,3 +790,42 @@ def mode_reject(lo_res, hi_res, drift_threshold=1e6, plot_drift_ratios=True, plo
         fig.savefig(filename, dpi=300)
 
     return evals_good, indx, ep
+
+
+class RainySpectrum():
+    def __init__(self, nz, Rayleigh, tau, kx, γ, α, β, lower_q0, k, rejection_method='resolution', Legendre=True, erf=True, nondim='buoyancy', bc_type=None, Prandtl=1, Prandtlm=1, Lz=1, dealias=3/2, dtype=np.complex128, twoD=True, use_heaviside=False, quiet=True, restart=False, N_evals=5, target=0):
+        self.restart = restart
+        self.N_evals = N_evals
+        self.target = target
+        if lower_q0 == 1:
+            self.EVP = RainyBenardEVP
+        else:
+            self.EVP = SplitRainyBenardEVP
+        self.lo_res = self.EVP(nz, Rayleigh, tau, kx, γ, α, β, lower_q0, k, Legendre=Legendre, erf=erf, bc_type=bc_type, nondim=nondim, dealias=dealias,Lz=1, use_heaviside=use_heaviside)
+        if not quiet:
+            self.lo_res.plot_background()
+        if rejection_method == 'resolution':
+            self.hi_res = self.EVP(int(2*nz), Rayleigh, tau, kx, γ, α, β, lower_q0, k, Legendre=Legendre, erf=erf, bc_type=bc_type, nondim=nondim, dealias=dealias,Lz=1, use_heaviside=use_heaviside)
+            if not quiet:
+                self.hi_res.plot_background()
+        elif rejection_method == 'bases':
+            self.hi_res = EVP(nz, Rayleigh, tau, kx, γ, α, β, lower_q0, k, Legendre=not(Legendre), erf=erf, bc_type=bc_type, nondim=nondim, dealias=dealias,Lz=1, use_heaviside=use_heaviside)
+            if not quiet:
+                self.hi_res.plot_background(label='alternative-basis')
+        else:
+            raise NotImplementedError('rejection method {:s}'.format(args['--rejection_method']))
+
+    def solve(self, dense=False, N_evals=5, target=0, quiet=False):
+        for solver in [self.lo_res, self.hi_res]:
+            if self.restart:
+                solver.load()
+            else:
+                solver.solve(dense=dense, N_evals=N_evals, target=target)
+                solver.save()
+        evals_ok, indx_ok, ep = mode_reject(self.lo_res, self.hi_res)
+        self.evals_good = evals_ok
+        self.indx = indx_ok
+        self.ep = ep
+        if not quiet:
+            logger.info(f"max growth rate = {self.evals_good[-1]}")
+
