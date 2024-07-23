@@ -129,7 +129,7 @@ if __name__ == "__main__":
     dlog = logging.getLogger('subsystems')
     dlog.setLevel(logging.WARNING)
     spectra = []
-    fig = plt.figure(figsize=[12,6])
+    fig = plt.figure(figsize=[6,6])
     spec_ax = fig.add_axes([0.15,0.2,0.8,0.7])
     for solver in [lo_res, hi_res]:
         if args['--dense']:
