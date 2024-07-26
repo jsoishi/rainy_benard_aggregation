@@ -80,6 +80,7 @@ annotate = args['--annotate']
 plot_type = args['--plot_type']
 use_heaviside = args['--use-heaviside']
 restart = args['--restart']
+rejection_method= args['--rejection_method']
 Prandtlm = 1
 Prandtl = 1
 dealias = 1#2
@@ -114,14 +115,14 @@ if __name__ == "__main__":
         tau_in = float(args['--tau'])
     # build solvers
     
-    spectrum = RainySpectrum(nz, Rayleigh, tau, kx, γ, α, β, lower_q0, k, Legendre=Legendre, erf=erf, bc_type=bc_type, nondim=nondim, dealias=dealias,Lz=1, use_heaviside=use_heaviside, restart=restart)
+    spectrum = RainySpectrum(nz, Rayleigh, tau, kx, γ, α, β, lower_q0, k, Legendre=Legendre, erf=erf, bc_type=bc_type, nondim=nondim, dealias=dealias,Lz=1, use_heaviside=use_heaviside, restart=restart, rejection_method=rejection_method)
     spectrum.solve(dense=dense, N_evals=N_evals, target=target)
     
     evals_good = spectrum.evals_good
     indx = spectrum.indx
     fig = plt.figure(figsize=[6,6])
     spec_ax = fig.add_axes([0.15,0.2,0.8,0.7])
-    fig_filename=f"Ra_{Rayleigh:.2e}_nz_{nz}_kx_{kx:.3f}_bc_{bc_type}_dense_{dense}_spectrum"
+    fig_filename=f"Ra_{Rayleigh:.2e}_nz_{nz}_kx_{kx:.3f}_bc_{bc_type}_dense_{dense}_rejection_{rejection_method}_spectrum"
     if restart:
         fig_filename += "_restart"
     logger.info(f"good modes ({{$\delta_t$}} = {drift_threshold:.1e}):    max growth rate = {spectrum.evals_good[-1]}")
