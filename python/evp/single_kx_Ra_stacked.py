@@ -90,8 +90,6 @@ Prandtlm = 1
 Prandtl = 1
 
 Lz = 1
-coords = de.CartesianCoordinates('x', 'y', 'z')
-dist = de.Distributor(coords, dtype=dtype)
 dealias = 2
 
 α = float(args['--alpha'])
@@ -142,8 +140,8 @@ if args['--dense']:
 plot_filename = Path(lo_res.case_name)/Path(f"{fig_filename}.pdf")
 ax.axhline(0, color='k', linestyle=':',linewidth=1)
 ax.legend()
-omega_r_max = np.max(σ.real)
-ax.set_ylim(-1.1*omega_r_max,1.1*omega_r_max)
+omega_r_max_abs = np.abs(np.max(σ.real))
+#ax.set_ylim(-1.1*omega_r_max_abs,1.1*omega_r_max_abs)
 ax.set_xlim(0.1,100)
 ax.set_xlabel(r"$k_x$")
 ax.set_ylabel(r"$\omega_r$")

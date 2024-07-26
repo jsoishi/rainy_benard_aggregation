@@ -134,7 +134,7 @@ class RainyEVP():
 
 class SplitRainyBenardEVP(RainyEVP):
     def __init__(self, nz, Ra, tau_in, kx_in, γ, α, β, lower_q0, k, Legendre=True, erf=True, nondim='buoyancy', bc_type=None, Prandtl=1, Prandtlm=1, Lz=1, dealias=3/2, dtype=np.complex128, twoD=True, use_heaviside=False):
-        self.param_string = f'Ra={Ra:}_kx={kx_in:}_α={α:}_β={β:}_γ={γ:}_tau={tau_in:}_k={k:}_nz={nz:}'
+        self.param_string = f'Ra={Ra:}_kx={kx_in:}_α={α:}_β={β:}_γ={γ:}_tau={tau_in:}_k={k:}_nz={nz:}_bc_type={bc_type}'
         logger.info(self.param_string.replace('_',', '))
         self.savefilename = f'{self.param_string.replace('=','_'):}_eigenvectors.h5'
         self.nz = nz
@@ -809,7 +809,7 @@ class RainySpectrum():
             if not quiet:
                 self.hi_res.plot_background()
         elif rejection_method == 'bases':
-            self.hi_res = EVP(nz, Rayleigh, tau, kx, γ, α, β, lower_q0, k, Legendre=not(Legendre), erf=erf, bc_type=bc_type, nondim=nondim, dealias=dealias,Lz=1, use_heaviside=use_heaviside)
+            self.hi_res = self.EVP(nz, Rayleigh, tau, kx, γ, α, β, lower_q0, k, Legendre=not(Legendre), erf=erf, bc_type=bc_type, nondim=nondim, dealias=dealias,Lz=1, use_heaviside=use_heaviside)
             if not quiet:
                 self.hi_res.plot_background(label='alternative-basis')
         else:
@@ -822,7 +822,7 @@ class RainySpectrum():
             else:
                 solver.solve(dense=dense, N_evals=N_evals, target=target)
                 solver.save()
-        evals_ok, indx_ok, ep = mode_reject(self.lo_res, self.hi_res)
+        evals_ok, indx_ok, ep = mode_reject(self.lo_res, self.hi_res, plot_drift_ratios=False)
         self.evals_good = evals_ok
         self.indx = indx_ok
         self.ep = ep
