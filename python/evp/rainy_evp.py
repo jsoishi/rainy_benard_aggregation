@@ -1,7 +1,9 @@
 import os
 import numpy as np
 from mpi4py import MPI
-from scipy.special import lambertw as W, erf
+from scipy.special import lambertw as W
+from scipy.special import erf as erf_func
+from mpi4py import MPI
 import dedalus.public as de
 import h5py
 import matplotlib.pyplot as plt
@@ -389,7 +391,7 @@ class SplitRainyBenardEVP(RainyEVP):
         if self.use_heaviside:
             self.scrN = []
             if self.erf:
-                H = lambda A: 0.5*(1+erf(self.k*A))
+                H = lambda A: 0.5*(1+erf_func(self.k*A))
                 for i in range(2):
                     self.scrN.append((H(self.q0[i] - self.qs0[i]) + 1/2*(self.q0[i] - self.qs0[i])*self.k*2*(np.pi)**(-1/2)*np.exp(-self.k**2*(self.q0[i] - self.qs0[i])**2)).evaluate())
                     self.scrN[i].name=f'scrN{i}'
@@ -489,7 +491,7 @@ class RainyBenardEVP(RainyEVP):
         else:
             self.coords = de.CartesianCoordinates('x', 'y', 'z')
             self.z_slice = (0,0,slice(None))
-        self.dist = de.Distributor(self.coords, dtype=dtype)
+        self.dist = de.Distributor(self.coords, dtype=dtype, comm=MPI.COMM_SELF)
         self.erf = erf
         self.Legendre = Legendre
         self.nondim = nondim
@@ -679,7 +681,7 @@ class RainyBenardEVP(RainyEVP):
             raise ValueError('nondim {:} not in valid set [diffusion, buoyancy]'.format(nondim))
 
         if self.erf:
-            H = lambda A: 0.5*(1+erf(self.k*A))
+            H = lambda A: 0.5*(1+erf_func(self.k*A))
         else:
             H = lambda A: 0.5*(1+np.tanh(self.k*A))
         # solve NLBVP for smoothing background
