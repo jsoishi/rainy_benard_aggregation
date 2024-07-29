@@ -52,7 +52,7 @@ class RainyEVP():
             norm_data = data['b']
         i_max = np.argmax(np.abs(norm_data[self.z_slice]))
         phase_correction = norm_data[self.z_slice][i_max]
-        
+
         for v in ['q','b']:
             name = names[v]
             d = data[v]/phase_correction
@@ -119,7 +119,7 @@ class RainyEVP():
             if k != 'ux':
                 v.get_yaxis().set_visible(False)
         logger.info(f"Phase = {phase_correction.real:.3e}+{phase_correction.imag:.3e}i")
-        
+
         #fig.suptitle(f"$\sigma = {sigma.real:.2f} {sigma.imag:+.2e} i$")
         logger.info(r"$\sigma"+ f" = {sigma.real:.2f}{sigma.imag:+.2e} i$")
         if not mode_label:
@@ -130,13 +130,13 @@ class RainyEVP():
         fig.savefig(total_filename)
         logger.info("eigenmode {:d} saved in {:s}".format(index, total_filename))
 
-    
+
 
 class SplitRainyBenardEVP(RainyEVP):
     def __init__(self, nz, Ra, tau_in, kx_in, γ, α, β, lower_q0, k, Legendre=True, erf=True, nondim='buoyancy', bc_type=None, Prandtl=1, Prandtlm=1, Lz=1, dealias=3/2, dtype=np.complex128, twoD=True, use_heaviside=False):
         self.param_string = f'Ra={Ra:}_kx={kx_in:}_α={α:}_β={β:}_γ={γ:}_tau={tau_in:}_k={k:}_nz={nz:}_bc_type={bc_type}'
         logger.info(self.param_string.replace('_',', '))
-        self.savefilename = f'{self.param_string.replace('=','_'):}_eigenvectors.h5'
+        self.savefilename = f'{self.param_string.replace("=","_"):}_eigenvectors.h5'
         self.nz = nz
         self.Lz = Lz
 
@@ -207,7 +207,7 @@ class SplitRainyBenardEVP(RainyEVP):
         atm_name = 'unsaturated'
 
         self.case_name = f'analytic_{atm_name:s}/stacked_alpha{self.α:1.0f}_beta{self.β:}_gamma{self.γ:}_q{self.lower_q0:1.1f}'
-        self.case_name += f'/tau{self.tau['g'].squeeze().real:}_k{self.k:.3e}'
+        self.case_name += f'/tau{self.tau["g"].squeeze().real:}_k{self.k:.3e}'
         if self.erf:
             self.case_name += '_erf'
         if self.Legendre:
@@ -465,7 +465,7 @@ class RainyBenardEVP(RainyEVP):
     def __init__(self, nz, Ra, tau_in, kx_in, γ, α, β, lower_q0, k, atmosphere=None, relaxation_method=None, Legendre=True, erf=True, nondim='buoyancy', bc_type=None, Prandtl=1, Prandtlm=1, Lz=1, dealias=3/2, dtype=np.complex128, twoD=True, use_heaviside=False):
         self.param_string = f'Ra={Ra:}_kx={kx_in:}_α={α:}_β={β:}_γ={γ:}_tau={tau_in:}_k={k:}_nz={nz:}'
         logger.info(self.param_string.replace('_',', '))
-        self.savefilename = f'{self.param_string.replace('=','_'):}_eigenvectors.h5'        
+        self.savefilename = f'{self.param_string.replace("=","_"):}_eigenvectors.h5'
         self.nz = nz
         self.Lz = Lz
 
@@ -828,4 +828,3 @@ class RainySpectrum():
         self.ep = ep
         if not quiet:
             logger.info(f"max growth rate = {self.evals_good[-1]}")
-
