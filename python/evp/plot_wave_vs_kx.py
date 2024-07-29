@@ -86,16 +86,11 @@ if __name__ == "__main__":
     else:
         bc_type = None # default no-slip
 
-    dealias = 3/2
-    dtype = np.complex128
-
     Prandtlm = 1
     Prandtl = 1
 
     Lz = 1
-    coords = de.CartesianCoordinates('x', 'y', 'z')
-    dist = de.Distributor(coords, dtype=dtype)
-    dealias = 2
+    dealias = 1
 
     α = float(args['--alpha'])
     β = float(args['--beta'])
@@ -124,27 +119,25 @@ if __name__ == "__main__":
     global_waves = comm.gather(waves, root=0)
     global_kx_plot = comm.gather(kx_plot, root=0)
 
-    for kxp,w in zip(global_kx_plot, global_waves):
-        plt.scatter(kxp[-1], w[-1].imag, color='k')
+    if comm.rank == 0:
+        for kxp,w in zip(global_kx_plot, global_waves):
+            plt.scatter(kxp[-1], w[-1].imag, color='k')
 
-    kz = 6.28
-    N = np.sqrt(0.1)
-    def gw_disp(kx, kz, N):
-        return N*kx/np.sqrt((kx**2 + kz**2))
-    plt.loglog(kxs_global, gw_disp(kxs_global,kz, N),'x-', label=r'$N_b \frac{kx}{\sqrt{kx^2 + (2\pi/Lz)^2}}$')
-    plt.legend()
-    #plt.ylim(-0.4,0.4)
-    plt.ylim(1e-4,0.6)
-    plt.xlabel(r"$k_x$")
-    plt.ylabel(r"$\omega_i$")
-    plt.tight_layout()
+        kz = 6.28
+        N = np.sqrt(0.1)
+        def gw_disp(kx, kz, N):
+            return N*kx/np.sqrt((kx**2 + kz**2))
+        plt.loglog(kxs_global, gw_disp(kxs_global,kz, N),'x-', label=r'$N_b \frac{kx}{\sqrt{kx^2 + (2\pi/Lz)^2}}$')
+        plt.legend()
+        #plt.ylim(-0.4,0.4)
+        plt.ylim(1e-4,0.6)
+        plt.xlabel(r"$k_x$")
+        plt.ylabel(r"$\omega_i$")
+        plt.tight_layout()
 
-    fig_filename=f"Ra_{Rayleigh:.2e}_nz_{nz}_bc_{bc_type}_dense_{dense}_freq_vs_kx_parallel"
-    spec_filename = f'{spectrum.lo_res.case_name}/{fig_filename}.{plot_type}'
-    logger.info(f"saving file to {spec_filename}")
-
-
-    plt.savefig(spec_filename,dpi=300)
+        fig_filename=f"Ra_{Rayleigh:.2e}_nz_{nz}_bc_{bc_type}_dense_{dense}_freq_vs_kx_parallel"
+        spec_filename = f'{spectrum.lo_res.case_name}/{fig_filename}.{plot_type}'
+        logger.info(f"saving file to {spec_filename}")
 
 
-
+        plt.savefig(spec_filename,dpi=300)
