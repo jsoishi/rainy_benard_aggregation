@@ -86,16 +86,11 @@ if __name__ == "__main__":
     else:
         bc_type = None # default no-slip
 
-    dealias = 3/2
-    dtype = np.complex128
-
     Prandtlm = 1
     Prandtl = 1
 
     Lz = 1
-    coords = de.CartesianCoordinates('x', 'y', 'z')
-    dist = de.Distributor(coords, dtype=dtype)
-    dealias = 2
+    dealias = 1
 
     α = float(args['--alpha'])
     β = float(args['--beta'])
@@ -146,6 +141,3 @@ if __name__ == "__main__":
 
 
         plt.savefig(spec_filename,dpi=300)
-
-
-
