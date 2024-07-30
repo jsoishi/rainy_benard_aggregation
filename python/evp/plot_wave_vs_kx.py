@@ -112,6 +112,7 @@ if __name__ == "__main__":
 
         wave_indx = np.abs(spectrum.evals_good.imag) > eps
         if wave_indx.sum() == 0:
+            logger.info(f"no waves for kx = {kx}")
             waves.append(np.array([0,]))
         else:
             waves.append(np.array(spectrum.evals_good[wave_indx]))
@@ -120,17 +121,20 @@ if __name__ == "__main__":
     global_kx_plot = comm.gather(kx_plot, root=0)
 
     if comm.rank == 0:
-        for kxp,w in zip(global_kx_plot, global_waves):
-            plt.scatter(kxp[-1], w[-1].imag, color='k')
+        flat_kx_plot = [x for xs in global_kx_plot for x in xs]
+        flat_waves = [x for xs in global_waves for x in xs]
+        for kxp,w in zip(flat_kx_plot, flat_waves):
+            plt.scatter(kxp, w.imag, color='k')
 
-        kz = 6.28
-        N = np.sqrt(0.1)
+        kz = 6.28 # biggest wave is typically one wave across Lz=1...
+        N = np.sqrt(0.1) # this is about right for both beta=1.1 and 1.05
         def gw_disp(kx, kz, N):
             return N*kx/np.sqrt((kx**2 + kz**2))
-        plt.loglog(kxs_global, gw_disp(kxs_global,kz, N),'x-', label=r'$N_b \frac{kx}{\sqrt{kx^2 + (2\pi/Lz)^2}}$')
+        plt.loglog(kxs_global, gw_disp(kxs_global,kz, N), label=r'$N_b \frac{kx}{\sqrt{kx^2 + (2\pi/Lz)^2}}$')
         plt.legend()
         #plt.ylim(-0.4,0.4)
-        plt.ylim(1e-4,0.6)
+        plt.ylim(1e-3,0.6)
+        plt.xlim(0.1,33)
         plt.xlabel(r"$k_x$")
         plt.ylabel(r"$\omega_i$")
         plt.tight_layout()
