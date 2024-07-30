@@ -554,7 +554,7 @@ class RainyBenardEVP(RainyEVP):
         self.grad_b0 = de.grad(self.b0).evaluate()
         self.grad_q0 = de.grad(self.q0).evaluate()
 
-        if not os.path.exists('{:s}/'.format(self.case_name)) and self.dist.comm.rank == 0:
+        if not os.path.exists('{:s}/'.format(self.case_name)) and MPI.COMM_WORLD.rank == 0:
             os.makedirs('{:s}/'.format(self.case_name))
 
     def get_names_data(self, fields):
