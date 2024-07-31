@@ -124,19 +124,24 @@ if __name__ == "__main__":
         flat_kx_plot = [x for xs in global_kx_plot for x in xs]
         flat_waves = [x for xs in global_waves for x in xs]
         for kxp,w in zip(flat_kx_plot, flat_waves):
-            plt.scatter(kxp, w.imag, color='k')
+            plt.scatter(kxp, w.imag, c=w.real)
+            print(f"kx = {kxp[0]},waves = {w}")
 
         kz = 6.28 # biggest wave is typically one wave across Lz=1...
         N = np.sqrt(0.1) # this is about right for both beta=1.1 and 1.05
         def gw_disp(kx, kz, N):
             return N*kx/np.sqrt((kx**2 + kz**2))
-        plt.loglog(kxs_global, gw_disp(kxs_global,kz, N), label=r'$N_b \frac{kx}{\sqrt{kx^2 + (2\pi/Lz)^2}}$')
+        plt.loglog(kxs_global, gw_disp(kxs_global,kz, N), label=r'$N_b \frac{kx}{\sqrt{kx^2 + (2\pi/Lz)^2}}$', color='k')
+        for i in range(2,4):
+            alpha = 1-0.3*i
+            plt.loglog(kxs_global, gw_disp(kxs_global,kz*i, N), alpha=alpha, color='k')
         plt.legend()
         #plt.ylim(-0.4,0.4)
-        plt.ylim(1e-3,0.6)
+        plt.ylim(1e-2,0.4)
         plt.xlim(0.1,33)
         plt.xlabel(r"$k_x$")
         plt.ylabel(r"$\omega_i$")
+        plt.colorbar()
         plt.tight_layout()
 
         fig_filename=f"Ra_{Rayleigh:.2e}_nz_{nz}_bc_{bc_type}_dense_{dense}_freq_vs_kx_parallel"
