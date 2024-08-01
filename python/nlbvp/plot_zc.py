@@ -67,15 +67,20 @@ def plot_solution(solution, title=None, mask=None, linestyle=None, ax=None):
 
 from scipy.optimize import newton
 from scipy.interpolate import interp1d
+from numpy.polynomial import Chebyshev as P
 
-def find_zc(sol, ε=1e-3, root_finding = 'log_newton'):
+def find_zc(sol, ε=1e-4, deg=256, root_finding = 'log_newton'):
     rh = sol['rh']
     z = sol['z']
     nz = z.shape[0]
     zc0 = z[np.argmin(np.abs(rh[0:int(nz*3/4)]-(1-ε)))]
     if root_finding == 'inverse':
         # invert the relationship and use interpolation to find where r_h = 1-ε (approach from below)
-        f_i = interp1d(rh, z) #inverse
+        #f_i = interp1d(rh, z) #inverse
+        #mask = slice(0,int(nz*3/4))
+        y = rh
+        f_i = P.fit(y,z,deg)
+        print(f'deg = {deg:4d} L2 = {np.sum(np.abs(f_i(y)-z)):.3g}' )
         zc = f_i(1-ε)
     elif root_finding == 'discrete':
         # crude initial emperical zc; look for where rh-1 ~ 0, in lower half of domain.
@@ -84,7 +89,11 @@ def find_zc(sol, ε=1e-3, root_finding = 'log_newton'):
         f = interp1d(z, rh-(1-ε))
         zc = newton(f, zc0)
     elif root_finding == 'log_newton':
-        f = interp1d(z, np.log(rh+ε))
+        # find when rh+ε=1, or rh=1-ε
+        #f = interp1d(z, np.log(rh+ε), kind='cubic')
+        y = np.log(rh+ε)
+        f = P.fit(z,y,deg)
+        print(f'deg = {deg:4d} L2 = {np.sum(np.abs(f(z)-y)):.3g}' )
         zc = newton(f, zc0)
     else:
         raise ValueError('search method {:} not in [inverse, discrete]'.format(root_finding))
@@ -132,25 +141,19 @@ if __name__=="__main__":
     for tau in data:
         data[tau]['zc'] = np.array(data[tau]['zc'])
 
-
-    if γ == 0.3:
-        zc_analytic = 0.4832893544084419
-        Tc_analytic = -0.4588071140209613
-    elif γ == 0.19:
-        zc_analytic = 0.4751621541611023
-        Tc_analytic = -0.4588071140209616
-    else:
-        raise ValueError("γ = {:} not yet supported".format(γ))
-
+    from analytic_zc import f_zc
+    zc_analytic = f_zc()(γ)
+    print(f'analytic zc = {zc_analytic:.4g}')
 
     import matplotlib.colors as colors
     norm = colors.LogNorm(vmin=min_tau, vmax=max_tau)
 
     fig, ax = plt.subplots(figsize=[6,6/1.6])
     for tau in data:
-        p = ax.scatter(data[tau]['k'], data[tau]['zc'], c=tau*np.ones_like(data[tau]['k']), norm=norm)
+        p = ax.scatter(data[tau]['k'], data[tau]['zc'], c=tau*np.ones_like(data[tau]['k']), norm=norm, alpha=0.5)
         if args['--show_discrete']:
             ax.scatter(data[tau]['k'], data[tau]['zc_discrete'], c=tau*np.ones_like(data[tau]['k']), norm=norm, alpha=0.3, marker='s')
+    ax.axhline(y=zc_analytic, linestyle='dashed', color='xkcd:dark grey', alpha=0.5)
     ax.set_xlabel(r'$k$')
     ax.set_ylabel(r'$z_c$')
     fig.colorbar(mappable=p, ax=ax, orientation='horizontal', location='top', label=r'$\tau$', norm=norm)

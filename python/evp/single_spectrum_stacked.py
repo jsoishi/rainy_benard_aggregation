@@ -114,10 +114,10 @@ if __name__ == "__main__":
     if args['--tau']:
         tau_in = float(args['--tau'])
     # build solvers
-    
+
     spectrum = RainySpectrum(nz, Rayleigh, tau, kx, γ, α, β, lower_q0, k, Legendre=Legendre, erf=erf, bc_type=bc_type, nondim=nondim, dealias=dealias,Lz=1, use_heaviside=use_heaviside, restart=restart, rejection_method=rejection_method)
     spectrum.solve(dense=dense, N_evals=N_evals, target=target)
-    
+
     evals_good = spectrum.evals_good
     indx = spectrum.indx
     fig = plt.figure(figsize=[6,6])

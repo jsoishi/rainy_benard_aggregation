@@ -169,11 +169,24 @@ if __name__=="__main__":
     import matplotlib.colors as colors
     norm = colors.LogNorm(vmin=min_tau, vmax=max_tau)
 
+    import scipy.optimize as sciop
+    f = lambda x, a, b: a + b*x
+
     for quant in ['q', 'b', 'rh']:
         fig, ax = plt.subplots(figsize=[6,6/1.6])
+        tau_set = []
+        L2_set = []
         for tau in data:
             taus = tau*np.ones_like(data[tau][f'L2_{quant:s}'])
             p = ax.scatter(taus, data[tau][f'L2_{quant:s}'], c=taus, norm=norm)
+            tau_set.append(tau)
+            L2_set.append(data[tau][f'L2_{quant:s}'][0])#hack to pull out single element from potentially multi-resolution dataset
+        tau_set = np.array(tau_set)
+        fit = sciop.curve_fit(f, np.log(tau_set), np.log(L2_set))
+        a, b = fit[0]
+        ax.plot(tau_set, np.exp(a)*(tau_set**b), linestyle='dashed', color='xkcd:grey', label=rf'q \propto \tau^{b}')
+        print(fit[0], np.exp(a))
+
         ax.set_xlabel(r'$\tau$')
         ax.set_ylabel(r'$|{:s}_c - {:s}_a|/|{:s}_a|$'.format(quant,quant,quant))
         fig.colorbar(mappable=p, ax=ax, orientation='horizontal', location='top', label=r'$\tau$', norm=norm)

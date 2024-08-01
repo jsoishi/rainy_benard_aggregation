@@ -817,16 +817,16 @@ class RainySpectrum():
         else:
             raise NotImplementedError('rejection method {:s}'.format(args['--rejection_method']))
 
-    def solve(self, dense=False, N_evals=5, target=0, quiet=False):
+    def solve(self, dense=False, N_evals=5, target=0, quiet=False, plot_drift_ratios=False):
         for solver in [self.lo_res, self.hi_res]:
             if self.restart:
                 solver.load()
             else:
                 solver.solve(dense=dense, N_evals=N_evals, target=target)
                 solver.save()
-        evals_ok, indx_ok, ep = mode_reject(self.lo_res, self.hi_res, plot_drift_ratios=False)
+        evals_ok, indx_ok, ep = mode_reject(self.lo_res, self.hi_res, plot_drift_ratios=plot_drift_ratios)
         self.evals_good = evals_ok
         self.indx = indx_ok
         self.ep = ep
         if not quiet:
-            logger.info(f"max growth rate = {self.evals_good[-1]}")
+            logger.info(f"max growth rate = {self.evals_good[-1]}, at mode {self.indx[-1]}")
