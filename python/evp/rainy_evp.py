@@ -135,7 +135,7 @@ class RainyEVP():
 
 
 class SplitRainyBenardEVP(RainyEVP):
-    def __init__(self, nz, Ra, tau_in, kx_in, γ, α, β, lower_q0, k, Legendre=True, erf=True, nondim='buoyancy', bc_type=None, Prandtl=1, Prandtlm=1, Lz=1, dealias=3/2, dtype=np.complex128, twoD=True, use_heaviside=False):
+    def __init__(self, nz, Ra, tau_in, kx_in, γ, α, β, lower_q0, k, Legendre=True, erf=True, nondim='buoyancy', bc_type=None, Prandtl=1, Prandtlm=1, Lz=1, dealias=3/2, dtype=np.complex128, twoD=True, use_heaviside=False, dynamic_gamma_factor=1):
         self.param_string = f'Ra={Ra:}_kx={kx_in:}_α={α:}_β={β:}_γ={γ:}_tau={tau_in:}_k={k:}_nz={nz:}_bc_type={bc_type}'
         logger.info(self.param_string.replace('_',', '))
         self.savefilename = f'{self.param_string.replace("=","_"):}_eigenvectors.h5'
@@ -464,8 +464,8 @@ class SplitRainyBenardEVP(RainyEVP):
         self.eigenvalues = self.solver.eigenvalues
 
 class RainyBenardEVP(RainyEVP):
-    def __init__(self, nz, Ra, tau_in, kx_in, γ, α, β, lower_q0, k, atmosphere=None, relaxation_method=None, Legendre=True, erf=True, nondim='buoyancy', bc_type=None, Prandtl=1, Prandtlm=1, Lz=1, dealias=3/2, dtype=np.complex128, twoD=True, use_heaviside=False):
-        self.param_string = f'Ra={Ra:}_kx={kx_in:}_α={α:}_β={β:}_γ={γ:}_tau={tau_in:}_k={k:}_nz={nz:}'
+    def __init__(self, nz, Ra, tau_in, kx_in, γ, α, β, lower_q0, k, atmosphere=None, relaxation_method=None, Legendre=True, erf=True, nondim='buoyancy', bc_type=None, Prandtl=1, Prandtlm=1, Lz=1, dealias=3/2, dtype=np.complex128, twoD=True, use_heaviside=False, dynamic_gamma_factor=1):
+        self.param_string = f'Ra={Ra:}_kx={kx_in:}_α={α:}_β={β:}_γ={γ:}_tau={tau_in:}_k={k:}_nz={nz:}_bc_type={bc_type}_dynamic_gamma_{dynamic_gamma_factor:}'
         logger.info(self.param_string.replace('_',', '))
         self.savefilename = f'{self.param_string.replace("=","_"):}_eigenvectors.h5'
         self.nz = nz
@@ -478,6 +478,7 @@ class RainyBenardEVP(RainyEVP):
         self.lower_q0 = lower_q0
         self.k = k
         self.atmosphere = atmosphere
+        self.dynamic_gamma_factor = dynamic_gamma_factor
 
         self.Prandtl = Prandtl
         self.Prandtlm = Prandtlm
@@ -656,7 +657,7 @@ class RainyBenardEVP(RainyEVP):
         b0 = self.b0
         grad_q0 = self.grad_q0
         grad_b0 = self.grad_b0
-        γ = self.γ
+        γ = self.γ * self.dynamic_gamma_factor
         α = self.α
         β = self.β
         tau = self.tau
@@ -795,7 +796,7 @@ def mode_reject(lo_res, hi_res, drift_threshold=1e6, plot_drift_ratios=True, plo
 
 
 class RainySpectrum():
-    def __init__(self, nz, Rayleigh, tau, kx, γ, α, β, lower_q0, k, rejection_method='resolution', Legendre=True, erf=True, nondim='buoyancy', bc_type=None, Prandtl=1, Prandtlm=1, Lz=1, dealias=3/2, dtype=np.complex128, twoD=True, use_heaviside=False, quiet=True, restart=False, N_evals=5, target=0):
+    def __init__(self, nz, Rayleigh, tau, kx, γ, α, β, lower_q0, k, rejection_method='resolution', Legendre=True, erf=True, nondim='buoyancy', bc_type=None, Prandtl=1, Prandtlm=1, Lz=1, dealias=3/2, dtype=np.complex128, twoD=True, use_heaviside=False, quiet=True, restart=False, N_evals=5, target=0, dynamic_gamma_factor=1):
         self.restart = restart
         self.N_evals = N_evals
         self.target = target
@@ -803,15 +804,15 @@ class RainySpectrum():
             self.EVP = RainyBenardEVP
         else:
             self.EVP = SplitRainyBenardEVP
-        self.lo_res = self.EVP(nz, Rayleigh, tau, kx, γ, α, β, lower_q0, k, Legendre=Legendre, erf=erf, bc_type=bc_type, nondim=nondim, dealias=dealias,Lz=1, use_heaviside=use_heaviside)
+        self.lo_res = self.EVP(nz, Rayleigh, tau, kx, γ, α, β, lower_q0, k, Legendre=Legendre, erf=erf, bc_type=bc_type, nondim=nondim, dealias=dealias,Lz=1, use_heaviside=use_heaviside, dynamic_gamma_factor=dynamic_gamma_factor)
         if not quiet:
             self.lo_res.plot_background()
         if rejection_method == 'resolution':
-            self.hi_res = self.EVP(int(2*nz), Rayleigh, tau, kx, γ, α, β, lower_q0, k, Legendre=Legendre, erf=erf, bc_type=bc_type, nondim=nondim, dealias=dealias,Lz=1, use_heaviside=use_heaviside)
+            self.hi_res = self.EVP(int(2*nz), Rayleigh, tau, kx, γ, α, β, lower_q0, k, Legendre=Legendre, erf=erf, bc_type=bc_type, nondim=nondim, dealias=dealias,Lz=1, use_heaviside=use_heaviside, dynamic_gamma_factor=dynamic_gamma_factor)
             if not quiet:
                 self.hi_res.plot_background()
         elif rejection_method == 'bases':
-            self.hi_res = self.EVP(nz, Rayleigh, tau, kx, γ, α, β, lower_q0, k, Legendre=not(Legendre), erf=erf, bc_type=bc_type, nondim=nondim, dealias=dealias,Lz=1, use_heaviside=use_heaviside)
+            self.hi_res = self.EVP(nz, Rayleigh, tau, kx, γ, α, β, lower_q0, k, Legendre=not(Legendre), erf=erf, bc_type=bc_type, nondim=nondim, dealias=dealias,Lz=1, use_heaviside=use_heaviside, dynamic_gamma_factor=dynamic_gamma_factor)
             if not quiet:
                 self.hi_res.plot_background(label='alternative-basis')
         else:

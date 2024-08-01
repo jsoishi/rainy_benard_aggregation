@@ -46,53 +46,51 @@ Options:
     --plot_type=<plot_type>   File type for plots [default: pdf]
     --use-heaviside        Use the Heaviside function
     --restart              Don't solve, use saved eigenmodes and eigenvalues
+    --dynamic-gamma=<dyn_gam>       Factor to raise or lower gamma by in EVP (but not background!) [default: 1]
 """
 import logging
 logger = logging.getLogger(__name__)
-for system in ['h5py._conv', 'matplotlib', 'PIL']:
+for system in ['matplotlib', 'PIL']:
     logging.getLogger(system).setLevel(logging.WARNING)
-
-import os
 import numpy as np
-import dedalus.public as de
-import h5py
 import matplotlib.pyplot as plt
 plt.style.use("prl")
 
 from rainy_evp import RainySpectrum
-from docopt import docopt
-args = docopt(__doc__)
-
-N_evals = int(float(args['--eigs']))
-target = float(args['--target'])
-Rayleigh = float(args['--Ra'])
-tau_in = float(args['--tau'])
-drift_threshold = float(args['--drift_threshold'])
-normalization = args['--normalization']
-if args['--stress-free']:
-    bc_type = 'stress-free'
-elif args['--top-stress-free']:
-    bc_type = 'top-stress-free'
-else:
-    bc_type = None # default no-slip
-kx = float(args['--kx'])
-annotate = args['--annotate']
-plot_type = args['--plot_type']
-use_heaviside = args['--use-heaviside']
-restart = args['--restart']
-rejection_method= args['--rejection_method']
-Prandtlm = 1
-Prandtl = 1
-dealias = 1#2
-dense = args['--dense']
-
-emode = args['--emode']
-if emode:
-    emode = int(emode)
-
-import os
-
 if __name__ == "__main__":
+    from docopt import docopt
+    args = docopt(__doc__)
+
+    N_evals = int(float(args['--eigs']))
+    target = float(args['--target'])
+    Rayleigh = float(args['--Ra'])
+    tau_in = float(args['--tau'])
+    drift_threshold = float(args['--drift_threshold'])
+    normalization = args['--normalization']
+    if args['--stress-free']:
+        bc_type = 'stress-free'
+    elif args['--top-stress-free']:
+        bc_type = 'top-stress-free'
+    else:
+        bc_type = None # default no-slip
+    kx = float(args['--kx'])
+    annotate = args['--annotate']
+    plot_type = args['--plot_type']
+    use_heaviside = args['--use-heaviside']
+    restart = args['--restart']
+    rejection_method= args['--rejection_method']
+    dynamic_gamma = float(args['--dynamic-gamma'])
+    if dynamic_gamma != 1.0:
+        logger.warning(f"dynamic_gamma factor is set to {dynamic_gamma:}. This is not self-consistent!")
+    Prandtlm = 1
+    Prandtl = 1
+    dealias = 1#2
+    dense = args['--dense']
+
+    emode = args['--emode']
+    if emode:
+        emode = int(emode)
+
     Legendre = args['--Legendre']
     erf = args['--erf']
     case = args['<case>']
@@ -115,14 +113,14 @@ if __name__ == "__main__":
         tau_in = float(args['--tau'])
     # build solvers
     
-    spectrum = RainySpectrum(nz, Rayleigh, tau, kx, γ, α, β, lower_q0, k, Legendre=Legendre, erf=erf, bc_type=bc_type, nondim=nondim, dealias=dealias,Lz=1, use_heaviside=use_heaviside, restart=restart, rejection_method=rejection_method)
+    spectrum = RainySpectrum(nz, Rayleigh, tau, kx, γ, α, β, lower_q0, k, Legendre=Legendre, erf=erf, bc_type=bc_type, nondim=nondim, dealias=dealias,Lz=1, use_heaviside=use_heaviside, restart=restart, rejection_method=rejection_method, dynamic_gamma_factor = dynamic_gamma)
     spectrum.solve(dense=dense, N_evals=N_evals, target=target)
     
     evals_good = spectrum.evals_good
     indx = spectrum.indx
     fig = plt.figure(figsize=[6,6])
     spec_ax = fig.add_axes([0.15,0.2,0.8,0.7])
-    fig_filename=f"Ra_{Rayleigh:.2e}_nz_{nz}_kx_{kx:.3f}_bc_{bc_type}_dense_{dense}_rejection_{rejection_method}_spectrum"
+    fig_filename=f"Ra_{Rayleigh:.2e}_nz_{nz}_kx_{kx:.3f}_bc_{bc_type}_dense_{dense}_rejection_{rejection_method}_dynamic_gamma_{dynamic_gamma:}_spectrum"
     if restart:
         fig_filename += "_restart"
     logger.info(f"good modes ({{$\delta_t$}} = {drift_threshold:.1e}):    max growth rate = {spectrum.evals_good[-1]}")
