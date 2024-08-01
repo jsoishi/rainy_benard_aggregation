@@ -133,10 +133,11 @@ class Eigenproblem():
         else:
             inverse_drift = 1/self.delta_near
         eval_low_and_indx = eval_low_and_indx[np.where(inverse_drift > self.drift_threshold)]
+        drift_ratios = inverse_drift[np.where(inverse_drift > self.drift_threshold)]
 
         eval_low = eval_low_and_indx[:, 0]
         indx = eval_low_and_indx[:, 1].real.astype(int)
-
+        logger.debug(f'mode reject: {eval_low[-1]:.3g}, {indx[-1]}, {drift_ratios[-1]:3g}, rejecting {eval_low_sorted.size-eval_low.size} modes, keeping {eval_low.size}')
         return eval_low, indx
 
     def plot_drift_ratios(self, axes=None):
