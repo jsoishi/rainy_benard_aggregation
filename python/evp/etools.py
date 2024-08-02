@@ -88,7 +88,7 @@ class Eigenproblem():
         self.grow_func = grow_func
         self.freq_func = freq_func
 
-    def discard_spurious_eigenvalues_via_tau(self, tau_cutoff=1e-10):
+    def discard_spurious_eigenvalues_via_tau(self):
         """ Use an experimental tau-thresholding to reject spurious eigenvalues.
         Returns trustworthy eigenvalues using the L2 magnitude of the taus.
         """
@@ -107,13 +107,12 @@ class Eigenproblem():
         evals_indices_taus = evals_indices_taus[np.argsort(evals_indices_taus[:,0].real)]
 
         # reject via tau amplitudes
-        mask_ok = np.where(evals_indices_taus[:,-1] < tau_cutoff) # np.where()?
+        mask_ok = np.where(evals_indices_taus[:,-1] < self.tau_cutoff) # np.where()?
         evals_indices_taus_ok = evals_indices_taus[mask_ok]
         evals_ok = evals_indices_taus_ok[:, 0]
         indices_ok = evals_indices_taus_ok[:, 1].real.astype(int)
-        logger.debug(f'mode reject: {evals_ok[-1]:.3g}, {indices_ok[-1]}, rejecting {evals.size-evals_ok.size}, retained {evals_ok.size} good eigenvalues with |τ|_2 < {tau_cutoff:.3g}')
+        logger.debug(f'mode reject: {evals_ok[-1]:.3g}, {indices_ok[-1]}, rejecting {evals.size-evals_ok.size}, retained {evals_ok.size} good eigenvalues with |τ|_2 < {self.tau_cutoff:.3g}')
 
-        self.tau_cutoff = tau_cutoff
         self.tau_amplitudes_sorted = evals_indices_taus[:,-1]
         return evals_ok, indices_ok
 
@@ -166,9 +165,17 @@ class Eigenproblem():
         eval_low_and_indx = np.asarray(list(zip(eval_low, reverse_eval_low_indx)))
         eval_hi_and_indx = np.asarray(list(zip(eval_hi, reverse_eval_hi_indx)))
 
+        # sort taus
+        taus = np.array(self.taus)
+        taus = taus[np.isfinite(eval_low)]
+
         # remove nans
         eval_low_and_indx = eval_low_and_indx[np.isfinite(eval_low)]
         eval_hi_and_indx = eval_hi_and_indx[np.isfinite(eval_hi)]
+
+        # sort taus on NaN-cleaned
+        taus = taus[np.argsort(eval_low_and_indx[:, 0].real)]
+        self.tau_amplitudes_sorted = taus
 
         # Sort eval_low and eval_hi by real parts
         eval_low_and_indx = eval_low_and_indx[np.argsort(eval_low_and_indx[:, 0].real)]
@@ -237,6 +244,46 @@ class Eigenproblem():
         ax.semilogy(mode_numbers[good_ordinal],1/self.delta_ordinal[good_ordinal],'x',label='ordinal')
         ax.axhline(self.drift_threshold,alpha=0.4, color='black')
         ax.set_xlabel("mode number")
+        ax.set_ylabel(r"$1/\delta$")
+        ax.legend()
+
+        return ax
+
+    def plot_drift_ratios_vs_taus(self, axes=None):
+        """Plot drift ratios (both ordinal and nearest) vs. tau amplitudes.
+
+        The drift ratios give a measure of how good a given eigenmode is;
+        this can help set thresholds.
+
+        Returns
+        -------
+        matplotlib.figure.Figure
+
+        """
+        if self.reject is False:
+            raise NotImplementedError("Can't plot drift ratios unless eigenvalue rejection is True.")
+
+        if axes is None:
+            fig = plt.figure()
+            ax = fig.add_subplot(111)
+        else:
+            ax = axes
+            fig = axes.figure
+
+        taus = self.tau_amplitudes_sorted
+        mode_numbers = np.arange(len(self.delta_near))
+        ax.loglog(taus,1/self.delta_near,'o',alpha=0.4)
+        ax.loglog(taus,1/self.delta_ordinal,'x',alpha=0.4)
+
+        ax.set_prop_cycle(None)
+        good_near = 1/self.delta_near > self.drift_threshold
+        good_ordinal = 1/self.delta_ordinal > self.drift_threshold
+        ax.loglog(taus[good_near],1/self.delta_near[good_near],'o', label='nearest')
+        ax.loglog(taus[good_ordinal],1/self.delta_ordinal[good_ordinal],'x',label='ordinal')
+        ax.axhline(self.drift_threshold,alpha=0.4, color='black')
+        ax.axvline(self.tau_cutoff,alpha=0.4, color='black')
+
+        ax.set_xlabel(r"$|\tau|_2$")
         ax.set_ylabel(r"$1/\delta$")
         ax.legend()
 

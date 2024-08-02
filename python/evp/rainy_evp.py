@@ -786,20 +786,21 @@ class RainyBenardEVP(RainyEVP):
 def mode_reject(lo_res, hi_res, drift_threshold=1e6, tau_cutoff=1e-6, plot_drift_ratios=True,  plot_type='png'):
     ep = Eigenproblem(None,use_ordinal=False, drift_threshold=drift_threshold)
 
-    if lo_res.rejection_method == 'taus':
-        # calculate tau amplitudes, here under L2
-        lo_res.tau_amps = []
-        N_eval = len(lo_res.eigenvalues)
-        for i in range(N_eval):
-            lo_res.solver.set_state(i,0)
-            tau_sq = 0
-            for τ in lo_res.taus:
-                tau_sq += np.sum(np.abs(τ['c'][:])**2)
-            lo_res.tau_amps.append(np.sqrt(tau_sq))
+    # calculate tau amplitudes, here under L2
+    lo_res.tau_amps = []
+    N_eval = len(lo_res.eigenvalues)
+    for i in range(N_eval):
+        lo_res.solver.set_state(i,0)
+        tau_sq = 0
+        for τ in lo_res.taus:
+            tau_sq += np.sum(np.abs(τ['c'][:])**2)
+        lo_res.tau_amps.append(np.sqrt(tau_sq))
+    ep.taus = lo_res.tau_amps
+    ep.tau_cutoff = tau_cutoff
 
+    if lo_res.rejection_method == 'taus':
         ep.evalues = lo_res.eigenvalues
-        ep.taus = lo_res.tau_amps
-        evals_good, indx = ep.discard_spurious_eigenvalues_via_tau(tau_cutoff=tau_cutoff)
+        evals_good, indx = ep.discard_spurious_eigenvalues_via_tau()
 
         if plot_drift_ratios:
             fig, ax = plt.subplots()
@@ -817,6 +818,12 @@ def mode_reject(lo_res, hi_res, drift_threshold=1e6, tau_cutoff=1e-6, plot_drift
             ep.plot_drift_ratios(axes=ax)
             nz = lo_res.nz
             filename=f'{lo_res.case_name}/nz_{nz}_drift_ratios.{plot_type}'
+            fig.savefig(filename, dpi=300)
+
+            fig, ax = plt.subplots()
+            ep.plot_drift_ratios_vs_taus(axes=ax)
+            nz = lo_res.nz
+            filename=f'{lo_res.case_name}/nz_{nz}_drift_ratios_vs_taus.{plot_type}'
             fig.savefig(filename, dpi=300)
 
     return evals_good, indx, ep
