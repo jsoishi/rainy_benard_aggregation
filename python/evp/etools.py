@@ -1,4 +1,7 @@
 import numpy as np
+import logging
+logger = logging.getLogger(__name__)
+
 class Eigenproblem():
     def __init__(self, EVP, reject=True, factor=1.5, scales=1, drift_threshold=1e6, use_ordinal=False, grow_func=lambda x: x.real, freq_func=lambda x: x.imag):
         """An object for feature-rich eigenvalue analysis.
@@ -84,6 +87,68 @@ class Eigenproblem():
         self.scales = scales
         self.grow_func = grow_func
         self.freq_func = freq_func
+
+    def discard_spurious_eigenvalues_via_tau(self, tau_cutoff=1e-10):
+        """ Use an experimental tau-thresholding to reject spurious eigenvalues.
+        Returns trustworthy eigenvalues using the L2 magnitude of the taus.
+        """
+        evals = self.evalues
+        taus = self.taus
+
+        # Reverse engineer correct indices to make unsorted list from sorted
+        indices = np.arange(len(evals))
+
+        evals_indices_taus = np.asarray(list(zip(evals, indices, taus)))
+
+        # remove NaNs:
+        evals_indices_taus = evals_indices_taus[np.isfinite(evals_indices_taus[:,0])]
+
+        # sort by real part of eigenvalue:
+        evals_indices_taus = evals_indices_taus[np.argsort(evals_indices_taus[:,0].real)]
+
+        # reject via tau amplitudes
+        mask_ok = np.where(evals_indices_taus[:,-1] < tau_cutoff) # np.where()?
+        evals_indices_taus_ok = evals_indices_taus[mask_ok]
+        evals_ok = evals_indices_taus_ok[:, 0]
+        indices_ok = evals_indices_taus_ok[:, 1].real.astype(int)
+        logger.debug(f'mode reject: {evals_ok[-1]:.3g}, {indices_ok[-1]}, rejecting {evals.size-evals_ok.size}, retained {evals_ok.size} good eigenvalues with |τ|_2 < {tau_cutoff:.3g}')
+
+        self.tau_cutoff = tau_cutoff
+        self.tau_amplitudes_sorted = evals_indices_taus[:,-1]
+        return evals_ok, indices_ok
+
+    def plot_taus(self, axes=None):
+        """Plot tau amplitudes vs. mode number.
+
+        The L2 tau amplitudes give a measure of how well a given eigenmode is
+        resolved; this is experimental, buy may be able to help set thresholds.
+
+        Returns
+        -------
+        matplotlib.figure.Figure
+
+        """
+        if self.reject is False:
+            raise NotImplementedError("Can't plot tau amplitudes unless eigenvalue rejection is True.")
+
+        if axes is None:
+            fig = plt.figure()
+            ax = fig.add_subplot(111)
+        else:
+            ax = axes
+            fig = axes.figure
+
+        taus = self.tau_amplitudes_sorted
+        mode_numbers = np.arange(len(taus))
+        ax.semilogy(mode_numbers, taus,'o',alpha=0.4)
+        good_taus = np.where(taus < self.tau_cutoff)
+        ax.semilogy(mode_numbers[good_taus], taus[good_taus],'o', label='tau')
+        ax.axhline(self.tau_cutoff,alpha=0.4, color='black')
+        ax.set_xlabel("mode number")
+        ax.set_ylabel(r"$|\tau|_2$")
+        ax.legend()
+
+        return ax
 
 
     def discard_spurious_eigenvalues(self):

@@ -347,8 +347,10 @@ class SplitRainyBenardEVP(RainyEVP):
         τb22 = self.dist.Field(name='τb22', bases=bases_p)
         τq12 = self.dist.Field(name='τq12', bases=bases_p)
         τq22 = self.dist.Field(name='τq22', bases=bases_p)
-        variables = [p1, u1, b1, q1, τp, τu11, τu21, τb11, τb21, τq11, τq21,
-                     p2, u2, b2, q2, τu12, τu22, τb12, τb22, τq12, τq22]
+        vars = self.vars = [p1, u1, b1, q1, p2, u2, b2, q2]
+        taus = self.taus = [τp, τu11, τu21, τb11, τb21, τq11, τq21,
+                                τu12, τu22, τb12, τb22, τq12, τq22]
+        variables = vars + taus
         varnames = [v.name for v in variables]
         self.fields = {k:v for k, v in zip(varnames, variables)}
 
@@ -640,7 +642,9 @@ class RainyBenardEVP(RainyEVP):
         τb2 = self.dist.Field(name='τb2', bases=bases_p)
         τq1 = self.dist.Field(name='τq1', bases=bases_p)
         τq2 = self.dist.Field(name='τq2', bases=bases_p)
-        variables = [p, u, b, q, τp, τu1, τu2, τb1, τb2, τq1, τq2]
+        vars = self.vars = [p, u, b, q]
+        taus = self.taus = [τp, τu1, τu2, τb1, τb2, τq1, τq2]
+        variables = vars + taus
         varnames = [v.name for v in variables]
         self.fields = {k:v for k, v in zip(varnames, variables)}
 
@@ -779,18 +783,41 @@ class RainyBenardEVP(RainyEVP):
             self.solver.solve_sparse(self.solver.subproblems[1], N=N_evals, target=target, rebuild_matrices=True)
         self.eigenvalues = self.solver.eigenvalues
 
-def mode_reject(lo_res, hi_res, drift_threshold=1e6, plot_drift_ratios=True, plot_type='png'):
+def mode_reject(lo_res, hi_res, drift_threshold=1e6, tau_cutoff=1e-6, plot_drift_ratios=True,  plot_type='png'):
     ep = Eigenproblem(None,use_ordinal=False, drift_threshold=drift_threshold)
-    ep.evalues_low   = lo_res.eigenvalues
-    ep.evalues_high  = hi_res.eigenvalues
-    evals_good, indx = ep.discard_spurious_eigenvalues()
 
-    if plot_drift_ratios:
-        fig, ax = plt.subplots()
-        ep.plot_drift_ratios(axes=ax)
-        nz = lo_res.nz
-        filename=f'{lo_res.case_name}/nz_{nz}_drift_ratios.{plot_type}'
-        fig.savefig(filename, dpi=300)
+    if lo_res.rejection_method == 'taus':
+        # calculate tau amplitudes, here under L2
+        lo_res.tau_amps = []
+        N_eval = len(lo_res.eigenvalues)
+        for i in range(N_eval):
+            lo_res.solver.set_state(i,0)
+            tau_sq = 0
+            for τ in lo_res.taus:
+                tau_sq += np.sum(np.abs(τ['c'][:])**2)
+            lo_res.tau_amps.append(np.sqrt(tau_sq))
+
+        ep.evalues = lo_res.eigenvalues
+        ep.taus = lo_res.tau_amps
+        evals_good, indx = ep.discard_spurious_eigenvalues_via_tau(tau_cutoff=tau_cutoff)
+
+        if plot_drift_ratios:
+            fig, ax = plt.subplots()
+            ep.plot_taus(axes=ax)
+            nz = lo_res.nz
+            filename=f'{lo_res.case_name}/nz_{nz}_tau_amplitudes.{plot_type}'
+            fig.savefig(filename, dpi=300)
+    else:
+        ep.evalues_low   = lo_res.eigenvalues
+        ep.evalues_high  = hi_res.eigenvalues
+        evals_good, indx = ep.discard_spurious_eigenvalues()
+
+        if plot_drift_ratios:
+            fig, ax = plt.subplots()
+            ep.plot_drift_ratios(axes=ax)
+            nz = lo_res.nz
+            filename=f'{lo_res.case_name}/nz_{nz}_drift_ratios.{plot_type}'
+            fig.savefig(filename, dpi=300)
 
     return evals_good, indx, ep
 
@@ -805,6 +832,7 @@ class RainySpectrum():
         else:
             self.EVP = SplitRainyBenardEVP
         self.lo_res = self.EVP(nz, Rayleigh, tau, kx, γ, α, β, lower_q0, k, Legendre=Legendre, erf=erf, bc_type=bc_type, nondim=nondim, dealias=dealias,Lz=1, use_heaviside=use_heaviside, dynamic_gamma_factor=dynamic_gamma_factor)
+        self.lo_res.rejection_method = rejection_method
         if not quiet:
             self.lo_res.plot_background()
         if rejection_method == 'resolution':
@@ -815,16 +843,19 @@ class RainySpectrum():
             self.hi_res = self.EVP(nz, Rayleigh, tau, kx, γ, α, β, lower_q0, k, Legendre=not(Legendre), erf=erf, bc_type=bc_type, nondim=nondim, dealias=dealias,Lz=1, use_heaviside=use_heaviside, dynamic_gamma_factor=dynamic_gamma_factor)
             if not quiet:
                 self.hi_res.plot_background(label='alternative-basis')
+        elif rejection_method == 'taus':
+            self.hi_res = None
         else:
             raise NotImplementedError('rejection method {:s}'.format(args['--rejection_method']))
 
     def solve(self, dense=False, N_evals=5, target=0, quiet=False, plot_drift_ratios=False):
         for solver in [self.lo_res, self.hi_res]:
-            if self.restart:
-                solver.load()
-            else:
-                solver.solve(dense=dense, N_evals=N_evals, target=target)
-                solver.save()
+            if solver:
+                if self.restart:
+                    solver.load()
+                else:
+                    solver.solve(dense=dense, N_evals=N_evals, target=target)
+                    solver.save()
         evals_ok, indx_ok, ep = mode_reject(self.lo_res, self.hi_res, plot_drift_ratios=plot_drift_ratios)
         self.evals_good = evals_ok
         self.indx = indx_ok
