@@ -432,6 +432,13 @@ class SplitRainyBenardEVP(RainyEVP):
         self.problem.add_equation('ez@grad(b1)(z=zc) - ez@grad(b2)(z=zc) = 0')
         self.problem.add_equation('ez@grad(q1)(z=zc) - ez@grad(q2)(z=zc) = 0')
         self.problem.add_equation('ez@grad(ex@u1)(z=zc) - ez@grad(ex@u2)(z=zc) = 0')
+        # self.problem.add_equation('p1(z=zc) - p2(z=zc) + τp = 0')
+        # self.problem.add_equation('b1(z=zc) - b2(z=zc) + τb11 + τb21 = 0')
+        # self.problem.add_equation('q1(z=zc) - q2(z=zc) + τq11 + τq21 = 0')
+        # self.problem.add_equation('u1(z=zc) - u2(z=zc) + τu11 + τu21 = 0')
+        # self.problem.add_equation('ez@grad(b1)(z=zc) - ez@grad(b2)(z=zc) + τb12 + τb22 = 0')
+        # self.problem.add_equation('ez@grad(q1)(z=zc) - ez@grad(q2)(z=zc) + τq12 + τq22 = 0')
+        # self.problem.add_equation('ez@grad(ex@u1)(z=zc) - ez@grad(ex@u2)(z=zc) + ex@τu12 + ex@τu22 = 0')
         # boundary conditions
         self.problem.add_equation('b1(z=0) = 0')
         self.problem.add_equation('b2(z=Lz) = 0')
@@ -789,11 +796,15 @@ def mode_reject(lo_res, hi_res, drift_threshold=1e6, tau_cutoff=1e-6, plot_drift
     # calculate tau amplitudes, here under L2
     lo_res.tau_amps = []
     N_eval = len(lo_res.eigenvalues)
+    tau_set = {}
+    for τ in lo_res.taus:
+        tau_set[τ] = []
     for i in range(N_eval):
         lo_res.solver.set_state(i,0)
         tau_sq = 0
         for τ in lo_res.taus:
             tau_sq += np.sum(np.abs(τ['c'][:])**2)
+            tau_set[τ].append(np.sqrt(np.sum(np.abs(τ['c'][:])**2)))
         lo_res.tau_amps.append(np.sqrt(tau_sq))
     ep.taus = lo_res.tau_amps
     ep.tau_cutoff = tau_cutoff
@@ -807,6 +818,17 @@ def mode_reject(lo_res, hi_res, drift_threshold=1e6, tau_cutoff=1e-6, plot_drift
             ep.plot_taus(axes=ax)
             nz = lo_res.nz
             filename=f'{lo_res.case_name}/nz_{nz}_tau_amplitudes.{plot_type}'
+            fig.savefig(filename, dpi=300)
+
+            fig, ax = plt.subplots()
+            mask = np.isfinite(lo_res.eigenvalues)
+            modes = np.arange(N_eval)
+            for τ in lo_res.taus:
+                ax.semilogy(modes[mask], np.array(tau_set[τ])[mask], label=τ.name, alpha=0.5)
+            ax.axhline(self.tau_cutoff, linestyle='dashed', color='xkcd:dark grey', alpha=0.5)
+            ax.legend()
+            ax.set_ylabel(r'$|\tau|_2$')
+            filename=f'{lo_res.case_name}/nz_{nz}_tau_amplitudes_all_taus.{plot_type}'
             fig.savefig(filename, dpi=300)
     else:
         ep.evalues_low   = lo_res.eigenvalues
