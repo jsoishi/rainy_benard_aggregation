@@ -825,7 +825,7 @@ def mode_reject(lo_res, hi_res, drift_threshold=1e6, tau_cutoff=1e-6, plot_drift
             modes = np.arange(N_eval)
             for τ in lo_res.taus:
                 ax.semilogy(modes[mask], np.array(tau_set[τ])[mask], label=τ.name, alpha=0.5)
-            ax.axhline(self.tau_cutoff, linestyle='dashed', color='xkcd:dark grey', alpha=0.5)
+            ax.axhline(tau_cutoff, linestyle='dashed', color='xkcd:dark grey', alpha=0.5)
             ax.legend()
             ax.set_ylabel(r'$|\tau|_2$')
             filename=f'{lo_res.case_name}/nz_{nz}_tau_amplitudes_all_taus.{plot_type}'
