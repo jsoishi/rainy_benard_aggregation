@@ -875,7 +875,7 @@ class RainySpectrum():
         elif rejection_method == 'taus':
             self.hi_res = None
         else:
-            raise NotImplementedError('rejection method {:s}'.format(args['--rejection_method']))
+            raise NotImplementedError('rejection method {:s}'.format(rejection_method))
 
     def solve(self, dense=False, N_evals=5, target=0, quiet=False, plot_drift_ratios=False):
         for solver in [self.lo_res, self.hi_res]:
