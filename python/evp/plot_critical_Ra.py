@@ -13,6 +13,7 @@ import h5py
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
+plt.style.use("prl.mplstyle")
 
 from docopt import docopt
 args = docopt(__doc__)
@@ -50,7 +51,7 @@ K2 = 4e-10
 T0 = 5.5
 VPT_γ_convert = G = (M_convert*K2*np.exp(α*T0))
 
-fig, ax = plt.subplots(figsize=[6,6/1.6])
+fig, ax = plt.subplots(figsize=[8,8/1.6])
 ax2 = ax.twinx()
 for γ in np.sort(data['γ'].unique()):
     curve = data[data['γ']==γ]
@@ -63,12 +64,12 @@ ax.set_yscale('log')
 ax2.set_ylabel('critical k')
 ax2.set_ylim(1,3)
 ax.set_xlabel(r'$\beta$')
-ax.legend(loc='center left')
+ax.legend(fontsize='x-small', loc='center left')
 fig.tight_layout()
 fig.savefig(f'critical_Ra_and_k_all_gamma_{label}.png', dpi=300)
 
 
-fig, ax = plt.subplots(figsize=[6,6/1.6])
+fig, ax = plt.subplots(figsize=[8,8/1.6])
 ax2 = ax.twinx()
 for γ in [0.19, 0.3]:
     curve = data[data['γ']==γ]
@@ -83,12 +84,12 @@ ax.set_yscale('log')
 ax2.set_ylabel('critical k')
 ax2.set_ylim(1,3)
 ax.set_xlabel(r'$\beta$')
-ax.legend(loc='center left')
+ax.legend(fontsize='x-small', loc='center left')
 fig.tight_layout()
 fig.savefig(f'critical_Ra_and_k_gamma_{label}.png', dpi=300)
 
 data.sort_values('γ', inplace=True)
-fig, ax = plt.subplots(figsize=[6,6/1.6])
+fig, ax = plt.subplots(figsize=[8,8/1.6])
 ax2 = ax.twinx()
 for β in βs:
     curve = data[data['β']==β]
@@ -110,11 +111,11 @@ if args['--overlay_VPT19']:
     Vallis_10 = pd.read_csv('Vallis_et_al_2019_data/beta_1.0.csv', names=['γ', 'Ra_c'])
     γ = Vallis_10['γ']*G
     ax.scatter(γ, 1/G*Vallis_10['Ra_c'],#*VPT_Ra_convert(1.0, γ),
-               label=r'Vallis, $\beta=1.0$', color='xkcd:dark green', marker='o', alpha=0.5)
+               label=r'VPT19, $\beta=1.0$', color='xkcd:dark green', marker='o', alpha=0.5)
     γ = Vallis_12['γ']*G
     ax.scatter(γ, 1/G*Vallis_12['Ra_c'], #*VPT_Ra_convert(1.2, γ),
-               label=r'Vallis, $\beta=1.2$', color='xkcd:dark red', marker='o', alpha=0.5)
-ax.legend(loc='lower left')
+               label=r'VPT19, $\beta=1.2$', color='xkcd:dark red', marker='o', alpha=0.5)
+ax.legend(fontsize='x-small', loc='center right')
 fig.tight_layout()
 fig.savefig(f'critical_Ra_and_k_beta_{label}.png', dpi=300)
 print(VPT_γ_convert)
