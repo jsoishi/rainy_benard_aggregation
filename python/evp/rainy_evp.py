@@ -132,6 +132,12 @@ class RainyEVP():
         fig.savefig(total_filename)
         logger.info("eigenmode {:d} saved in {:s}".format(index, total_filename))
 
+    def solve(self, dense=True, N_evals=20, target=0):
+        if dense:
+            self.solver.solve_dense(self.solver.subproblems[1], rebuild_matrices=True)
+        else:
+            self.solver.solve_sparse(self.solver.subproblems[1], N=N_evals, target=target, rebuild_matrices=True)
+        self.eigenvalues = self.solver.eigenvalues
 
 
 class SplitRainyBenardEVP(RainyEVP):
@@ -448,13 +454,6 @@ class SplitRainyBenardEVP(RainyEVP):
         self.problem.add_equation('ez@grad(b1)(z=zc) - ez@grad(b2)(z=zc) = 0')
         self.problem.add_equation('ez@grad(q1)(z=zc) - ez@grad(q2)(z=zc) = 0')
         self.problem.add_equation('ez@grad(ex@u1)(z=zc) - ez@grad(ex@u2)(z=zc) = 0')
-        # self.problem.add_equation('p1(z=zc) - p2(z=zc) + τp = 0')
-        # self.problem.add_equation('b1(z=zc) - b2(z=zc) + τb11 + τb21 = 0')
-        # self.problem.add_equation('q1(z=zc) - q2(z=zc) + τq11 + τq21 = 0')
-        # self.problem.add_equation('u1(z=zc) - u2(z=zc) + τu11 + τu21 = 0')
-        # self.problem.add_equation('ez@grad(b1)(z=zc) - ez@grad(b2)(z=zc) + τb12 + τb22 = 0')
-        # self.problem.add_equation('ez@grad(q1)(z=zc) - ez@grad(q2)(z=zc) + τq12 + τq22 = 0')
-        # self.problem.add_equation('ez@grad(ex@u1)(z=zc) - ez@grad(ex@u2)(z=zc) + ex@τu12 + ex@τu22 = 0')
         # boundary conditions
         self.problem.add_equation('b1(z=0) = 0')
         self.problem.add_equation('b2(z=Lz) = 0')
@@ -480,13 +479,6 @@ class SplitRainyBenardEVP(RainyEVP):
             self.problem.add_equation('u2(z=Lz) = 0')
         self.problem.add_equation('integ(p1) + integ(p2) = 0')
         self.solver = self.problem.build_solver(ncc_cutoff=1e-10)
-
-    def solve(self, dense=True, N_evals=20, target=0):
-        if dense:
-            self.solver.solve_dense(self.solver.subproblems[1], rebuild_matrices=True)
-        else:
-            self.solver.solve_sparse(self.solver.subproblems[1], N=N_evals, target=target, rebuild_matrices=True)
-        self.eigenvalues = self.solver.eigenvalues
 
 class RainyBenardEVP(RainyEVP):
     def __init__(self, nz, Ra, tau_in, kx_in, γ, α, β, lower_q0, k, atmosphere=None, relaxation_method=None, Legendre=True, erf=True, nondim='buoyancy', bc_type=None, Prandtl=1, Prandtlm=1, Lz=1, dealias=3/2, dtype=np.complex128, twoD=True, use_heaviside=False, dynamic_gamma_factor=1):
@@ -802,13 +794,6 @@ class RainyBenardEVP(RainyEVP):
             self.problem.add_equation('u(z=Lz) = 0')
         self.problem.add_equation('integ(p) = 0')
         self.solver = self.problem.build_solver(ncc_cutoff=1e-10)
-
-    def solve(self, dense=True, N_evals=20, target=0):
-        if dense:
-            self.solver.solve_dense(self.solver.subproblems[1], rebuild_matrices=True)
-        else:
-            self.solver.solve_sparse(self.solver.subproblems[1], N=N_evals, target=target, rebuild_matrices=True)
-        self.eigenvalues = self.solver.eigenvalues
 
 def mode_reject(lo_res, hi_res, drift_threshold=1e6, tau_cutoff=1e-6, plot_drift_ratios=True,  plot_type='png'):
     ep = Eigenproblem(None,use_ordinal=False, drift_threshold=drift_threshold)
