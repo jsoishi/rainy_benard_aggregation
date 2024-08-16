@@ -54,7 +54,7 @@ for system in ['matplotlib', 'PIL']:
     logging.getLogger(system).setLevel(logging.WARNING)
 import numpy as np
 import matplotlib.pyplot as plt
-plt.style.use("prl")
+#plt.style.use("prl")
 
 from rainy_evp import RainySpectrum
 if __name__ == "__main__":
@@ -84,7 +84,7 @@ if __name__ == "__main__":
         logger.warning(f"dynamic_gamma factor is set to {dynamic_gamma:}. This is not self-consistent!")
     Prandtlm = 1
     Prandtl = 1
-    dealias = 1#2
+    dealias = 1
     dense = args['--dense']
 
     emode = args['--emode']
@@ -113,7 +113,10 @@ if __name__ == "__main__":
         tau_in = float(args['--tau'])
     # build solvers
     spectrum = RainySpectrum(nz, Rayleigh, tau, kx, γ, α, β, lower_q0, k, Legendre=Legendre, erf=erf, bc_type=bc_type, nondim=nondim, dealias=dealias,Lz=1, use_heaviside=use_heaviside, restart=restart, rejection_method=rejection_method, dynamic_gamma_factor = dynamic_gamma)
-    spectrum.solve(dense=dense, N_evals=N_evals, target=target)
+
+    spectrum.lo_res.plot_background()
+    
+    spectrum.solve(dense=dense, N_evals=N_evals, target=target, plot_drift_ratios=True)
 
     evals_good = spectrum.evals_good
     indx = spectrum.indx

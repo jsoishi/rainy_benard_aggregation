@@ -307,6 +307,15 @@ class SplitRainyBenardEVP(RainyEVP):
             filebase += f'_{label}'
         fig.savefig(f"{filebase}.{plot_type}", dpi=300)
 
+        fig, ax = plt.subplots(nrows=2)
+        scrN = self.concatenate_bases(*self.scrN)
+        ax[0].plot(scrN[0,:].real, self.z, label=r'$\mathcal{N}$')
+        for scrN in self.scrN:
+            ax[1].plot(np.abs(scrN['c'])[0,:], label=scrN.name)
+        ax[1].set_yscale('log')
+        ax[1].legend()
+        fig.savefig(f"{filebase}_scrN.{plot_type}", dpi=300)
+
     def build_solver(self):
         if self.twoD:
             ex, ez = self.coords.unit_vector_fields(self.dist)
@@ -424,6 +433,10 @@ class SplitRainyBenardEVP(RainyEVP):
             self.problem.add_equation('dt(b2) - P*lap(b2) + u2@grad_b02 - γ/tau*(q2-α*qs02*b2) + lift2(τb12, -1) + lift2(τb22, -2) = 0')
             self.problem.add_equation('dt(q2) - S*lap(q2) + u2@grad_q02 + 1/tau*(q2-α*qs02*b2) + lift2(τq12, -1) + lift2(τq22, -2) = 0')
 
+        for ncc in [grad_b01, grad_b02, grad_q01, grad_q02, scrN1, scrN2]:
+            ncc_cutoff=1e-10
+            logger.info("{}: {}".format(ncc.evaluate(), np.where(np.abs(ncc.evaluate()['c']) >= ncc_cutoff)[0].shape))
+
         # matching conditions
         self.problem.add_equation('p1(z=zc) - p2(z=zc) = 0')
         self.problem.add_equation('b1(z=zc) - b2(z=zc) = 0')
@@ -463,7 +476,7 @@ class SplitRainyBenardEVP(RainyEVP):
             logger.info("BCs: top no-slip")
             self.problem.add_equation('u2(z=Lz) = 0')
         self.problem.add_equation('integ(p1) + integ(p2) = 0')
-        self.solver = self.problem.build_solver(entry_cutoff=0)#)ncc_cutoff=1e-10)
+        self.solver = self.problem.build_solver(ncc_cutoff=1e-10)
 
     def solve(self, dense=True, N_evals=20, target=0):
         if dense:
@@ -749,6 +762,10 @@ class RainyBenardEVP(RainyEVP):
 
         grad_b0 = grad(b0).evaluate()
         grad_q0 = grad(q0).evaluate()
+
+        for ncc in [grad_b0, grad_q0, scrN]:
+            ncc_cutoff=1e-10
+            logger.info("{}: {}".format(ncc.evaluate(), np.where(np.abs(ncc.evaluate()['c']) >= ncc_cutoff)[0].shape))
 
         ω = self.dist.Field(name='ω')
         dt = lambda A: ω*A

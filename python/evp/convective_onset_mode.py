@@ -70,7 +70,6 @@ if args['--nz']:
 else:
     nz = nz_sol
 
-dealias = 3/2
 dtype = np.complex128
 
 Prandtlm = 1
@@ -79,7 +78,7 @@ Prandtl = 1
 Lz = 1
 coords = de.CartesianCoordinates('x', 'y', 'z')
 dist = de.Distributor(coords, dtype=dtype)
-dealias = 2
+dealias = 1
 zb = de.ChebyshevT(coords.coords[2], size=nz, bounds=(0, Lz), dealias=dealias)
 z = zb.local_grid(1)
 zd = zb.local_grid(2)

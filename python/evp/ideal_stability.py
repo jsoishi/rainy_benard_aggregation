@@ -58,7 +58,7 @@ import analytic_atmosphere
 from analytic_zc import f_zc as zc_analytic
 from analytic_zc import f_Tc as Tc_analytic
 
-dealias = 2
+dealias = 1
 dtype = np.float64
 
 Lz = 1

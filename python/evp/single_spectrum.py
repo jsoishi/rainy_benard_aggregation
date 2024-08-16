@@ -76,7 +76,7 @@ kx = float(args['--kx'])
 annotate = args['--annotate']
 Prandtlm = 1
 Prandtl = 1
-dealias = 2
+dealias = 1
 
 emode = args['--emode']
 if emode:
