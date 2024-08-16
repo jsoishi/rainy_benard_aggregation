@@ -140,6 +140,400 @@ class RainyEVP():
         self.eigenvalues = self.solver.eigenvalues
 
 
+class SplitThreeRainyBenardEVP(RainyEVP):
+    def __init__(self, nz, Ra, tau_in, kx_in, γ, α, β, lower_q0, k, Legendre=True, erf=True, nondim='buoyancy', bc_type=None, Prandtl=1, Prandtlm=1, Lz=1, dealias=1, dtype=np.complex128, twoD=True, use_heaviside=True, dynamic_gamma_factor=1):
+        self.param_string = f'Ra={Ra:}_kx={kx_in:}_α={α:}_β={β:}_γ={γ:}_tau={tau_in:}_k={k:}_nz={nz:}_bc_type={bc_type}'
+        logger.info(self.param_string.replace('_',', '))
+        self.savefilename = f'{self.param_string.replace("=","_"):}_eigenvectors.h5'
+        self.nz = nz
+        self.Lz = Lz
+
+        self.dealias = dealias
+        self.α = α
+        self.β = β
+        self.γ = γ
+        self.lower_q0 = lower_q0
+        self.k = k
+
+        self.Prandtl = Prandtl
+        self.Prandtlm = Prandtlm
+
+        self.twoD = twoD
+        if self.twoD:
+            self.coords = de.CartesianCoordinates('x', 'z')
+            self.vector_dims = 3
+            self.z_slice = (0,slice(None))
+        else:
+            self.coords = de.CartesianCoordinates('x', 'y', 'z')
+            self.vector_dims = 4
+            self.z_slice = (0,0,slice(None))
+        self.dist = de.Distributor(self.coords, dtype=dtype, comm=MPI.COMM_SELF)
+        self.erf = erf
+        self.Legendre = Legendre
+        self.nondim = nondim
+        self.bc_type = bc_type
+        self.use_heaviside = use_heaviside
+        self.get_zc_Tc()
+        # empirically determined
+        if self.k < 5e3:
+            self.zc_pad = 70/self.k
+        else:
+            self.zc_pad = 500/self.k
+        if self.Legendre:
+            self.zb1 = de.Legendre(self.coords['z'], size=self.nz/4, bounds=(0, self.zc-self.zc_pad), dealias=self.dealias)
+            self.zb2 = de.Legendre(self.coords['z'], size=self.nz, bounds=(self.zc-self.zc_pad , self.zc), dealias=self.dealias)
+            self.zb3 = de.Legendre(self.coords['z'], size=self.nz/4, bounds=(self.zc, self.Lz), dealias=self.dealias)
+        else:
+            self.zb1 = de.ChebyshevT(self.coords['z'], size=self.nz/4, bounds=(0, self.zc-self.zc_pad), dealias=self.dealias)
+            self.zb2 = de.ChebyshevT(self.coords['z'], size=self.nz, bounds=(self.zc-self.zc_pad , self.zc), dealias=self.dealias)
+            self.zb3 = de.ChebyshevT(self.coords['z'], size=self.nz/4, bounds=(self.zc, self.Lz), dealias=self.dealias)
+        self.z = np.concatenate([self.dist.local_grid(self.zb1).squeeze(), self.dist.local_grid(self.zb2).squeeze(), self.dist.local_grid(self.zb3).squeeze()])
+        self.zd = np.concatenate([self.dist.local_grid(self.zb1, scale=self.dealias).squeeze(), self.dist.local_grid(self.zb2, scale=self.dealias).squeeze(), self.dist.local_grid(self.zb3, scale=self.dealias).squeeze()])
+
+        # self.kx = self.dist.Field(name='kx')
+        # self.kx['g'] = kx_in
+        # # protection against array type-casting via scipy.optimize;
+        # # important when updating Lx during that loop.
+        kx = np.float64(kx_in).squeeze()[()]
+        # # Build Fourier basis for x with prescribed kx as the fundamental mode
+        self.nx = 4
+        self.Lx = 2 * np.pi / kx
+        self.xb = de.ComplexFourier(self.coords['x'], size=self.nx, bounds=(0, self.Lx), dealias=self.dealias)
+
+        self.Rayleigh = self.dist.Field(name='Ra')
+        self.Rayleigh['g'] = Ra
+        self.tau = self.dist.Field(name='tau')
+        self.tau['g'] = tau_in
+        self.build_atmosphere()
+        self.build_solver()
+
+    def get_zc_Tc(self):
+        #if self.α != 3.0 or self.β != 1.2 or self.lower_q0 != 0.6:
+        #    raise NotImplementedError("Only α = 3.0, β = 1.2, and lower_q0 = 0.6 currently supported.")
+        if self.α != 3.0 or self.lower_q0 !=0.6:
+            raise NotImplementedError("Only α = 3.0 and lower_q0 = 0.6 currently supported.")
+        from analytic_zc import f_zc as zc_analytic
+        from analytic_zc import f_Tc as Tc_analytic
+        self.zc = zc_analytic()(self.γ)
+        self.Tc = Tc_analytic()(self.γ)
+
+    def build_atmosphere(self):
+        logger.info("Building atmosphere")
+        atm_name = 'unsaturated'
+
+        self.case_name = f'analytic_{atm_name:s}/stacked_alpha{self.α:1.0f}_beta{self.β:}_gamma{self.γ:}_q{self.lower_q0:1.1f}'
+        self.case_name += f'/tau{self.tau["g"].squeeze().real:}_k{self.k:.3e}'
+        if self.erf:
+            self.case_name += '_erf'
+        if self.Legendre:
+            self.case_name += '_Legendre'
+        if self.use_heaviside:
+            self.case_name += '_heaviside'
+        z1 = self.dist.local_grid(self.zb1)
+        z2 = self.dist.local_grid(self.zb2)
+        z3 = self.dist.local_grid(self.zb3)
+        ΔT = -1
+        b1 = 0
+        b2 = self.β + ΔT
+        q1 = self.lower_q0
+        q2 = np.exp(self.α*ΔT)
+
+        bc = self.Tc + self.β*self.zc
+        qc = np.exp(self.α*self.Tc)
+
+        P = bc + self.γ*qc
+        Q = ((b2-bc) + self.γ*(q2-qc))
+        C = P + Q*(z3-self.zc)/(1-self.zc) - self.β*z3
+        T_lo = self.Tc*z1/self.zc
+        T_mi = self.Tc*z2/self.zc
+        T_hi = C - W(self.α*self.γ*np.exp(self.α*C)).real/self.α
+
+        b0_lo = self.dist.Field(name='b0_lo', bases=self.zb1)
+        b0_lo['g'] = T_lo + self.β*z1
+        b0_mi = self.dist.Field(name='b0_mi', bases=self.zb2)
+        b0_mi['g'] = T_mi + self.β*z2
+        b0_hi = self.dist.Field(name='b0_hi', bases=self.zb3)
+        b0_hi['g'] = T_hi + self.β*z3
+        q0_lo = self.dist.Field(name='q0_lo', bases=self.zb1)
+        q0_lo['g'] = q1 + (qc - q1)*z1/self.zc
+        q0_mi = self.dist.Field(name='q0_mi', bases=self.zb2)
+        q0_mi['g'] = q1 + (qc - q1)*z2/self.zc
+        q0_hi = self.dist.Field(name='q0_hi', bases=self.zb3)
+        q0_hi['g'] = np.exp(self.α*T_hi)
+        qs0_lo = self.dist.Field(name='qs0_lo', bases=self.zb1)
+        qs0_lo['g'] = np.exp(self.α*T_lo)
+        qs0_mi = self.dist.Field(name='qs0_mi', bases=self.zb2)
+        qs0_mi['g'] = np.exp(self.α*T_mi)
+
+        self.b0 = [b0_lo,b0_mi,b0_hi]
+        self.q0 = [q0_lo,q0_mi,q0_hi]
+        self.qs0 = [qs0_lo,qs0_mi,q0_hi] # above zc, qs0 = q0
+        self.grad_b0 = []
+        self.grad_q0 = []
+        for b0,q0 in zip(self.b0, self.q0):
+            self.grad_b0.append(de.grad(b0).evaluate())
+            self.grad_q0.append(de.grad(q0).evaluate())
+        if not os.path.exists('{:s}/'.format(self.case_name)) and self.dist.comm.rank == 0:
+            os.makedirs('{:s}/'.format(self.case_name))
+
+    def get_names_data(self, fields):
+        names = {}
+        data ={}
+        for f in fields:
+            lower_field = self.fields[f'{f}1']
+            lower_field.change_scales(1)
+            middle_field = self.fields[f'{f}2']
+            middle_field.change_scales(1)
+            upper_field = self.fields[f'{f}3']
+            upper_field.change_scales(1)
+            data[f] = self.concatenate_bases(lower_field,middle_field,upper_field)
+            names[f] = lower_field.name
+        return names, data
+
+    def concatenate_bases(self, field1, field2, field3):
+        return np.concatenate([field1['g'],field2['g'],field3['g']], axis=-1)
+
+    def plot_background(self,label=None, plot_type='png'):
+        fig, ax = plt.subplots(ncols=2, figsize=[12,6])
+        for b0,q0 in zip(self.b0, self.q0):
+            b0.change_scales(1)
+            q0.change_scales(1)
+        b0 = self.concatenate_bases(*self.b0)
+        q0 = self.concatenate_bases(*self.q0)
+        qs0 = self.concatenate_bases(*self.qs0)
+        grad_q0 = self.concatenate_bases(*self.grad_q0)
+        grad_b0 = self.concatenate_bases(*self.grad_b0)
+
+        p0 = ax[0].plot(b0[0,:].real, self.z, label=r'$b$')
+        p1 = ax[0].plot(self.γ*q0[0,:].real, self.z, label=r'$\gamma q$')
+        p2 = ax[0].plot(b0[0,:].real+self.γ*q0[0,:].real, self.z, label=r'$m = b + \gamma q$')
+        p3 = ax[0].plot(self.γ*qs0[0,:].real, self.z, linestyle='dashed', alpha=0.3, label=r'$\gamma q_s$')
+        lines = p0 + p1 + p2 + p3
+        labels = [l.get_label() for l in lines]
+        ax[0].legend(lines, labels)
+        ax[0].set_xlabel(r'$b$, $\gamma q$, $m$')
+        ax[0].set_ylabel(r'$z$')
+
+        ax[1].plot(grad_b0[1,0,:].real, self.zd, label=r'$\nabla b$')
+        ax[1].plot(self.γ*grad_q0[1,0,:].real, self.zd, label=r'$\gamma \nabla q$')
+        ax[1].plot(grad_b0[1,0,:].real+self.γ*grad_q0[1,0,:].real, self.zd, label=r'$\nabla m$')
+        ax[1].set_xlabel(r'$\nabla b$, $\gamma \nabla q$, $\nabla m$')
+        ax[1].legend()
+        ax[1].axvline(x=0, linestyle='dashed', color='xkcd:dark grey', alpha=0.5)
+        for a in ax:
+            a.axhline(self.zc,color='k',alpha=0.4)
+        fig.tight_layout()
+        tau_val = self.tau["g"].squeeze().real
+        Ra_val  = self.Rayleigh["g"].squeeze().real
+        filebase = self.case_name+f'/nz_{self.nz}_k_{self.k}_tau_{tau_val:0.1e}_Ra_{Ra_val:0.2e}_evp_background_stacked'
+        if label:
+            filebase += f'_{label}'
+        fig.savefig(f"{filebase}.{plot_type}", dpi=300)
+
+        fig, ax = plt.subplots(nrows=2)
+        scrN = self.concatenate_bases(*self.scrN)
+        ax[0].plot(scrN[0,:].real, self.z, label=r'$\mathcal{N}$')
+        ax[0].axhline(y=self.zc, alpha=0.3, linestyle='dashed', color='xkcd:dark grey')
+        ax[0].axhline(y=self.zc-self.zc_pad, alpha=0.3, linestyle='dashed', color='xkcd:dark grey')
+        for scrN in self.scrN:
+            ax[1].plot(np.abs(scrN['c'])[0,:], label=scrN.name)
+        ax[1].set_yscale('log')
+        ax[1].legend()
+        fig.savefig(f"{filebase}_scrN.{plot_type}", dpi=300)
+
+    def build_solver(self):
+        if self.twoD:
+            ex, ez = self.coords.unit_vector_fields(self.dist)
+            ey = self.dist.VectorField(self.coords)
+            ey['c'] = 0
+        else:
+            raise NotImplementedError("3D is not implemented.")
+        grad = lambda A: de.grad(A)
+        div = lambda A:  de.div(A)
+        lap = lambda A: de.lap(A)
+        trans = lambda A: de.TransposeComponents(A)
+
+        z1 = self.dist.local_grid(self.zb1)
+        z2 = self.dist.local_grid(self.zb2)
+        z3 = self.dist.local_grid(self.zb3)
+
+        bases1 = (self.xb, self.zb1)
+        bases2 = (self.xb, self.zb2)
+        bases3 = (self.xb, self.zb3)
+
+        bases_p = self.xb
+        p1 = self.dist.Field(name='p1', bases=bases1)
+        u1 = self.dist.VectorField(self.coords, name='u1', bases=bases1)
+        b1 = self.dist.Field(name='b1', bases=bases1)
+        q1 = self.dist.Field(name='q1', bases=bases1)
+        τp = self.dist.Field(name='τp')
+        τu11 = self.dist.VectorField(self.coords, name='τu11', bases=bases_p)
+        τu21 = self.dist.VectorField(self.coords, name='τu21', bases=bases_p)
+        τb11 = self.dist.Field(name='τb11', bases=bases_p)
+        τb21 = self.dist.Field(name='τb21', bases=bases_p)
+        τq11 = self.dist.Field(name='τq11', bases=bases_p)
+        τq21 = self.dist.Field(name='τq21', bases=bases_p)
+
+        p2 = self.dist.Field(name='p2', bases=bases2)
+        u2 = self.dist.VectorField(self.coords, name='u2', bases=bases2)
+        b2 = self.dist.Field(name='b2', bases=bases2)
+        q2 = self.dist.Field(name='q2', bases=bases2)
+        τu12 = self.dist.VectorField(self.coords, name='τu12', bases=bases_p)
+        τu22 = self.dist.VectorField(self.coords, name='τu22', bases=bases_p)
+        τb12 = self.dist.Field(name='τb12', bases=bases_p)
+        τb22 = self.dist.Field(name='τb22', bases=bases_p)
+        τq12 = self.dist.Field(name='τq12', bases=bases_p)
+        τq22 = self.dist.Field(name='τq22', bases=bases_p)
+
+        p3 = self.dist.Field(name='p3', bases=bases3)
+        u3 = self.dist.VectorField(self.coords, name='u3', bases=bases3)
+        b3 = self.dist.Field(name='b3', bases=bases3)
+        q3 = self.dist.Field(name='q3', bases=bases3)
+        τu13 = self.dist.VectorField(self.coords, name='τu13', bases=bases_p)
+        τu23 = self.dist.VectorField(self.coords, name='τu23', bases=bases_p)
+        τb13 = self.dist.Field(name='τb13', bases=bases_p)
+        τb23 = self.dist.Field(name='τb23', bases=bases_p)
+        τq13 = self.dist.Field(name='τq13', bases=bases_p)
+        τq23 = self.dist.Field(name='τq23', bases=bases_p)
+
+        vars = self.vars = [p1, u1, b1, q1,
+                            p2, u2, b2, q2,
+                            p3, u3, b3, q3]
+        taus = self.taus = [τp, τu11, τu21, τb11, τb21, τq11, τq21,
+                                τu12, τu22, τb12, τb22, τq12, τq22,
+                                τu13, τu23, τb13, τb23, τq13, τq23]
+        variables = vars + taus
+        varnames = [v.name for v in variables]
+        self.fields = {k:v for k, v in zip(varnames, variables)}
+
+        lift_basis1 = self.zb1
+        lift1 = lambda A, n: de.Lift(A, lift_basis1, n)
+        lift_basis2 = self.zb2
+        lift2 = lambda A, n: de.Lift(A, lift_basis2, n)
+        lift_basis3 = self.zb3
+        lift3 = lambda A, n: de.Lift(A, lift_basis3, n)
+
+        # need local aliases...this is a weakness of this approach
+        Lz = self.Lz
+        #kx = self.kx
+        γ = self.γ
+        α = self.α
+        β = self.β
+        tau = self.tau
+        zc = self.zc
+        zc_lo = zc-self.zc_pad
+
+        grad_q01 = self.grad_q0[0]
+        grad_b01 = self.grad_b0[0]
+        qs01 = self.qs0[0]
+        qs02 = self.qs0[1]
+        qs03 = self.qs0[2]
+        grad_q02 = self.grad_q0[1]
+        grad_b02 = self.grad_b0[1]
+        grad_q03 = self.grad_q0[2]
+        grad_b03 = self.grad_b0[2]
+
+        e1 = grad(u1) + trans(grad(u1))
+        e2 = grad(u2) + trans(grad(u2))
+        e3 = grad(u3) + trans(grad(u3))
+        if self.nondim == 'diffusion':
+            P = 1                      #  diffusion on buoyancy. Always = 1 in this scaling.
+            S = self.Prandtlm               #  diffusion on moisture  k_q / k_b
+            PdR = self.Prandtl              #  diffusion on momentum
+            PtR = self.Prandtl*self.Rayleigh     #  Prandtl times Rayleigh = buoyancy force
+        elif self.nondim == 'buoyancy':
+            P = (self.Rayleigh * self.Prandtl)**(-1/2)         #  diffusion on buoyancy
+            S = (self.Rayleigh * self.Prandtlm)**(-1/2)        #  diffusion on moisture
+            PdR = (self.Rayleigh/self.Prandtl)**(-1/2)         #  diffusion on momentum
+            PtR = 1
+            #tau_in /=                     # think through what this should be
+        else:
+            raise ValueError('nondim {:} not in valid set [diffusion, buoyancy]'.format(nondim))
+
+        if self.use_heaviside:
+            self.scrN = []
+            if self.erf:
+                H = lambda A: 0.5*(1+erf_func(self.k*A))
+                for i in range(3):
+                    self.scrN.append((H(self.q0[i] - self.qs0[i]) + 1/2*(self.q0[i] - self.qs0[i])*self.k*2*(np.pi)**(-1/2)*np.exp(-self.k**2*(self.q0[i] - self.qs0[i])**2)).evaluate())
+                    self.scrN[i].name=f'scrN{i}'
+            else:
+                H = lambda A: 0.5*(1+np.tanh(self.k*A))
+                for i in range(3):
+                    self.scrN.append((H(self.q0[i] - self.qs0[i]) + 1/2*(self.q0[i] - self.qs0[i])*self.k*(1-(np.tanh(self.k*(self.q0[i] - self.qs0[i])))**2)).evaluate())
+                    self.scrN[i].name=f'scrN{i}'
+
+            scrN1 = self.scrN[0]
+            scrN2 = self.scrN[1]
+            scrN3 = self.scrN[2]
+        ω = self.dist.Field(name='ω')
+        dt = lambda A: ω*A
+
+        self.problem = de.EVP(variables, eigenvalue=ω, namespace=locals())
+        for i in [1, 2, 3]:
+            self.problem.add_equation(f'div(u{i}) + τp + 1/PdR*dot(lift{i}(τu2{i},-1),ez) = 0')
+            self.problem.add_equation(f'dt(u{i}) - PdR*lap(u{i}) + grad(p{i}) - PtR*b{i}*ez + lift{i}(τu1{i}, -1) + lift{i}(τu2{i}, -2) = 0')
+        if self.use_heaviside:
+            for i in [1, 2, 3]:
+                self.problem.add_equation(f'dt(b{i}) - P*lap(b{i}) + u{i}@grad_b0{i} - γ/tau*(q{i}-α*qs0{i}*b{i})*scrN{i} + lift{i}(τb1{i}, -1) + lift{i}(τb2{i}, -2) = 0')
+                self.problem.add_equation(f'dt(q{i}) - S*lap(q{i}) + u{i}@grad_q0{i} + 1/tau*(q{i}-α*qs0{i}*b{i})*scrN{i} + lift{i}(τq1{i}, -1) + lift{i}(τq2{i}, -2) = 0')
+        else:
+            # unsaturated layer
+            for i in [1, 2]:
+                self.problem.add_equation(f'dt(b{i}) - P*lap(b{i}) + u{i}@grad_b0{i} + lift{i}(τb1{i}, -1) + lift{i}(τb2{i}, -2) = 0')
+                self.problem.add_equation(f'dt(q{i}) - S*lap(q{i}) + u{i}@grad_q0{i} + lift{i}(τq1{i}, -1) + lift{i}(τq2{i}, -2) = 0')
+            # saturated layer
+            self.problem.add_equation('dt(b3) - P*lap(b3) + u3@grad_b03 - γ/tau*(q3-α*qs03*b3) + lift3(τb13, -1) + lift3(τb23, -2) = 0')
+            self.problem.add_equation('dt(q3) - S*lap(q3) + u3@grad_q03 + 1/tau*(q3-α*qs03*b3) + lift3(τq13, -1) + lift3(τq23, -2) = 0')
+
+        ncc_list = [grad_b01, grad_b02, grad_b03, grad_q01, grad_q02, grad_q03]
+        if self.use_heaviside:
+            ncc_list += [scrN1, scrN2, scrN3]
+        for ncc in ncc_list:
+            ncc_cutoff=1e-10
+            logger.info("{}: {}".format(ncc.evaluate(), np.where(np.abs(ncc.evaluate()['c']) >= ncc_cutoff)[0].shape))
+
+        # matching conditions
+        self.problem.add_equation('p1(z=zc_lo) - p2(z=zc_lo) = 0')
+        self.problem.add_equation('b1(z=zc_lo) - b2(z=zc_lo) = 0')
+        self.problem.add_equation('q1(z=zc_lo) - q2(z=zc_lo) = 0')
+        self.problem.add_equation('u1(z=zc_lo) - u2(z=zc_lo) = 0')
+        self.problem.add_equation('ez@grad(b1)(z=zc_lo) - ez@grad(b2)(z=zc_lo) = 0')
+        self.problem.add_equation('ez@grad(q1)(z=zc_lo) - ez@grad(q2)(z=zc_lo) = 0')
+        self.problem.add_equation('ez@grad(ex@u1)(z=zc_lo) - ez@grad(ex@u2)(z=zc_lo) = 0')
+        self.problem.add_equation('p3(z=zc) - p2(z=zc) = 0')
+        self.problem.add_equation('b3(z=zc) - b2(z=zc) = 0')
+        self.problem.add_equation('q3(z=zc) - q2(z=zc) = 0')
+        self.problem.add_equation('u3(z=zc) - u2(z=zc) = 0')
+        self.problem.add_equation('ez@grad(b3)(z=zc) - ez@grad(b2)(z=zc) = 0')
+        self.problem.add_equation('ez@grad(q3)(z=zc) - ez@grad(q2)(z=zc) = 0')
+        self.problem.add_equation('ez@grad(ex@u3)(z=zc) - ez@grad(ex@u2)(z=zc) = 0')
+        # boundary conditions
+        self.problem.add_equation('b1(z=0) = 0')
+        self.problem.add_equation('b3(z=Lz) = 0')
+        self.problem.add_equation('q1(z=0) = 0')
+        self.problem.add_equation('q3(z=Lz) = 0')
+        if self.bc_type=='stress-free':
+            logger.info("BCs: bottom stress-free")
+            self.problem.add_equation('ez@u1(z=0) = 0')
+            self.problem.add_equation('ez@(ex@e1(z=0)) = 0')
+            if not self.twoD:
+                self.problem.add_equation('ez@(ey@e1(z=0)) = 0')
+        else:
+            logger.info("BCs: bottom no-slip")
+            self.problem.add_equation('u1(z=0) = 0')
+        if self.bc_type == 'top-stress-free' or self.bc_type == 'stress-free':
+            logger.info("BCs: top stress-free")
+            self.problem.add_equation('ez@u3(z=Lz) = 0')
+            self.problem.add_equation('ez@(ex@e3(z=Lz)) = 0')
+            if not self.twoD:
+                self.problem.add_equation('ez@(ey@e3(z=Lz)) = 0')
+        else:
+            logger.info("BCs: top no-slip")
+            self.problem.add_equation('u3(z=Lz) = 0')
+        self.problem.add_equation('integ(p1) + integ(p2) + integ(p3) = 0')
+        self.solver = self.problem.build_solver(ncc_cutoff=1e-10)
+
 class SplitRainyBenardEVP(RainyEVP):
     def __init__(self, nz, Ra, tau_in, kx_in, γ, α, β, lower_q0, k, Legendre=True, erf=True, nondim='buoyancy', bc_type=None, Prandtl=1, Prandtlm=1, Lz=1, dealias=3/2, dtype=np.complex128, twoD=True, use_heaviside=False, dynamic_gamma_factor=1):
         self.param_string = f'Ra={Ra:}_kx={kx_in:}_α={α:}_β={β:}_γ={γ:}_tau={tau_in:}_k={k:}_nz={nz:}_bc_type={bc_type}'
@@ -864,7 +1258,8 @@ class RainySpectrum():
         if lower_q0 == 1:
             self.EVP = RainyBenardEVP
         else:
-            self.EVP = SplitRainyBenardEVP
+            self.EVP = SplitThreeRainyBenardEVP
+            #self.EVP = SplitRainyBenardEVP
         self.lo_res = self.EVP(nz, Rayleigh, tau, kx, γ, α, β, lower_q0, k, Legendre=Legendre, erf=erf, bc_type=bc_type, nondim=nondim, dealias=dealias,Lz=1, use_heaviside=use_heaviside, dynamic_gamma_factor=dynamic_gamma_factor)
         self.lo_res.rejection_method = rejection_method
         if not quiet:

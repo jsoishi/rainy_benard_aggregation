@@ -56,7 +56,8 @@ import h5py
 from pathlib import Path
 
 from convective_onset_stacked import compute_growth_rate
-from rainy_evp import SplitRainyBenardEVP, RainyBenardEVP, mode_reject
+from rainy_evp import RainyBenardEVP, mode_reject
+from rainy_evp import SplitThreeRainyBenardEVP as SplitRainyBenardEVP
 from etools import Eigenproblem
 import matplotlib.pyplot as plt
 plt.style.use('prl.mplstyle')
