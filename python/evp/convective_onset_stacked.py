@@ -106,7 +106,7 @@ nz = int(float(args['--nz']))
 
 logger.info('α={:}, β={:}, γ={:}, tau={:}, k={:}'.format(α,β,γ,tau, k))
 
-def compute_growth_rate(nz, Ra, tau, kx, γ, α, β, q0, k, rejection_method=rejection_method, dealias=dealias, use_heaviside=True, erf=True, Legendre=False, bc_type=None, target=0, plot_fastest_mode=False, plot_type='png'):
+def compute_growth_rate(nz, Ra, tau, kx, γ, α, β, q0, k, rejection_method=rejection_method, dealias=dealias, use_heaviside=True, erf=True, Legendre=False, bc_type=None, target=0, plot_fastest_mode=False, plot_type='png', dense=False, N_evals=5):
     spec = RainySpectrum(nz, Ra, tau, kx, γ, α, β, q0, k, rejection_method=rejection_method, dealias=dealias, use_heaviside=use_heaviside, erf=erf, Legendre=Legendre, bc_type=bc_type)
     spec.solve(dense=dense, N_evals=N_evals, target=target)
 

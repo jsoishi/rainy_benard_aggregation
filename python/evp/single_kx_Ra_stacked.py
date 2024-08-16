@@ -39,6 +39,7 @@ Options:
     --Legendre        Use Legendre polynomials
 
     --dense           Solve densely for all eigenvalues (slow)
+    --rejection_method=<rej>      Method for rejecting modes [default: resolution]
 
     --plot_type=<plot_type>   File type for plots [default: pdf]
     --use-heaviside        Use the Heaviside function 
@@ -75,7 +76,7 @@ min_kx = float(args['--min_kx'])
 max_kx = float(args['--max_kx'])
 nkx = int(float(args['--num_kx']))
 Ra = float(args['--Ra'])
-
+rejection_method= args['--rejection_method']
 if args['--stress-free']:
     bc_type = 'stress-free'
 elif args['--top-stress-free']:
@@ -105,7 +106,7 @@ logger.info('α={:}, β={:}, γ={:}, tau={:}, k={:}'.format(α,β,γ,tau, k))
 kxs = np.geomspace(min_kx, max_kx, num=nkx)
 σ = []
 for kx in kxs:
-    σ_i = compute_growth_rate(kx, Ra, target=target, plot_type=plot_type, use_heaviside=use_heaviside)
+    σ_i = compute_growth_rate(nz, Ra, tau, kx, γ, α, β, q0, k, rejection_method=rejection_method, dealias=dealias, use_heaviside=use_heaviside, erf=erf, Legendre=Legendre, bc_type=bc_type, target=0, plot_fastest_mode=False, plot_type='pdf')
     σ.append(σ_i)
     logger.info('Ra = {:.2g}, kx = {:.2g}, σ = {:.2g}'.format(Ra, kx, σ_i))
     if σ_i.imag > 0:
