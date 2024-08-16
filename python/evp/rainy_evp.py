@@ -433,7 +433,10 @@ class SplitRainyBenardEVP(RainyEVP):
             self.problem.add_equation('dt(b2) - P*lap(b2) + u2@grad_b02 - γ/tau*(q2-α*qs02*b2) + lift2(τb12, -1) + lift2(τb22, -2) = 0')
             self.problem.add_equation('dt(q2) - S*lap(q2) + u2@grad_q02 + 1/tau*(q2-α*qs02*b2) + lift2(τq12, -1) + lift2(τq22, -2) = 0')
 
-        for ncc in [grad_b01, grad_b02, grad_q01, grad_q02, scrN1, scrN2]:
+        ncc_list = [grad_b01, grad_b02, grad_q01, grad_q02]
+        if self.use_heaviside:
+            ncc_list += [scrN1, scrN2]
+        for ncc in ncc_list:
             ncc_cutoff=1e-10
             logger.info("{}: {}".format(ncc.evaluate(), np.where(np.abs(ncc.evaluate()['c']) >= ncc_cutoff)[0].shape))
 
