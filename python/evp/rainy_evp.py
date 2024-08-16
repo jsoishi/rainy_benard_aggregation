@@ -19,6 +19,9 @@ import analytic_atmosphere
 from analytic_zc import f_zc as zc_analytic
 from analytic_zc import f_Tc as Tc_analytic
 
+ncc_cutoff=1e-10
+
+
 class RainyEVP():
     def save(self):
         filename = f'{self.case_name}/{self.savefilename}'
@@ -337,6 +340,7 @@ class SplitThreeRainyBenardEVP(RainyEVP):
         ax[0].axhline(y=self.zc-self.zc_pad, alpha=0.3, linestyle='dashed', color='xkcd:dark grey')
         for scrN in self.scrN:
             ax[1].plot(np.abs(scrN['c'])[0,:], label=scrN.name)
+        ax[1].axhline(y=ncc_cutoff, alpha=0.3, linestyle='dashed', color='xkcd:dark grey')
         ax[1].set_yscale('log')
         ax[1].legend()
         fig.savefig(f"{filebase}_scrN.{plot_type}", dpi=300)
@@ -366,7 +370,10 @@ class SplitThreeRainyBenardEVP(RainyEVP):
         u1 = self.dist.VectorField(self.coords, name='u1', bases=bases1)
         b1 = self.dist.Field(name='b1', bases=bases1)
         q1 = self.dist.Field(name='q1', bases=bases1)
-        τp = self.dist.Field(name='τp')
+        #τp = self.dist.Field(name='τp')
+        τp1 = self.dist.Field(name='τp1')
+        τp2 = self.dist.Field(name='τp2')
+        τp3 = self.dist.Field(name='τp3')
         τu11 = self.dist.VectorField(self.coords, name='τu11', bases=bases_p)
         τu21 = self.dist.VectorField(self.coords, name='τu21', bases=bases_p)
         τb11 = self.dist.Field(name='τb11', bases=bases_p)
@@ -399,9 +406,9 @@ class SplitThreeRainyBenardEVP(RainyEVP):
         vars = self.vars = [p1, u1, b1, q1,
                             p2, u2, b2, q2,
                             p3, u3, b3, q3]
-        taus = self.taus = [τp, τu11, τu21, τb11, τb21, τq11, τq21,
-                                τu12, τu22, τb12, τb22, τq12, τq22,
-                                τu13, τu23, τb13, τb23, τq13, τq23]
+        taus = self.taus = [τp1, τu11, τu21, τb11, τb21, τq11, τq21,
+                            τp2, τu12, τu22, τb12, τb22, τq12, τq22,
+                            τp3, τu13, τu23, τb13, τb23, τq13, τq23]
         variables = vars + taus
         varnames = [v.name for v in variables]
         self.fields = {k:v for k, v in zip(varnames, variables)}
@@ -471,7 +478,7 @@ class SplitThreeRainyBenardEVP(RainyEVP):
 
         self.problem = de.EVP(variables, eigenvalue=ω, namespace=locals())
         for i in [1, 2, 3]:
-            self.problem.add_equation(f'div(u{i}) + τp + 1/PdR*dot(lift{i}(τu2{i},-1),ez) = 0')
+            self.problem.add_equation(f'div(u{i}) + τp{i} + 1/PdR*dot(lift{i}(τu2{i},-1),ez) = 0')
             self.problem.add_equation(f'dt(u{i}) - PdR*lap(u{i}) + grad(p{i}) - PtR*b{i}*ez + lift{i}(τu1{i}, -1) + lift{i}(τu2{i}, -2) = 0')
         if self.use_heaviside:
             for i in [1, 2, 3]:
@@ -490,7 +497,6 @@ class SplitThreeRainyBenardEVP(RainyEVP):
         if self.use_heaviside:
             ncc_list += [scrN1, scrN2, scrN3]
         for ncc in ncc_list:
-            ncc_cutoff=1e-10
             logger.info("{}: {}".format(ncc.evaluate(), np.where(np.abs(ncc.evaluate()['c']) >= ncc_cutoff)[0].shape))
 
         # matching conditions
@@ -531,8 +537,10 @@ class SplitThreeRainyBenardEVP(RainyEVP):
         else:
             logger.info("BCs: top no-slip")
             self.problem.add_equation('u3(z=Lz) = 0')
-        self.problem.add_equation('integ(p1) + integ(p2) + integ(p3) = 0')
-        self.solver = self.problem.build_solver(ncc_cutoff=1e-10)
+        for i in [1,2,3]:
+            self.problem.add_equation(f'integ(p{i})= 0')
+#        self.problem.add_equation('integ(p1) + integ(p2) + integ(p3) = 0')
+        self.solver = self.problem.build_solver(ncc_cutoff=ncc_cutoff)
 
 class SplitRainyBenardEVP(RainyEVP):
     def __init__(self, nz, Ra, tau_in, kx_in, γ, α, β, lower_q0, k, Legendre=True, erf=True, nondim='buoyancy', bc_type=None, Prandtl=1, Prandtlm=1, Lz=1, dealias=3/2, dtype=np.complex128, twoD=True, use_heaviside=False, dynamic_gamma_factor=1):
@@ -712,6 +720,7 @@ class SplitRainyBenardEVP(RainyEVP):
         ax[0].plot(scrN[0,:].real, self.z, label=r'$\mathcal{N}$')
         for scrN in self.scrN:
             ax[1].plot(np.abs(scrN['c'])[0,:], label=scrN.name)
+        ax[1].axhline(y=ncc_cutoff, alpha=0.3, linestyle='dashed', color='xkcd:dark grey')
         ax[1].set_yscale('log')
         ax[1].legend()
         fig.savefig(f"{filebase}_scrN.{plot_type}", dpi=300)
@@ -837,7 +846,6 @@ class SplitRainyBenardEVP(RainyEVP):
         if self.use_heaviside:
             ncc_list += [scrN1, scrN2]
         for ncc in ncc_list:
-            ncc_cutoff=1e-10
             logger.info("{}: {}".format(ncc.evaluate(), np.where(np.abs(ncc.evaluate()['c']) >= ncc_cutoff)[0].shape))
 
         # matching conditions
@@ -872,7 +880,7 @@ class SplitRainyBenardEVP(RainyEVP):
             logger.info("BCs: top no-slip")
             self.problem.add_equation('u2(z=Lz) = 0')
         self.problem.add_equation('integ(p1) + integ(p2) = 0')
-        self.solver = self.problem.build_solver(ncc_cutoff=1e-10)
+        self.solver = self.problem.build_solver(ncc_cutoff=ncc_cutoff)
 
 class RainyBenardEVP(RainyEVP):
     def __init__(self, nz, Ra, tau_in, kx_in, γ, α, β, lower_q0, k, atmosphere=None, relaxation_method=None, Legendre=True, erf=True, nondim='buoyancy', bc_type=None, Prandtl=1, Prandtlm=1, Lz=1, dealias=3/2, dtype=np.complex128, twoD=True, use_heaviside=False, dynamic_gamma_factor=1):
@@ -1153,7 +1161,6 @@ class RainyBenardEVP(RainyEVP):
         grad_q0 = grad(q0).evaluate()
 
         for ncc in [grad_b0, grad_q0, scrN]:
-            ncc_cutoff=1e-10
             logger.info("{}: {}".format(ncc.evaluate(), np.where(np.abs(ncc.evaluate()['c']) >= ncc_cutoff)[0].shape))
 
         ω = self.dist.Field(name='ω')
@@ -1187,7 +1194,7 @@ class RainyBenardEVP(RainyEVP):
             logger.info("BCs: top no-slip")
             self.problem.add_equation('u(z=Lz) = 0')
         self.problem.add_equation('integ(p) = 0')
-        self.solver = self.problem.build_solver(ncc_cutoff=1e-10)
+        self.solver = self.problem.build_solver(ncc_cutoff=ncc_cutoff)
 
 def mode_reject(lo_res, hi_res, drift_threshold=1e6, tau_cutoff=1e-6, plot_drift_ratios=True,  plot_type='png'):
     ep = Eigenproblem(None,use_ordinal=False, drift_threshold=drift_threshold)
