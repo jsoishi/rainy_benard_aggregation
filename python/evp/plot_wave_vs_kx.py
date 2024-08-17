@@ -144,6 +144,22 @@ if __name__ == "__main__":
         fig_filename=f"Ra_{Rayleigh:.2e}_nz_{nz}_bc_{bc_type}_dense_{dense}_freq_vs_kx_parallel"
         spec_filename = f'{spectrum.lo_res.case_name}/{fig_filename}.{plot_type}'
         logger.info(f"saving file to {spec_filename}")
-
-
         plt.savefig(spec_filename,dpi=300)
+
+        plt.clf()
+        for kxp,w in zip(flat_kx_plot, flat_waves):
+            plt.scatter(kxp, 1/w.imag, c=w.real, vmin=-2,vmax=-0.1)
+        plt.xscale('log')
+        plt.yscale('log')
+        plt.xlabel(r"$k_x$")
+        plt.ylabel(r"$1/\omega_i$")
+        plt.colorbar(label=r'$\omega_r$')
+        plt.tight_layout()
+
+        fig_filename=f"Ra_{Rayleigh:.2e}_nz_{nz}_bc_{bc_type}_dense_{dense}_period_vs_kx_parallel"
+        spec_filename = f'{spectrum.lo_res.case_name}/{fig_filename}.{plot_type}'
+        logger.info(f"saving file to {spec_filename}")
+        plt.savefig(spec_filename,dpi=300)
+
+            
+                
