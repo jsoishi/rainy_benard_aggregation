@@ -26,6 +26,7 @@ for system in ['h5py._conv', 'matplotlib', 'PIL']:
      logging.getLogger(system).setLevel(logging.WARNING)
 import matplotlib.pyplot as plt
 import numpy as np
+plt.style.use("prl.mplstyle")
 
 from scipy.special import lambertw as W
 def unsaturated(dist, zb, β, γ, zc, Tc,
@@ -170,10 +171,10 @@ if __name__=="__main__":
     for quant in ['q', 'b', 'rh']:
         fig, ax = plt.subplots(figsize=[6,6/1.6])
         for tau in data:
-            p = ax.scatter(data[tau]['k'], data[tau]['L2_{:s}'.format(quant)], c=tau*np.ones_like(data[tau]['k']), norm=norm)
+            p = ax.scatter(data[tau]['k'], data[tau]['L2_{:s}'.format(quant)], c=tau*np.ones_like(data[tau]['k']), norm=norm, s=8**2)
         ax.set_xlabel(r'$k$')
         ax.set_ylabel(r'$|{:s}_c - {:s}_a|/|{:s}_a|$'.format(quant,quant,quant))
-        fig.colorbar(mappable=p, ax=ax, orientation='horizontal', location='top', label=r'$\tau$', norm=norm)
+        fig.colorbar(mappable=p, ax=ax, orientation='horizontal', location='top', label=r'$\tau \mathcal{P}$', norm=norm)
         ax.set_xscale('log')
         ax.set_yscale('log')
         fig.tight_layout()

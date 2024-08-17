@@ -1,5 +1,5 @@
 """
-Dedalus script for plotting spectrum of static drizzle solutions to the Rainy-Benard system of equations.  
+Dedalus script for plotting spectrum of static drizzle solutions to the Rainy-Benard system of equations.
 
 Read more about these equations in:
 
@@ -19,12 +19,12 @@ Options:
     --beta=<beta>          beta value  [default: 1.1]
     --gamma=<gamma>        gamma value [default: 0.19]
     --q0=<q0>              basal q value [default: 0.6]
- 
+
     --tau=<tau>            If set, override value of tau
     --k=<k>                If set, override value of k
- 
+
     --nondim=<n>           Non-Nondimensionalization [default: buoyancy]
- 
+
     --Ra=<Ra>              Minimum Rayleigh number to sample [default: 1e4]
     --kx_min=<kx_min>      min x wavenumber [default: 0.1]
     --kx_max=<kx_max>      max x wavenumber [default: 10]
@@ -32,14 +32,14 @@ Options:
     --n_kx=<n_kx>          number of x wavenumbers [default: 20]
     --top-stress-free      Stress-free upper boundary
     --stress-free          Stress-free both boundaries
- 
+
     --nz=<nz>              Number of coeffs to use in eigenvalue search; if not set, uses resolution of background
     --target=<targ>        Target value for sparse eigenvalue search [default: 0]
     --eigs=<eigs>          Target number of eigenvalues to search for [default: 20]
     --drift_threshold=<dt>      Drift threshold [default: 1e6]
     --erf                  Use an erf rather than a tanh for the phase transition
     --Legendre             Use Legendre polynomials
- 
+
     --dense                Solve densely for all eigenvalues (slow)
 """
 import logging
@@ -83,7 +83,7 @@ else:
 
 Prandtlm = 1
 Prandtl = 1
-dealias = 2
+dealias = 1
 
 import os
 
@@ -162,4 +162,3 @@ if __name__ == "__main__":
     spec_filename = lo_res.case_name+'/'+fig_filename+'.png'
     logger.info(f"saving file to {spec_filename}")
     fig.savefig(spec_filename, dpi=300)
-

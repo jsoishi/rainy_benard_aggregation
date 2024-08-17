@@ -47,7 +47,7 @@ Options:
 
     --tol_crit_Ra=<tol>    Tolerance on frequency for critical growth [default: 1e-5]
     --plot_type=<plot_type>   File type for plots [default: pdf]
-    --use-heaviside        Use the Heaviside function 
+    --use-heaviside        Use the Heaviside function
 """
 import logging
 logger = logging.getLogger(__name__)
@@ -63,7 +63,7 @@ from rainy_evp import mode_reject, RainySpectrum
 
 from etools import Eigenproblem
 import matplotlib.pyplot as plt
-plt.style.use('prl')
+plt.style.use('prl.mplstyle')
 from docopt import docopt
 args = docopt(__doc__)
 
@@ -128,7 +128,7 @@ def compute_growth_rate(nz, Ra, tau, kx, γ, α, β, q0, k, rejection_method=rej
 def peak_growth_rate(*args):
     kx = args[0]
     Ra = args[1]
-    nz = args[2] 
+    nz = args[2]
     tau= args[3]
     γ  = args[4]
     α  = args[5]
@@ -153,7 +153,7 @@ def find_continous_peak(Ra, kx, plot_fastest_mode=False, plot_type='png',use_hea
 
 if __name__ == "__main__":
     from mpi4py import MPI
-    
+
     comm = MPI.COMM_WORLD
     growth_rates = {}
     ra_list = args['--Ra_list']

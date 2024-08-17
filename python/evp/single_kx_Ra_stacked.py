@@ -42,7 +42,7 @@ Options:
     --rejection_method=<rej>      Method for rejecting modes [default: resolution]
 
     --plot_type=<plot_type>   File type for plots [default: pdf]
-    --use-heaviside        Use the Heaviside function 
+    --use-heaviside        Use the Heaviside function
 """
 import logging
 logger = logging.getLogger(__name__)
@@ -56,10 +56,11 @@ import h5py
 from pathlib import Path
 
 from convective_onset_stacked import compute_growth_rate
-from rainy_evp import SplitRainyBenardEVP, RainyBenardEVP, mode_reject
+from rainy_evp import RainyBenardEVP, mode_reject
+from rainy_evp import SplitThreeRainyBenardEVP as SplitRainyBenardEVP
 from etools import Eigenproblem
 import matplotlib.pyplot as plt
-plt.style.use('prl')
+plt.style.use('prl.mplstyle')
 from docopt import docopt
 args = docopt(__doc__)
 
@@ -84,14 +85,13 @@ elif args['--top-stress-free']:
 else:
     bc_type = None # default no-slip
 
-dealias = 3/2
+dealias = 1
 dtype = np.complex128
 
 Prandtlm = 1
 Prandtl = 1
 
 Lz = 1
-dealias = 2
 
 α = float(args['--alpha'])
 β = float(args['--beta'])
@@ -150,4 +150,3 @@ plt.tight_layout()
 ax.axhline(0, color='k', linestyle=':',linewidth=1)
 
 fig.savefig(plot_filename)
-
