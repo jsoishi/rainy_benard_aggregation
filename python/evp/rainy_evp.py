@@ -463,12 +463,12 @@ class SplitThreeRainyBenardEVP(RainyEVP):
                 H = lambda A: 0.5*(1+erf_func(self.k*A))
                 for i in range(3):
                     self.scrN.append((H(self.q0[i] - self.qs0[i]) + 1/2*(self.q0[i] - self.qs0[i])*self.k*2*(np.pi)**(-1/2)*np.exp(-self.k**2*(self.q0[i] - self.qs0[i])**2)).evaluate())
-                    self.scrN[i].name=f'scrN{i}'
+                    self.scrN[i].name=f'scrN{i+1}'
             else:
                 H = lambda A: 0.5*(1+np.tanh(self.k*A))
                 for i in range(3):
                     self.scrN.append((H(self.q0[i] - self.qs0[i]) + 1/2*(self.q0[i] - self.qs0[i])*self.k*(1-(np.tanh(self.k*(self.q0[i] - self.qs0[i])))**2)).evaluate())
-                    self.scrN[i].name=f'scrN{i}'
+                    self.scrN[i].name=f'scrN{i+1}'
 
             scrN1 = self.scrN[0]
             scrN2 = self.scrN[1]
@@ -1236,6 +1236,7 @@ def mode_reject(lo_res, hi_res, drift_threshold=1e6, tau_cutoff=1e-6, plot_drift
             ax.set_ylabel(r'$|\tau|_2$')
             filename=f'{lo_res.case_name}/nz_{nz}_tau_amplitudes_all_taus.{plot_type}'
             fig.savefig(filename, dpi=300)
+
     else:
         ep.evalues_low   = lo_res.eigenvalues
         ep.evalues_high  = hi_res.eigenvalues
@@ -1258,7 +1259,7 @@ def mode_reject(lo_res, hi_res, drift_threshold=1e6, tau_cutoff=1e-6, plot_drift
 
 
 class RainySpectrum():
-    def __init__(self, nz, Rayleigh, tau, kx, γ, α, β, lower_q0, k, rejection_method='resolution', Legendre=True, erf=True, nondim='buoyancy', bc_type=None, Prandtl=1, Prandtlm=1, Lz=1, dealias=3/2, dtype=np.complex128, twoD=True, use_heaviside=False, quiet=True, restart=False, N_evals=5, target=0, dynamic_gamma_factor=1):
+    def __init__(self, nz, Rayleigh, tau, kx, γ, α, β, lower_q0, k, rejection_method='resolution', Legendre=True, erf=True, nondim='buoyancy', bc_type=None, Prandtl=1, Prandtlm=1, Lz=1, dealias=1, dtype=np.complex128, twoD=True, use_heaviside=False, quiet=True, restart=False, N_evals=5, target=0, dynamic_gamma_factor=1):
         self.restart = restart
         self.N_evals = N_evals
         self.target = target
