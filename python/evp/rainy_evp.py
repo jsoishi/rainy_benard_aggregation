@@ -471,13 +471,12 @@ class SplitThreeRainyBenardEVP(RainyEVP):
             if self.erf:
                 H = lambda A: 0.5*(1+erf_func(self.k*A))
                 for i in range(3):
-#                    self.scrN.append((H(self.q0[i] - self.qs0[i]) + 1/2*(self.q0[i] - self.qs0[i])*self.k*2*(np.pi)**(-1/2)*np.exp(-self.k**2*(self.q0[i] - self.qs0[i])**2)).evaluate())
-                    self.scrN.append((H(self.q0[i] - self.qs0[i]) + self.k*(np.pi)**(-1/2)*np.exp(-self.k**2*(self.q0[i] - self.qs0[i])**2)).evaluate())
+                    self.scrN.append((H(self.q0[i] - self.qs0[i]).evaluate()))
                     self.scrN[i].name=f'scrN{i+1}'
             else:
                 H = lambda A: 0.5*(1+np.tanh(self.k*A))
                 for i in range(3):
-                    self.scrN.append((H(self.q0[i] - self.qs0[i]) + 1/2*self.k*(1-(np.tanh(self.k*(self.q0[i] - self.qs0[i])))**2)).evaluate())
+                    self.scrN.append((H(self.q0[i] - self.qs0[i]).evaluate()))
                     self.scrN[i].name=f'scrN{i+1}'
 
             scrN1 = self.scrN[0]
@@ -826,12 +825,12 @@ class SplitRainyBenardEVP(RainyEVP):
             if self.erf:
                 H = lambda A: 0.5*(1+erf_func(self.k*A))
                 for i in range(2):
-                    self.scrN.append((H(self.q0[i] - self.qs0[i]) + self.k*(np.pi)**(-1/2)*np.exp(-self.k**2*(self.q0[i] - self.qs0[i])**2)).evaluate())
+                    self.scrN.append((H(self.q0[i] - self.qs0[i])).evaluate())
                     self.scrN[i].name=f'scrN{i}'
             else:
                 H = lambda A: 0.5*(1+np.tanh(self.k*A))
                 for i in range(2):
-                    self.scrN.append((H(self.q0[i] - self.qs0[i]) + 1/2*self.k*(1-(np.tanh(self.k*(self.q0[i] - self.qs0[i])))**2)).evaluate())
+                    self.scrN.append((H(self.q0[i] - self.qs0[i])).evaluate())
                     self.scrN[i].name=f'scrN{i}'
 
             scrN1 = self.scrN[0]
