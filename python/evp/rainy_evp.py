@@ -1278,8 +1278,10 @@ class RainySpectrum():
         if lower_q0 == 1:
             self.EVP = RainyBenardEVP
         else:
-            self.EVP = SplitThreeRainyBenardEVP
-            #self.EVP = SplitRainyBenardEVP
+            if use_heaviside:
+                self.EVP = SplitThreeRainyBenardEVP
+            else:
+                self.EVP = SplitRainyBenardEVP
         self.lo_res = self.EVP(nz, Rayleigh, tau, kx, γ, α, β, lower_q0, k, Legendre=Legendre, erf=erf, bc_type=bc_type, nondim=nondim, dealias=dealias,Lz=1, use_heaviside=use_heaviside, dynamic_gamma_factor=dynamic_gamma_factor)
         self.lo_res.rejection_method = rejection_method
         if not quiet:
