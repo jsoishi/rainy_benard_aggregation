@@ -180,16 +180,18 @@ class SplitThreeRainyBenardEVP(RainyEVP):
         # empirically determined
         if self.k < 5e3:
             self.zc_pad = 70/self.k
+        elif self.k < 1e4:
+            self.zc_pad = 150/self.k
         else:
-            self.zc_pad = 500/self.k
+            self.zc_pad = 300/self.k
         if self.Legendre:
-            self.zb1 = de.Legendre(self.coords['z'], size=self.nz/4, bounds=(0, self.zc-self.zc_pad), dealias=self.dealias)
+            self.zb1 = de.Legendre(self.coords['z'], size=self.nz/2, bounds=(0, self.zc-self.zc_pad), dealias=self.dealias)
             self.zb2 = de.Legendre(self.coords['z'], size=self.nz, bounds=(self.zc-self.zc_pad , self.zc), dealias=self.dealias)
-            self.zb3 = de.Legendre(self.coords['z'], size=self.nz/4, bounds=(self.zc, self.Lz), dealias=self.dealias)
+            self.zb3 = de.Legendre(self.coords['z'], size=self.nz/2, bounds=(self.zc, self.Lz), dealias=self.dealias)
         else:
-            self.zb1 = de.ChebyshevT(self.coords['z'], size=self.nz/4, bounds=(0, self.zc-self.zc_pad), dealias=self.dealias)
+            self.zb1 = de.ChebyshevT(self.coords['z'], size=self.nz/2, bounds=(0, self.zc-self.zc_pad), dealias=self.dealias)
             self.zb2 = de.ChebyshevT(self.coords['z'], size=self.nz, bounds=(self.zc-self.zc_pad , self.zc), dealias=self.dealias)
-            self.zb3 = de.ChebyshevT(self.coords['z'], size=self.nz/4, bounds=(self.zc, self.Lz), dealias=self.dealias)
+            self.zb3 = de.ChebyshevT(self.coords['z'], size=self.nz/2, bounds=(self.zc, self.Lz), dealias=self.dealias)
         self.z = np.concatenate([self.dist.local_grid(self.zb1).squeeze(), self.dist.local_grid(self.zb2).squeeze(), self.dist.local_grid(self.zb3).squeeze()])
         self.zd = np.concatenate([self.dist.local_grid(self.zb1, scale=self.dealias).squeeze(), self.dist.local_grid(self.zb2, scale=self.dealias).squeeze(), self.dist.local_grid(self.zb3, scale=self.dealias).squeeze()])
 
@@ -333,17 +335,18 @@ class SplitThreeRainyBenardEVP(RainyEVP):
             filebase += f'_{label}'
         fig.savefig(f"{filebase}.{plot_type}", dpi=300)
 
-        fig, ax = plt.subplots(nrows=2)
-        scrN = self.concatenate_bases(*self.scrN)
-        ax[0].plot(scrN[0,:].real, self.z, label=r'$\mathcal{N}$')
-        ax[0].axhline(y=self.zc, alpha=0.3, linestyle='dashed', color='xkcd:dark grey')
-        ax[0].axhline(y=self.zc-self.zc_pad, alpha=0.3, linestyle='dashed', color='xkcd:dark grey')
-        for scrN in self.scrN:
-            ax[1].plot(np.abs(scrN['c'])[0,:], label=scrN.name)
-        ax[1].axhline(y=ncc_cutoff, alpha=0.3, linestyle='dashed', color='xkcd:dark grey')
-        ax[1].set_yscale('log')
-        ax[1].legend()
-        fig.savefig(f"{filebase}_scrN.{plot_type}", dpi=300)
+        if self.use_heaviside:
+            fig, ax = plt.subplots(nrows=2)
+            scrN = self.concatenate_bases(*self.scrN)
+            ax[0].plot(scrN[0,:].real, self.z, label=r'$\mathcal{N}$')
+            ax[0].axhline(y=self.zc, alpha=0.3, linestyle='dashed', color='xkcd:dark grey')
+            ax[0].axhline(y=self.zc-self.zc_pad, alpha=0.3, linestyle='dashed', color='xkcd:dark grey')
+            for scrN in self.scrN:
+                ax[1].plot(np.abs(scrN['c'])[0,:], label=scrN.name)
+            ax[1].axhline(y=ncc_cutoff, alpha=0.3, linestyle='dashed', color='xkcd:dark grey')
+            ax[1].set_yscale('log')
+            ax[1].legend()
+            fig.savefig(f"{filebase}_scrN.{plot_type}", dpi=300)
 
     def build_solver(self):
         if self.twoD:
@@ -370,10 +373,7 @@ class SplitThreeRainyBenardEVP(RainyEVP):
         u1 = self.dist.VectorField(self.coords, name='u1', bases=bases1)
         b1 = self.dist.Field(name='b1', bases=bases1)
         q1 = self.dist.Field(name='q1', bases=bases1)
-        #τp = self.dist.Field(name='τp')
         τp1 = self.dist.Field(name='τp1')
-        τp2 = self.dist.Field(name='τp2')
-        τp3 = self.dist.Field(name='τp3')
         τu11 = self.dist.VectorField(self.coords, name='τu11', bases=bases_p)
         τu21 = self.dist.VectorField(self.coords, name='τu21', bases=bases_p)
         τb11 = self.dist.Field(name='τb11', bases=bases_p)
@@ -385,6 +385,7 @@ class SplitThreeRainyBenardEVP(RainyEVP):
         u2 = self.dist.VectorField(self.coords, name='u2', bases=bases2)
         b2 = self.dist.Field(name='b2', bases=bases2)
         q2 = self.dist.Field(name='q2', bases=bases2)
+        τp2 = self.dist.Field(name='τp2')
         τu12 = self.dist.VectorField(self.coords, name='τu12', bases=bases_p)
         τu22 = self.dist.VectorField(self.coords, name='τu22', bases=bases_p)
         τb12 = self.dist.Field(name='τb12', bases=bases_p)
@@ -396,6 +397,7 @@ class SplitThreeRainyBenardEVP(RainyEVP):
         u3 = self.dist.VectorField(self.coords, name='u3', bases=bases3)
         b3 = self.dist.Field(name='b3', bases=bases3)
         q3 = self.dist.Field(name='q3', bases=bases3)
+        τp3 = self.dist.Field(name='τp3')
         τu13 = self.dist.VectorField(self.coords, name='τu13', bases=bases_p)
         τu23 = self.dist.VectorField(self.coords, name='τu23', bases=bases_p)
         τb13 = self.dist.Field(name='τb13', bases=bases_p)
@@ -413,12 +415,19 @@ class SplitThreeRainyBenardEVP(RainyEVP):
         varnames = [v.name for v in variables]
         self.fields = {k:v for k, v in zip(varnames, variables)}
 
-        lift_basis1 = self.zb1
-        lift1 = lambda A, n: de.Lift(A, lift_basis1, n)
-        lift_basis2 = self.zb2
-        lift2 = lambda A, n: de.Lift(A, lift_basis2, n)
-        lift_basis3 = self.zb3
-        lift3 = lambda A, n: de.Lift(A, lift_basis3, n)
+        lift_basis11 = self.zb1.derivative_basis(1)
+        lift11 = lambda A, n: de.Lift(A, lift_basis11, n)
+        lift_basis21 = self.zb2.derivative_basis(1)
+        lift21 = lambda A, n: de.Lift(A, lift_basis21, n)
+        lift_basis31 = self.zb3.derivative_basis(1)
+        lift31 = lambda A, n: de.Lift(A, lift_basis31, n)
+
+        lift_basis12 = self.zb1.derivative_basis(2)
+        lift12 = lambda A, n: de.Lift(A, lift_basis12, n)
+        lift_basis22 = self.zb2.derivative_basis(2)
+        lift22 = lambda A, n: de.Lift(A, lift_basis22, n)
+        lift_basis32 = self.zb3.derivative_basis(2)
+        lift32 = lambda A, n: de.Lift(A, lift_basis32, n)
 
         # need local aliases...this is a weakness of this approach
         Lz = self.Lz
@@ -462,12 +471,12 @@ class SplitThreeRainyBenardEVP(RainyEVP):
             if self.erf:
                 H = lambda A: 0.5*(1+erf_func(self.k*A))
                 for i in range(3):
-                    self.scrN.append((H(self.q0[i] - self.qs0[i]) + 1/2*(self.q0[i] - self.qs0[i])*self.k*2*(np.pi)**(-1/2)*np.exp(-self.k**2*(self.q0[i] - self.qs0[i])**2)).evaluate())
+                    self.scrN.append((H(self.q0[i] - self.qs0[i]).evaluate()))
                     self.scrN[i].name=f'scrN{i+1}'
             else:
                 H = lambda A: 0.5*(1+np.tanh(self.k*A))
                 for i in range(3):
-                    self.scrN.append((H(self.q0[i] - self.qs0[i]) + 1/2*(self.q0[i] - self.qs0[i])*self.k*(1-(np.tanh(self.k*(self.q0[i] - self.qs0[i])))**2)).evaluate())
+                    self.scrN.append((H(self.q0[i] - self.qs0[i]).evaluate()))
                     self.scrN[i].name=f'scrN{i+1}'
 
             scrN1 = self.scrN[0]
@@ -478,20 +487,22 @@ class SplitThreeRainyBenardEVP(RainyEVP):
 
         self.problem = de.EVP(variables, eigenvalue=ω, namespace=locals())
         for i in [1, 2, 3]:
-            self.problem.add_equation(f'div(u{i}) + τp{i} + 1/PdR*dot(lift{i}(τu2{i},-1),ez) = 0')
-            self.problem.add_equation(f'dt(u{i}) - PdR*lap(u{i}) + grad(p{i}) - PtR*b{i}*ez + lift{i}(τu1{i}, -1) + lift{i}(τu2{i}, -2) = 0')
+            self.problem.add_equation(f'div(u{i}) + τp{i} + 1/PdR*dot(lift{i}1(τu2{i},-1),ez) = 0')
+            #self.problem.add_equation(f'div(u{i}) + lift{i}1(τp,-1) = 0')
+            #self.problem.add_equation(f'div(u{i}) + lift{i}1(τp{i},-1) = 0')
+            self.problem.add_equation(f'dt(u{i}) - PdR*lap(u{i}) + grad(p{i}) - PtR*b{i}*ez + lift{i}2(τu1{i}, -1) + lift{i}2(τu2{i}, -2) = 0')
         if self.use_heaviside:
             for i in [1, 2, 3]:
-                self.problem.add_equation(f'dt(b{i}) - P*lap(b{i}) + u{i}@grad_b0{i} - γ/tau*(q{i}-α*qs0{i}*b{i})*scrN{i} + lift{i}(τb1{i}, -1) + lift{i}(τb2{i}, -2) = 0')
-                self.problem.add_equation(f'dt(q{i}) - S*lap(q{i}) + u{i}@grad_q0{i} + 1/tau*(q{i}-α*qs0{i}*b{i})*scrN{i} + lift{i}(τq1{i}, -1) + lift{i}(τq2{i}, -2) = 0')
+                self.problem.add_equation(f'dt(b{i}) - P*lap(b{i}) + u{i}@grad_b0{i} - γ/tau*(q{i}-α*qs0{i}*b{i})*scrN{i} + lift{i}2(τb1{i}, -1) + lift{i}2(τb2{i}, -2) = 0')
+                self.problem.add_equation(f'dt(q{i}) - S*lap(q{i}) + u{i}@grad_q0{i} + 1/tau*(q{i}-α*qs0{i}*b{i})*scrN{i} + lift{i}2(τq1{i}, -1) + lift{i}2(τq2{i}, -2) = 0')
         else:
             # unsaturated layer
             for i in [1, 2]:
-                self.problem.add_equation(f'dt(b{i}) - P*lap(b{i}) + u{i}@grad_b0{i} + lift{i}(τb1{i}, -1) + lift{i}(τb2{i}, -2) = 0')
-                self.problem.add_equation(f'dt(q{i}) - S*lap(q{i}) + u{i}@grad_q0{i} + lift{i}(τq1{i}, -1) + lift{i}(τq2{i}, -2) = 0')
+                self.problem.add_equation(f'dt(b{i}) - P*lap(b{i}) + u{i}@grad_b0{i} + lift{i}2(τb1{i}, -1) + lift{i}2(τb2{i}, -2) = 0')
+                self.problem.add_equation(f'dt(q{i}) - S*lap(q{i}) + u{i}@grad_q0{i} + lift{i}2(τq1{i}, -1) + lift{i}2(τq2{i}, -2) = 0')
             # saturated layer
-            self.problem.add_equation('dt(b3) - P*lap(b3) + u3@grad_b03 - γ/tau*(q3-α*qs03*b3) + lift3(τb13, -1) + lift3(τb23, -2) = 0')
-            self.problem.add_equation('dt(q3) - S*lap(q3) + u3@grad_q03 + 1/tau*(q3-α*qs03*b3) + lift3(τq13, -1) + lift3(τq23, -2) = 0')
+            self.problem.add_equation('dt(b3) - P*lap(b3) + u3@grad_b03 - γ/tau*(q3-α*qs03*b3) + lift32(τb13, -1) + lift32(τb23, -2) = 0')
+            self.problem.add_equation('dt(q3) - S*lap(q3) + u3@grad_q03 + 1/tau*(q3-α*qs03*b3) + lift32(τq13, -1) + lift32(τq23, -2) = 0')
 
         ncc_list = [grad_b01, grad_b02, grad_b03, grad_q01, grad_q02, grad_q03]
         if self.use_heaviside:
@@ -539,7 +550,7 @@ class SplitThreeRainyBenardEVP(RainyEVP):
             self.problem.add_equation('u3(z=Lz) = 0')
         for i in [1,2,3]:
             self.problem.add_equation(f'integ(p{i})= 0')
-#        self.problem.add_equation('integ(p1) + integ(p2) + integ(p3) = 0')
+        # self.problem.add_equation('integ(p1) + integ(p2) + integ(p3) = 0')
         self.solver = self.problem.build_solver(ncc_cutoff=ncc_cutoff)
 
 class SplitRainyBenardEVP(RainyEVP):
@@ -715,15 +726,16 @@ class SplitRainyBenardEVP(RainyEVP):
             filebase += f'_{label}'
         fig.savefig(f"{filebase}.{plot_type}", dpi=300)
 
-        fig, ax = plt.subplots(nrows=2)
-        scrN = self.concatenate_bases(*self.scrN)
-        ax[0].plot(scrN[0,:].real, self.z, label=r'$\mathcal{N}$')
-        for scrN in self.scrN:
-            ax[1].plot(np.abs(scrN['c'])[0,:], label=scrN.name)
-        ax[1].axhline(y=ncc_cutoff, alpha=0.3, linestyle='dashed', color='xkcd:dark grey')
-        ax[1].set_yscale('log')
-        ax[1].legend()
-        fig.savefig(f"{filebase}_scrN.{plot_type}", dpi=300)
+        if self.use_heaviside:
+            fig, ax = plt.subplots(nrows=2)
+            scrN = self.concatenate_bases(*self.scrN)
+            ax[0].plot(scrN[0,:].real, self.z, label=r'$\mathcal{N}$')
+            for scrN in self.scrN:
+                ax[1].plot(np.abs(scrN['c'])[0,:], label=scrN.name)
+            ax[1].axhline(y=ncc_cutoff, alpha=0.3, linestyle='dashed', color='xkcd:dark grey')
+            ax[1].set_yscale('log')
+            ax[1].legend()
+            fig.savefig(f"{filebase}_scrN.{plot_type}", dpi=300)
 
     def build_solver(self):
         if self.twoD:
@@ -772,9 +784,9 @@ class SplitRainyBenardEVP(RainyEVP):
         varnames = [v.name for v in variables]
         self.fields = {k:v for k, v in zip(varnames, variables)}
 
-        lift_basis1 = self.zb1
+        lift_basis1 = self.zb1.derivative_basis(2)
         lift1 = lambda A, n: de.Lift(A, lift_basis1, n)
-        lift_basis2 = self.zb2
+        lift_basis2 = self.zb2.derivative_basis(2)
         lift2 = lambda A, n: de.Lift(A, lift_basis2, n)
 
         # need local aliases...this is a weakness of this approach
@@ -813,12 +825,12 @@ class SplitRainyBenardEVP(RainyEVP):
             if self.erf:
                 H = lambda A: 0.5*(1+erf_func(self.k*A))
                 for i in range(2):
-                    self.scrN.append((H(self.q0[i] - self.qs0[i]) + 1/2*(self.q0[i] - self.qs0[i])*self.k*2*(np.pi)**(-1/2)*np.exp(-self.k**2*(self.q0[i] - self.qs0[i])**2)).evaluate())
+                    self.scrN.append((H(self.q0[i] - self.qs0[i])).evaluate())
                     self.scrN[i].name=f'scrN{i}'
             else:
                 H = lambda A: 0.5*(1+np.tanh(self.k*A))
                 for i in range(2):
-                    self.scrN.append((H(self.q0[i] - self.qs0[i]) + 1/2*(self.q0[i] - self.qs0[i])*self.k*(1-(np.tanh(self.k*(self.q0[i] - self.qs0[i])))**2)).evaluate())
+                    self.scrN.append((H(self.q0[i] - self.qs0[i])).evaluate())
                     self.scrN[i].name=f'scrN{i}'
 
             scrN1 = self.scrN[0]
@@ -1196,7 +1208,7 @@ class RainyBenardEVP(RainyEVP):
         self.problem.add_equation('integ(p) = 0')
         self.solver = self.problem.build_solver(ncc_cutoff=ncc_cutoff)
 
-def mode_reject(lo_res, hi_res, drift_threshold=1e6, tau_cutoff=1e-6, plot_drift_ratios=True,  plot_type='png'):
+def mode_reject(lo_res, hi_res, drift_threshold=1e6, tau_cutoff=1e-8, plot_drift_ratios=True,  plot_type='png'):
     ep = Eigenproblem(None,use_ordinal=False, drift_threshold=drift_threshold)
 
     # calculate tau amplitudes, here under L2
@@ -1266,8 +1278,10 @@ class RainySpectrum():
         if lower_q0 == 1:
             self.EVP = RainyBenardEVP
         else:
-            self.EVP = SplitThreeRainyBenardEVP
-            #self.EVP = SplitRainyBenardEVP
+            if use_heaviside:
+                self.EVP = SplitThreeRainyBenardEVP
+            else:
+                self.EVP = SplitRainyBenardEVP
         self.lo_res = self.EVP(nz, Rayleigh, tau, kx, γ, α, β, lower_q0, k, Legendre=Legendre, erf=erf, bc_type=bc_type, nondim=nondim, dealias=dealias,Lz=1, use_heaviside=use_heaviside, dynamic_gamma_factor=dynamic_gamma_factor)
         self.lo_res.rejection_method = rejection_method
         if not quiet:
