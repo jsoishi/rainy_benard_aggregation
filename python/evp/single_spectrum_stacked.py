@@ -118,8 +118,11 @@ if __name__ == "__main__":
     spectrum = RainySpectrum(nz, Rayleigh, tau, kx, γ, α, β, lower_q0, k, Legendre=Legendre, erf=erf, bc_type=bc_type, nondim=nondim, dealias=dealias,Lz=1, use_heaviside=use_heaviside, restart=restart, rejection_method=rejection_method, dynamic_gamma_factor = dynamic_gamma)
 
     spectrum.lo_res.plot_background()
-    
+
     spectrum.solve(dense=dense, N_evals=N_evals, target=target, plot_drift_ratios=True)
+    print(40*'*')
+    spectrum.lo_res.solver.print_subproblem_ranks()
+    print(40*'*')
 
     evals_good = spectrum.evals_good
     indx = spectrum.indx
@@ -133,20 +136,24 @@ if __name__ == "__main__":
     logger.info(f"good fastest oscillating modes: {spectrum.evals_good[np.argmax(np.abs(spectrum.evals_good.imag))]}")
     col = np.where(np.abs(evals_good.imag) > eps, 'g', np.where(evals_good.real > eps, 'r','k'))
     spec_ax.scatter(evals_good.real, evals_good.imag, marker='o', c=col, label=f'good modes ($\delta_t$ = {drift_threshold:.1e})',s=100)#, alpha=0.5, s=25)
-    col = np.where(np.abs(evals_good.imag) > eps, 'g', np.where(evals_good.real > 0, 'r','k'))
+    #col = np.where(np.abs(evals_good.imag) > eps, 'g', np.where(evals_good.real > 0, 'r','k'))
 
     if annotate:
         for n,ev in enumerate(evals_good):
-            logger.info(f"ok ev = {ev}, index = {indx_ok[n]}")
-            spec_ax.annotate(indx_ok[n], (ev.real, ev.imag), fontsize=8, ha='left',va='top')
+            logger.info(f"ok ev = {ev}, index = {indx[n]}")
+            spec_ax.annotate(indx[n], (ev.real, ev.imag), fontsize=6, ha='left',va='top')
 
     spec_ax.set_xlabel(r"Growth Rate")
     spec_ax.set_ylabel(r"Frequency")
-    spec_ax.set_xlim(-1,0.1)
+    fig.tight_layout()
+    spec_filename = f'{spectrum.lo_res.case_name}/{fig_filename}_full.{plot_type}'
+    logger.info(f"saving full file to {spec_filename}")
+    fig.savefig(spec_filename, dpi=300)
+    spec_ax.set_xlim(-1,0.2)
     spec_ax.set_ylim(-0.3,0.3)
+    spec_ax.axvline(x=0, alpha=0.3, zorder=0, color='xkcd:dark grey')
     spec_filename = f'{spectrum.lo_res.case_name}/{fig_filename}.{plot_type}'
     logger.info(f"saving file to {spec_filename}")
-    fig.tight_layout()
     fig.savefig(spec_filename, dpi=300)
     spec_ax.set_xlim(-0.2,0.5)
     spec_filename = f'{spectrum.lo_res.case_name}/{fig_filename}_zoom.{plot_type}'
