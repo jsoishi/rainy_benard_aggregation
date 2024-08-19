@@ -63,7 +63,10 @@ from rainy_evp import mode_reject, RainySpectrum
 
 from etools import Eigenproblem
 import matplotlib.pyplot as plt
-plt.style.use('prl.mplstyle')
+try:
+    plt.style.use('prl.mplstyle')
+except OSError:
+    plt.style.use('prl')
 from docopt import docopt
 args = docopt(__doc__)
 
