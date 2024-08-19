@@ -3,6 +3,7 @@ import numpy as np
 from mpi4py import MPI
 from scipy.special import lambertw as W
 from scipy.special import erf as erf_func
+import scipy.optimize as sciop
 from mpi4py import MPI
 import dedalus.public as de
 import h5py
@@ -178,12 +179,10 @@ class SplitThreeRainyBenardEVP(RainyEVP):
         self.use_heaviside = use_heaviside
         self.get_zc_Tc()
         # empirically determined
-        if self.k < 5e3:
-            self.zc_pad = 70/self.k
-        elif self.k < 1e4:
-            self.zc_pad = 150/self.k
-        else:
-            self.zc_pad = 300/self.k
+        def q_qs(z, ε=-4*2/np.sqrt(np.pi)):
+            return np.abs(self.k*((np.exp(self.α*self.Tc)-self.lower_q0)*z/self.zc+self.lower_q0-np.exp(self.α*self.Tc*z/self.zc))-ε)
+        result = sciop.minimize_scalar(q_qs, bounds=(self.zc-0.1, self.zc), method='Bounded')
+        self.zc_pad = self.zc-result.x
         if self.Legendre:
             self.zb1 = de.Legendre(self.coords['z'], size=self.nz/2, bounds=(0, self.zc-self.zc_pad), dealias=self.dealias)
             self.zb2 = de.Legendre(self.coords['z'], size=self.nz, bounds=(self.zc-self.zc_pad , self.zc), dealias=self.dealias)
