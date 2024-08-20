@@ -19,8 +19,8 @@ Options:
     --beta=<beta>        Beta parameter  [default: 1.2]
 
     --start_tau=<st>     Starting value for tau sweep [default: 1e-3]
-    --end_tau=<et>       Ending value for tau sweep [default: 1e-5]
-    --num_tau=<nt>       Number of taus to sample in tau sweep [default: 5]
+    --end_tau=<et>       Ending value for tau sweep [default: 1e-6]
+    --num_tau=<nt>       Number of taus to sample in tau sweep [default: 7]
 
     --reverse_search_ks  Reverse direction of k search (from high to low)
 
@@ -228,12 +228,22 @@ lap = lambda A: dz(dz(A))
 vars = [b, q]
 nlbvp_taus = [τb1, τb2, τq1, τq2]
 
-scrN = lambda q, qs: H(q-qs)
+import dedalus.core.operators as op
+import scipy.special as scp
+def sym_diff(self, var):
+    diff_map = {
+            np.exp: lambda x: np.exp(x),
+            np.tanh: lambda x: 0,
+            scp.erf: lambda x: 0}
+    arg = self.args[0]
+    arg_diff = arg.sym_diff(var)
+    return diff_map[self.func](arg) * arg_diff
+op.UnaryGridFunction.sym_diff = sym_diff
 
 # Stable nonlinear solution
 problem = de.NLBVP(vars+nlbvp_taus, namespace=locals())
-problem.add_equation('dt(b) - tau*P*lap(b) - γ*(q-α*qs*b)*scrN(q, qs) + lift(τb1, -1) + lift(τb2, -2) = γ*H(q-qs)*(q-qs) - γ*(q-α*qs*b)*scrN(q, qs)')
-problem.add_equation('dt(q) - tau*S*lap(q) + (q-α*qs*b)*scrN(q, qs) + lift(τq1, -1) + lift(τq2, -2) = - H(q-qs)*(q-qs) + (q-α*qs*b)*scrN(q, qs)')
+problem.add_equation('dt(b) - tau*P*lap(b) + lift(τb1, -1) + lift(τb2, -2) = γ*H(q-qs)*(q-qs)')
+problem.add_equation('dt(q) - tau*S*lap(q) + lift(τq1, -1) + lift(τq2, -2) = - H(q-qs)*(q-qs)')
 problem.add_equation('b(z=0) = 0')
 problem.add_equation('b(z=Lz) = β + ΔT') # technically β*Lz
 problem.add_equation('q(z=0) = q_surface') #*qs(z=0)')
@@ -249,11 +259,11 @@ need_guess = True
 # on later tau loops, start with the highest k solution as the first guess, stored in sol
 sol = {}
 
-for i, tau_i in enumerate(taus):
-    # reverse order on k solves
-    if args['--reverse_search_ks']:
-        ks = ks[::-1]
+# reverse order on k solves
+if args['--reverse_search_ks']:
+    ks = ks[::-1]
 
+for i, tau_i in enumerate(taus):
     for j, k_j in enumerate(ks):
         case_dir = 'tau_{:.2g}_k{:.2g}_nz{:d}'.format(tau_i, k_j, nz)
         if args['--erf']:
