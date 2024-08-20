@@ -42,8 +42,10 @@ if q0 == 1:
     βs = [1, 1.2]
     label = 'saturated'
 else:
-    βs = [1, 1.1]
+    βs = [1, 1.05, 1.1]
     label = f'unsaturated_q{args["--q0"]}'
+γs = [0.19, 0.3]
+
 
 # VPT19 conversions
 M_convert = 1/3.8e-3
@@ -71,7 +73,7 @@ fig.savefig(f'critical_Ra_and_k_all_gamma_{label}.png', dpi=300)
 
 fig, ax = plt.subplots(figsize=[8,8/1.6])
 ax2 = ax.twinx()
-for γ in [0.19, 0.3]:
+for γ in γs:
     curve = data[data['γ']==γ]
     p = ax.plot(curve['β'], curve['Ra'], label=rf'$\gamma = {γ}$', marker='o', alpha=0.5)
     ax2.plot(curve['β'], curve['k'], color=p[0].get_color(),
@@ -123,3 +125,7 @@ print(VPT_γ_convert)
 print('gamma crit')
 for β in βs:
     print(f'β = {β:.2g}, γ_c = {γ_crit(β):.2g}')
+
+print('beta crit')
+for γ in γs:
+    print(f'γ = {γ:.2g}, γ_c = {β_crit(γ):.2g}')
