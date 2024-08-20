@@ -28,8 +28,8 @@ Options:
 
     --erf                Use erf, not tanh
 
-    --tolerance=<t>      Tolerance for convergence [default: 1e-6]
-    --niter=<n>          Max iterations before stopping [default: 15]
+    --tolerance=<t>      Tolerance for convergence [default: 1e-5]
+    --niter=<n>          Max iterations before stopping [default: 50]
     --damping=<d>        Damping rate for newton iterations [default: 0.9]
 
     --nz=<nz>            Vertical (z) grid resolution [default: 256]
@@ -228,10 +228,12 @@ lap = lambda A: dz(dz(A))
 vars = [b, q]
 nlbvp_taus = [τb1, τb2, τq1, τq2]
 
+scrN = lambda q, qs: H(q-qs)
+
 # Stable nonlinear solution
 problem = de.NLBVP(vars+nlbvp_taus, namespace=locals())
-problem.add_equation('dt(b) - tau*P*lap(b) + lift(τb1, -1) + lift(τb2, -2) = γ*H(q-qs)*(q-qs)')
-problem.add_equation('dt(q) - tau*S*lap(q) + lift(τq1, -1) + lift(τq2, -2) = - H(q-qs)*(q-qs)')
+problem.add_equation('dt(b) - tau*P*lap(b) - γ*(q-α*qs*b)*scrN(q, qs) + lift(τb1, -1) + lift(τb2, -2) = γ*H(q-qs)*(q-qs) - γ*(q-α*qs*b)*scrN(q, qs)')
+problem.add_equation('dt(q) - tau*S*lap(q) + (q-α*qs*b)*scrN(q, qs) + lift(τq1, -1) + lift(τq2, -2) = - H(q-qs)*(q-qs) + (q-α*qs*b)*scrN(q, qs)')
 problem.add_equation('b(z=0) = 0')
 problem.add_equation('b(z=Lz) = β + ΔT') # technically β*Lz
 problem.add_equation('q(z=0) = q_surface') #*qs(z=0)')
