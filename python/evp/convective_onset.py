@@ -45,6 +45,8 @@ Options:
 
     --dense           Solve densely for all eigenvalues (slow)
 
+    --use-heaviside   Use Heaviside expansion in unsaturated atmospheres
+
     --tol_crit_Ra=<tol>    Tolerance on frequency for critical growth [default: 1e-5]
 
     --verbose         Show plots on screen
@@ -59,13 +61,20 @@ import numpy as np
 import dedalus.public as de
 import h5py
 
-from rainy_evp import RainyBenardEVP, SplitRainyBenardEVP, mode_reject
+from rainy_evp import RainyBenardEVP, mode_reject
+
 from etools import Eigenproblem
 
 import matplotlib.pyplot as plt
 
 from docopt import docopt
 args = docopt(__doc__)
+
+use_heaviside = args['--use-heaviside']
+if use_heaviside:
+    from rainy_evp import SplitThreeRainyBenardEVP as SplitRainyBenardEVP
+else:
+    from rainy_evp import SplitRainyBenardEVP
 
 Legendre = args['--Legendre']
 erf = args['--erf']
@@ -138,19 +147,22 @@ def plot_eigenfunctions(evp, index, Rayleigh, kx):
     fig.savefig(evp.case_name+'/'+fig_filename+'.png', dpi=300)
     logger.info("eigenfunctions plotted in {:s}".format(evp.case_name+'/'+fig_filename+'.png'))
 
+
 # fix Ra, find omega
 def compute_growth_rate(kx, Ra, target=0, plot_fastest_mode=False):
+    hi_res = None
     if q0 < 1:
-        lo_res = SplitRainyBenardEVP(nz, Ra, tau, kx, γ, α, β, q0, k, Legendre=Legendre, erf=erf, bc_type=bc_type, nondim=nondim, dealias=dealias,Lz=1)
-        hi_res = SplitRainyBenardEVP(int(3*nz/2), Ra, tau, kx, γ, α, β, q0, k, Legendre=Legendre, erf=erf, bc_type=bc_type, nondim=nondim, dealias=dealias,Lz=1)
+        lo_res = SplitRainyBenardEVP(nz, Ra, tau, kx, γ, α, β, q0, k, Legendre=Legendre, erf=erf, bc_type=bc_type, nondim=nondim, dealias=1,Lz=1, use_heaviside=use_heaviside)
     else:
-        lo_res = RainyBenardEVP(nz, Ra, tau, kx, γ, α, β, q0, k, relaxation_method=relaxation_method, Legendre=Legendre, erf=erf, bc_type=bc_type, nondim=nondim, dealias=dealias,Lz=1)
-        hi_res = RainyBenardEVP(int(3*nz/2), Ra, tau, kx, γ, α, β, q0, k, relaxation_method=relaxation_method, Legendre=Legendre, erf=erf, bc_type=bc_type, nondim=nondim, dealias=dealias,Lz=1)
+        lo_res = RainyBenardEVP(nz, Ra, tau, kx, γ, α, β, q0, k, relaxation_method=relaxation_method, Legendre=Legendre, erf=erf, bc_type=bc_type, nondim=nondim, dealias=1,Lz=1)
     for solver in [lo_res, hi_res]:
-        if args['--dense']:
-            solver.solve(dense=True)
-        else:
-            solver.solve(dense=False, N_evals=N_evals, target=target)
+        if solver:
+            if args['--dense']:
+                solver.solve(dense=True)
+            else:
+                solver.solve(dense=False, N_evals=N_evals, target=target)
+
+    lo_res.rejection_method = 'taus'
     evals_good, indx, ep = mode_reject(lo_res, hi_res, plot_drift_ratios=False)
 
     i_evals = np.argsort(evals_good.real)
@@ -180,16 +192,11 @@ for Ra in Ras:
     target = float(args['--target'])
     kx = kxs[0]
     if q0 < 1:
-        lo_res = SplitRainyBenardEVP(nz, Ra, tau, kx, γ, α, β, q0, k, Legendre=Legendre, erf=erf, bc_type=bc_type, nondim=nondim, dealias=dealias,Lz=1)
+        lo_res = SplitRainyBenardEVP(nz, Ra, tau, kx, γ, α, β, q0, k, Legendre=Legendre, erf=erf, bc_type=bc_type, nondim=nondim, dealias=1,Lz=1, use_heaviside=use_heaviside)
     else:
-        lo_res = RainyBenardEVP(nz, Ra, tau, kx, γ, α, β, q0, k, relaxation_method=relaxation_method, Legendre=Legendre, erf=erf, bc_type=bc_type, nondim=nondim, dealias=dealias,Lz=1)
+        lo_res = RainyBenardEVP(nz, Ra, tau, kx, γ, α, β, q0, k, relaxation_method=relaxation_method, Legendre=Legendre, erf=erf, bc_type=bc_type, nondim=nondim, dealias=1,Lz=1)
     lo_res.plot_background()
-    if q0 < 1:
-        hi_res = SplitRainyBenardEVP(int(3*nz/2), Ra, tau, kx, γ, α, β, q0, k, Legendre=Legendre, erf=erf, bc_type=bc_type, nondim=nondim, dealias=dealias,Lz=1)
-    else:
-        hi_res = RainyBenardEVP(int(3*nz/2), Ra, tau, kx, γ, α, β, q0, k, relaxation_method=relaxation_method, Legendre=Legendre, erf=erf, bc_type=bc_type, nondim=nondim, dealias=dealias,Lz=1)
-    hi_res.plot_background()
-    for system in ['rainy_evp']:
+    for system in ['rainy_evp', 'subsystems']:
          logging.getLogger(system).setLevel(logging.WARNING)
 
     for kx in kxs:
