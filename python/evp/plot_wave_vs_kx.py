@@ -116,7 +116,7 @@ if __name__ == "__main__":
             waves.append(np.array([0,]))
         else:
             waves.append(np.array(spectrum.evals_good[wave_indx]))
-        kx_plot.append([kx,]*len(waves[-1]))
+        kx_plot.append(np.array([kx,]*len(waves[-1])))
     global_waves = comm.gather(waves, root=0)
     global_kx_plot = comm.gather(kx_plot, root=0)
 
@@ -148,7 +148,8 @@ if __name__ == "__main__":
 
         plt.clf()
         for kxp,w in zip(flat_kx_plot, flat_waves):
-            plt.scatter(kxp, 1/w.imag, c=w.real, vmin=-2,vmax=-0.1)
+            mask = w.real > -4
+            plt.scatter(kxp[mask], 1/w[mask].imag, c=w[mask].real, vmin=-2,vmax=-0.1)
         plt.xscale('log')
         plt.yscale('log')
         plt.xlabel(r"$k_x$")
