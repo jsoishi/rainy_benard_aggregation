@@ -42,6 +42,8 @@ Options:
 
     --max_dt=<dt>     Largest timestep to use; should be set by oscillation timescales of waves (Brunt) [default: 1]
 
+    --implicit        Enable implicit treatment of condensation term
+
     --run_time_diff=<rtd>      Run time, in diffusion times [default: 1]
     --run_time_buoy=<rtb>      Run time, in buoyancy times
     --run_time_iter=<rti>      Run time, number of iterations; if not set, n_iter=np.inf
@@ -234,6 +236,8 @@ grad_b0 = de.grad(b0).evaluate()
 
 ncc_cutoff = 1e-10
 ncc_list = [grad_b0, grad_q0, scrN]
+if args['--implicit']:
+    ncc_list += [qs0]
 for ncc in ncc_list:
     logger.info("{}: {}".format(ncc.evaluate(), np.where(np.abs(ncc.evaluate()['c']) >= ncc_cutoff)[0].shape))
 
@@ -271,8 +275,13 @@ vars = [p, u, b1, q1]
 problem = de.IVP(vars+taus, namespace=locals())
 problem.add_equation('div(u) + τ_d = 0')
 problem.add_equation('dt(u) - PdR*lap(u) + grad(p) - PtR*b1*ez + τ_u = cross(u, ω)')
-problem.add_equation('dt(b1) - P*lap(b1) + u@grad_b0 + τ_b = - (u@grad(b1)) + γ/tau*((q-qs)*H(q-qs)) + P*lap(b0)')
-problem.add_equation('dt(q1) - S*lap(q1) + u@grad_q0 + τ_q = - (u@grad(q1)) - 1/tau*((q-qs)*H(q-qs)) + S*lap(q0)')
+if args['--implicit']:
+
+    problem.add_equation('dt(b1) - P*lap(b1) + u@grad_b0 - γ/tau*(q1-α*qs0*b1)*scrN + τ_b = - (u@grad(b1)) + γ/tau*((q-qs)*H(q-qs)) - γ/tau*(q1-α*qs0*b1)*scrN + P*lap(b0)')
+    problem.add_equation('dt(q1) - S*lap(q1) + u@grad_q0 + 1/tau*(q1-α*qs0*b1)*scrN + τ_q = - (u@grad(q1)) - 1/tau*((q-qs)*H(q-qs)) + 1/tau*(q1-α*qs0*b1)*scrN + S*lap(q0)')
+else:
+    problem.add_equation('dt(b1) - P*lap(b1) + u@grad_b0 + τ_b = - (u@grad(b1)) + γ/tau*((q-qs)*H(q-qs)) + P*lap(b0)')
+    problem.add_equation('dt(q1) - S*lap(q1) + u@grad_q0 + τ_q = - (u@grad(q1)) - 1/tau*((q-qs)*H(q-qs)) + S*lap(q0)')
 problem.add_equation('b1(z=0) = 0')
 problem.add_equation('b1(z=Lz) = 0')
 problem.add_equation('q1(z=0) = 0')
@@ -300,6 +309,8 @@ elif args['--timestepper'] == 'SBDF2':
     ts = de.SBDF2
 elif args['--timestepper'] == 'RK222':
     ts = de.RK222
+elif args['--timestepper'] == 'RK443':
+    ts = de.RK443
 else:
     raise ValueError(f'timestepper {args["--timestepper"]} not currently implemented in this script')
 cfl_safety_factor = 0.2
@@ -308,12 +319,15 @@ solver = problem.build_solver(ts, ncc_cutoff=ncc_cutoff, enforce_real_cadence=np
 solver.stop_sim_time = run_time_buoy
 solver.stop_iteration = run_time_iter
 
-Δt = max_Δt = min(float(args['--max_dt']), tau/4)
-logger.info('setting Δt = min(--max_dt={:.2g}, tau/4={:.2g})'.format(float(args['--max_dt']), tau/4))
+if args['--implicit']:
+    Δt = max_Δt = float(args['--max_dt'])
+    logger.info('setting Δt = --max_dt={:.2g}, implicitly stepping over tau={:.2g})'.format(float(args['--max_dt']), tau))
+else:
+    Δt = max_Δt = min(float(args['--max_dt']), tau/4)
+    logger.info('setting Δt = min(--max_dt={:.2g}, tau/4={:.2g}), explicitly capturing tau'.format(float(args['--max_dt']), tau/4))
 cfl = flow_tools.CFL(solver, Δt, safety=cfl_safety_factor, cadence=1, threshold=0.1,
                       max_change=1.5, min_change=0.5, max_dt=max_Δt)
 cfl.add_velocity(u)
-
 
 vol = Lx*Lz
 avg = lambda A: de.Integrate(A)/vol
