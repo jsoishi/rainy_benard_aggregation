@@ -28,7 +28,7 @@ file = args['<file>']
 if args['--output'] is not None:
     output_path = pathlib.Path(args['--output']).absolute()
 else:
-    data_dir = args['<file>'].split('traces')[0]
+    data_dir = args['<file>'].split('scalars')[0]
     data_dir += '/'
     output_path = pathlib.Path(data_dir).absolute()
 
@@ -90,13 +90,10 @@ fig_E.savefig('{:s}/fluc_energies.png'.format(str(output_path)), dpi=300)
 
 fig_tau, ax_tau = plt.subplots(nrows=2, sharex=True)
 for i in range(2):
-    ax_tau[i].plot(t, data['τu1'], label=r'$\tau_{u,1}$')
-    ax_tau[i].plot(t, data['τu2'], label=r'$\tau_{u,2}$')
-    ax_tau[i].plot(t, data['τb1'], label=r'$\tau_{b,1}$')
-    ax_tau[i].plot(t, data['τb2'], label=r'$\tau_{b,2}$')
-    ax_tau[i].plot(t, data['τq1'], label=r'$\tau_{q,1}$')
-    ax_tau[i].plot(t, data['τq2'], label=r'$\tau_{q,2}$')
-    ax_tau[i].plot(t, data['τp'], label=r'$\tau_{p}$')
+    ax_tau[i].plot(t, data['τ_d'], label=r'$\tau_{d}$')
+    ax_tau[i].plot(t, data['τ_u'], label=r'$\tau_{u}$')
+    ax_tau[i].plot(t, data['τ_b'], label=r'$\tau_{b}$')
+    ax_tau[i].plot(t, data['τ_q'], label=r'$\tau_{q}$')
 
 for ax in ax_tau:
     if subrange:
