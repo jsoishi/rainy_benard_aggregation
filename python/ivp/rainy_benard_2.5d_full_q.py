@@ -6,7 +6,7 @@ Read more about these equations in:
 Vallis, Parker & Tobias, 2019, JFM,
 ``A simple system for moist convection: the Rainy–Bénard model''
 
-This script solves IVPs for an existing atmospheres, solved for by scripts in the nlbvp section.
+This script solves IVPs, starting from an analytic base state.
 
 Usage:
     rainy_benard.py [options]
@@ -22,8 +22,8 @@ Options:
 
     --aspect=<a>      Aspect ratio of domain, Lx/Lz [default: 10]
 
-    --tau=<tau>       Timescale for moisture reaction [default: 0.1]
-    --k=<k>           Sharpness of smooth phase transition [default: 1e4]
+    --tau=<tau>       Timescale for moisture reaction [default: 1e-2]
+    --k=<k>           Sharpness of smooth phase transition [default: 1e5]
 
     --erf             Use an erf for the phase transition (default)
     --tanh            Use a tanh for the phase transition
@@ -323,7 +323,7 @@ cfl.add_velocity(u)
 
 vol = Lx*Lz
 avg = lambda A: de.Integrate(A)/vol
-x_avg = lambda A: de.Integrate(A, 'x')/(Lx)
+h_avg = lambda A: de.Integrate(A, 'x')/(Lx)
 
 Re = np.sqrt(u@u)/PdR
 KE = 0.5*u@u
@@ -341,28 +341,28 @@ if not args['--no-output']:
     snapshots.add_task(m, name='m')
     snapshots.add_task(rh, name='rh')
     snapshots.add_task(Q_eq, name='c')
-    snapshots.add_task(b-x_avg(b), name='b_fluc')
-    snapshots.add_task(q-x_avg(q), name='q_fluc')
-    snapshots.add_task(m-x_avg(m), name='m_fluc')
-    snapshots.add_task(rh-x_avg(rh), name='rh_fluc')
+    snapshots.add_task(b-h_avg(b), name='b_fluc')
+    snapshots.add_task(q-h_avg(q), name='q_fluc')
+    snapshots.add_task(m-h_avg(m), name='m_fluc')
+    snapshots.add_task(rh-h_avg(rh), name='rh_fluc')
     snapshots.add_task(ex@u, name='ux')
     snapshots.add_task(ez@u, name='uz')
     snapshots.add_task(ey@ω, name='vorticity')
     snapshots.add_task(ω@ω, name='enstrophy')
 
     averages = solver.evaluator.add_file_handler(data_dir+'/averages', sim_dt=snap_dt, max_writes=None)
-    averages.add_task(x_avg(b), name='b')
-    averages.add_task(x_avg(q), name='q')
-    averages.add_task(x_avg(m), name='m')
-    averages.add_task(x_avg(rh), name='rh')
-    averages.add_task(x_avg(Q_eq), name='Q_eq')
-    averages.add_task(x_avg(ez@u*q), name='uq')
-    averages.add_task(x_avg(ez@u*b), name='ub')
-    averages.add_task(x_avg(ex@u), name='ux')
-    averages.add_task(x_avg(ez@u), name='uz')
-    averages.add_task(x_avg(np.sqrt((u-x_avg(u))@(u-x_avg(u)))), name='u_rms')
-    averages.add_task(x_avg(ω@ω), name='enstrophy')
-    averages.add_task(x_avg((ω-x_avg(ω))@(ω-x_avg(ω))), name='enstrophy_rms')
+    averages.add_task(h_avg(b), name='b')
+    averages.add_task(h_avg(q), name='q')
+    averages.add_task(h_avg(m), name='m')
+    averages.add_task(h_avg(rh), name='rh')
+    averages.add_task(h_avg(Q_eq), name='Q_eq')
+    averages.add_task(h_avg(ez@u*q), name='uq')
+    averages.add_task(h_avg(ez@u*b), name='ub')
+    averages.add_task(h_avg(ex@u), name='ux')
+    averages.add_task(h_avg(ez@u), name='uz')
+    averages.add_task(h_avg(np.sqrt((u-h_avg(u))@(u-h_avg(u)))), name='u_rms')
+    averages.add_task(h_avg(ω@ω), name='enstrophy')
+    averages.add_task(h_avg((ω-h_avg(ω))@(ω-h_avg(ω))), name='enstrophy_rms')
 
     slices = solver.evaluator.add_file_handler(data_dir+'/slices', sim_dt=snap_dt, max_writes=None)
     slices.add_task(b(z=0.5), name='b')
@@ -373,9 +373,9 @@ if not args['--no-output']:
     slices.add_task((ez@u*q)(z=0.5), name='uq')
     slices.add_task((ez@u*b)(z=0.5), name='ub')
     slices.add_task((ez@u)(z=0.5), name='uz')
-    slices.add_task((np.sqrt((u-x_avg(u))@(u-x_avg(u))))(z=0.5), name='u_rms')
+    slices.add_task((np.sqrt((u-h_avg(u))@(u-h_avg(u))))(z=0.5), name='u_rms')
     slices.add_task((ω@ω)(z=0.5), name='enstrophy')
-    slices.add_task(((ω-x_avg(ω))@(ω-x_avg(ω)))(z=0.5), name='enstrophy_rms')
+    slices.add_task(((ω-h_avg(ω))@(ω-h_avg(ω)))(z=0.5), name='enstrophy_rms')
 
     scalar_dt = snap_dt/5
     scalars = solver.evaluator.add_file_handler(data_dir+'/scalars', sim_dt=scalar_dt, max_writes=None)
@@ -387,12 +387,12 @@ if not args['--no-output']:
     scalars.add_task(avg(Re), name='Re')
     scalars.add_task(avg(ω@ω), name='enstrophy')
     scalars.add_task(avg(np.abs(de.div(u))), name='div_u')
-    scalars.add_task(x_avg(np.sqrt(τu1@τu1)), name='τu1')
-    scalars.add_task(x_avg(np.sqrt(τu2@τu2)), name='τu2')
-    scalars.add_task(x_avg(np.abs(τb1)), name='τb1')
-    scalars.add_task(x_avg(np.abs(τb2)), name='τb2')
-    scalars.add_task(x_avg(np.abs(τq1)), name='τq1')
-    scalars.add_task(x_avg(np.abs(τq2)), name='τq2')
+    scalars.add_task(h_avg(np.sqrt(τu1@τu1)), name='τu1')
+    scalars.add_task(h_avg(np.sqrt(τu2@τu2)), name='τu2')
+    scalars.add_task(h_avg(np.abs(τb1)), name='τb1')
+    scalars.add_task(h_avg(np.abs(τb2)), name='τb2')
+    scalars.add_task(h_avg(np.abs(τq1)), name='τq1')
+    scalars.add_task(h_avg(np.abs(τq2)), name='τq2')
     scalars.add_task(np.abs(τc1), name='τc1')
     scalars.add_task(np.abs(τc0), name='τc0')
     scalars.add_task(np.sqrt(avg(τ_d**2)), name='τ_d')
