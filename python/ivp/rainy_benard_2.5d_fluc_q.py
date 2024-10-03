@@ -381,7 +381,9 @@ if not args['--no-output']:
     slices.add_task((ez@u*q)(z=0.5), name='uq')
     slices.add_task((ez@u*b)(z=0.5), name='ub')
     slices.add_task((ez@u)(z=0.5), name='uz')
+    slices.add_task((ex@u)(z=0.5), name='ux')
     slices.add_task((np.sqrt((u-h_avg(u))@(u-h_avg(u))))(z=0.5), name='u_rms')
+    slices.add_task((ey@ω)(z=0.5), name='omega_y')
     slices.add_task((ω@ω)(z=0.5), name='enstrophy')
     slices.add_task(((ω-h_avg(ω))@(ω-h_avg(ω)))(z=0.5), name='enstrophy_rms')
 
@@ -414,10 +416,10 @@ flow.add_property(Re, name='Re')
 flow.add_property(KE, name='KE')
 flow.add_property(np.abs(de.div(u)), name='div_u')
 flow.add_property(np.sqrt(τ_d**2)+np.sqrt(τ_u@τ_u)+np.sqrt(τ_b**2)+np.sqrt(τ_q**2), name='|taus|')
-flow.add_property(np.sqrt(avg(τ_d**2)), name='|τ_d|')
-flow.add_property(np.sqrt(avg(τ_q**2)), name='|τ_q|')
-flow.add_property(np.sqrt(avg(τ_b**2)), name='|τ_b|')
-flow.add_property(np.sqrt(avg(τ_u@τ_u)), name='|τ_u|')
+flow.add_property(np.sqrt(τ_d**2), name='|τ_d|')
+flow.add_property(np.sqrt(τ_q**2), name='|τ_q|')
+flow.add_property(np.sqrt(τ_b**2), name='|τ_b|')
+flow.add_property(np.sqrt(τ_u@τ_u), name='|τ_u|')
 
 good_solution = True
 KE_avg = 0

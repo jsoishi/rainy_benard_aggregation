@@ -107,7 +107,7 @@ if __name__ == "__main__":
     args = docopt(__doc__)
     tasks = args['--tasks'].split(',')
     if args['--3D_default']:
-        tasks = ['rh mid y','enstrophy mid y']
+        tasks = ['vorticity y 0.5 y', 'enstrophy 0.5 y', 'm_fluc 0.5 y']
     if args['--output']:
         output_path = pathlib.Path(args['--output']).absolute()
     else:
