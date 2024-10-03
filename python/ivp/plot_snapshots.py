@@ -7,6 +7,7 @@ Usage:
 Options:
     --output=<dir>     Output directory; defaults to 'frames' subdir within the case dir
     --tasks=<tasks>    Tasks to plot [default: b,q,m,rh,b_fluc,q_fluc,m_fluc,rh_fluc,vorticity]
+    --aspect=<aspect>  Choose an aspect ratio rather than enforcing 1-1
     --3D_default       plots default 3-D fields
 """
 
@@ -19,11 +20,13 @@ import matplotlib.pyplot as plt
 import logging
 logger = logging.getLogger(__name__)
 
-# Plot settings
-dpi = 300
-
-def main(filename, start, count, tasks, output):
+def main(filename, start, count, tasks, output, aspect=None, dpi=300):
     """Save plot of specified tasks for given range of analysis writes."""
+
+    if aspect is None:
+        one_to_one = True
+    else:
+        one_to_one = False
 
     # Plot writes
     with h5py.File(filename, mode='r') as f:
@@ -53,12 +56,15 @@ def main(filename, start, count, tasks, output):
                 mask = (slice(None), 0, slice(None))
             Lz = np.max(z)-np.min(z)
             Lx = np.max(x)-np.min(x)
-            height = 1.6
-            figsize = (height*(Lx/Lz), height+0.32)
+            height = 2
+            if not aspect:
+                aspect = (Lx/Lz)
+            figsize = (height*aspect, height+0.5)
             for k in range(len(t)):
                 time = t[k]
-                fig, ax = plt.subplots(1, figsize=figsize)
-                ax.set_aspect(1)
+                fig, ax = plt.subplots(figsize=figsize)
+                if one_to_one:
+                    ax.set_aspect(1)
                 pcm = ax.pcolormesh(x, z, task[(k,*mask)].T, shading='nearest',cmap=cmap)
                 pmin,pmax = pcm.get_clim()
                 if center_zero:
@@ -79,19 +85,22 @@ def main(filename, start, count, tasks, output):
                 else:
                     cNorm = matplotlib.colors.Normalize(vmin=pmin, vmax=pmax)
                 pcm = ax.pcolormesh(x, z, task[(k,*mask)].T, shading='nearest',cmap=cmap, norm=cNorm)
-                ax_cb = fig.add_axes([0.91, 0.4, 0.02, 1-0.4*2])
-                cb = fig.colorbar(pcm, cax=ax_cb)
+                #ax_cb = fig.add_axes([0.93, 0.4, 0.02, 1-0.4*2])
+                #cb = fig.colorbar(pcm, cax=ax_cb)
+                cb = fig.colorbar(pcm, ax=ax, location='right', shrink=0.75, extend='both')
                 cb.formatter.set_scientific(True)
                 cb.formatter.set_powerlimits((0,4))
                 cb.ax.yaxis.set_offset_position('left')
+
                 cb.update_ticks()
-                fig.subplots_adjust(left=0.1,right=0.9,top=0.95)
+                fig.subplots_adjust(left=0.075,right=1,top=0.95)
                 if title is not None:
-                    ax_cb.text(0.5, 1.75, title, horizontalalignment='center', verticalalignment='center', transform=ax_cb.transAxes)
+                    cb.ax.text(5, 0.9, title, horizontalalignment='center', verticalalignment='center', transform=cb.ax.transAxes)
                 if time is not None:
-                    ax.text(0.975, -0.15, "t = {:.0f}".format(time), horizontalalignment='left', verticalalignment='center', transform=ax.transAxes)
+                    ax.text(0.975, -0.05, "t = {:.0f}".format(time), horizontalalignment='left', verticalalignment='center', transform=ax.transAxes)
                 savename = savename_func(f['scales/write_number'][k])
                 savepath = output.joinpath(savename)
+                #fig.tight_layout()
                 fig.savefig(str(savepath), dpi=dpi)
                 #fig.clear()
                 plt.close(fig)
@@ -113,9 +122,14 @@ if __name__ == "__main__":
     else:
         case_name = args['<files>'][0].split('snapshots')[0]
         output_path = pathlib.Path(case_name+'/frames').absolute()
+
+    if args['--aspect']:
+        aspect = float(args['--aspect'])
+    else:
+        aspect = None
     # Create output directory if needed
     with Sync() as sync:
         if sync.comm.rank == 0:
             if not output_path.exists():
                 output_path.mkdir()
-    post.visit_writes(args['<files>'], main, tasks=tasks, output=output_path)
+    post.visit_writes(args['<files>'], main, tasks=tasks, output=output_path, aspect=aspect)
