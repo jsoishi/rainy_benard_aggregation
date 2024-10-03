@@ -65,6 +65,8 @@ def main(filename, start, count, tasks, output, aspect=None, dpi=300):
                 fig, ax = plt.subplots(figsize=figsize)
                 if one_to_one:
                     ax.set_aspect(1)
+                else:
+                    ax.set_aspect(aspect)
                 pcm = ax.pcolormesh(x, z, task[(k,*mask)].T, shading='nearest',cmap=cmap)
                 pmin,pmax = pcm.get_clim()
                 if center_zero:
@@ -93,11 +95,11 @@ def main(filename, start, count, tasks, output, aspect=None, dpi=300):
                 cb.ax.yaxis.set_offset_position('left')
 
                 cb.update_ticks()
-                fig.subplots_adjust(left=0.075,right=1,top=0.95)
+                fig.subplots_adjust(left=0.1,right=1,top=0.95)
                 if title is not None:
                     cb.ax.text(5, 0.9, title, horizontalalignment='center', verticalalignment='center', transform=cb.ax.transAxes)
                 if time is not None:
-                    ax.text(0.975, -0.05, "t = {:.0f}".format(time), horizontalalignment='left', verticalalignment='center', transform=ax.transAxes)
+                    ax.text(0.975, -0.1, "t = {:.0f}".format(time), horizontalalignment='left', verticalalignment='center', transform=ax.transAxes)
                 savename = savename_func(f['scales/write_number'][k])
                 savepath = output.joinpath(savename)
                 #fig.tight_layout()
