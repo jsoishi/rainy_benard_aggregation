@@ -438,7 +438,6 @@ if not args['--no-output']:
 
     checkpoint_wall_dt = 3.9*3600 # trigger slightly before a 4 hour interval
     checkpoints = solver.evaluator.add_file_handler(data_dir+'/checkpoints', wall_dt=checkpoint_wall_dt, max_writes=1)
-    #checkpoints.add_system(solver.state)
     checkpoints.add_task(p, layout='c')
     checkpoints.add_task(b, layout='c')
     checkpoints.add_task(q, layout='c')
@@ -462,7 +461,8 @@ try:
         # advance
         solver.step(Δt)
         if solver.iteration % report_cadence == 0:
-            τ_max = np.max([flow.max('|τ_u|'),flow.max('|τ_b|'),flow.max('|τ_q|'),flow.max('|τ_d|')])
+            # τ_max = np.max([flow.max('|τ_u|'),flow.max('|τ_b|'),flow.max('|τ_q|'),flow.max('|τ_d|')])
+            avg_taus = flow.volume_integral('|taus|')/vol
             Re_max = flow.max('Re')
             Re_avg = flow.volume_integral('Re')/vol
             KE_avg = flow.volume_integral('KE')/vol
@@ -471,7 +471,7 @@ try:
             log_string = 'Iteration: {:5d}, Time: {:8.3e}, dt: {:5.1e}'.format(solver.iteration, solver.sim_time, Δt)
             log_string += ', KE: {:.2g}, Re: {:.2g} ({:.2g})'.format(KE_avg, Re_avg, Re_max)
             log_string += ', div(u): {:.2g}'.format(div_u_max)
-            log_string += ', τ: {:.2g}'.format(τ_max)
+            log_string += ', avg τ: {:.2g}'.format(avg_taus)
             logger.info(log_string)
         Δt = cfl.compute_timestep()
         good_solution = np.isfinite(Δt)*np.isfinite(KE_avg)
