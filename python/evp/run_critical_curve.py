@@ -22,6 +22,8 @@ Options:
 
      --use-heaviside
 
+     --tau=<tau>          Timescale for moisture reaction [default: 0.01]
+
      --nz=<nz>            z resolution [default: 128]
      --verbose
 
@@ -32,6 +34,7 @@ from docopt import docopt
 args = docopt(__doc__)
 
 q0 = float(args['--q0'])
+tau = float(args['--tau'])
 
 min_Ra = float(args['--min_Ra'])
 max_Ra = float(args['--max_Ra'])
@@ -77,7 +80,7 @@ for γ in gammas:
     for β in betas:
         print(f"solving γ = {γ}, β = {β}:")
         run_command = f"python3 convective_onset.py --beta={β} --gamma={γ} --q0={q0} \
-                 --nz={nz} --k=1e4 --tau=0.1 \
+                 --nz={nz} --k=1e4 --tau={tau} \
                  --min_Ra={min_Ra} --max_Ra={max_Ra} --num_Ra={num_Ra} \
                  --min_kx={min_kx} --max_kx={max_kx} --num_kx={num_kx} \
                  --erf --Legendre --top-stress-free {use_H}"
