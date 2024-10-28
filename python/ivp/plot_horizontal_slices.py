@@ -6,7 +6,7 @@ Usage:
 
 Options:
     --output=<dir>     Output directory; defaults to 'frames' subdir within the case dir
-    --tasks=<tasks>    Tasks to plot [default: rh mid z,uz mid z,vorticity z mid z]
+    --tasks=<tasks>    Tasks to plot [default: rh 0.5 z,rh 0.75 z,uz 0.5 z,uz 0.75 z,vorticity z 0.5 z,vorticity z 0.75 z]
 """
 
 import h5py
