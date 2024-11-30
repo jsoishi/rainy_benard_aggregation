@@ -65,7 +65,8 @@ def plot_hov(df, task_name, output_path, zrange=None, aspect_ratio = 4, fig_W = 
         plot_z_ax.set_xlim(zmin, zmax)
     plot_z_ax.get_yaxis().set_visible(False)
     plot_z_ax.set_xlabel(f"{task_label}")
-
+    plot_z_ax.xaxis.tick_top()
+    plot_z_ax.xaxis.set_label_position('top')
     fig.savefig(output_path/pathlib.Path(f"{task_name}_hov_z.png"), dpi=300)
 
 args = docopt(__doc__)
