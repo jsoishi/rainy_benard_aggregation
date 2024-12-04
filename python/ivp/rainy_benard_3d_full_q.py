@@ -302,10 +302,9 @@ problem.add_equation('integ(ez@τu2) = 0')
 problem.add_equation('integ(p) = 0')
 
 # adopt equilbrium as ICs for both b and q
-b0.change_scales(1)
-q0.change_scales(1)
-b1['g'] = b0['g']
-q1['g'] = q0['g']
+if b0['c'].size > 0:
+    b1['c'] = b0['c']
+    q1['c'] = q0['c']
 
 # initial conditions
 amp = np.abs(Δm)*1e-3
