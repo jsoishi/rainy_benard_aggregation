@@ -6,7 +6,7 @@ Read more about these equations in:
 Vallis, Parker & Tobias, 2019, JFM,
 ``A simple system for moist convection: the Rainy–Bénard model''
 
-This script solves IVPs, starting from an analytic base state.
+This script solves IVPs, starting from an analytic base state, using fluctuating perturbations q1, b1 about the background q0, b0.
 
 Usage:
     rainy_benard.py [options]
@@ -20,7 +20,7 @@ Options:
 
     --Rayleigh=<Ra>   Rayleigh number [default: 1e5]
 
-    --aspect=<a>      Aspect ratio of domain, Lx/Lz [default: 8]
+    --aspect=<a>      Aspect ratio of domain, [Lx,Ly]/Lz [default: 8]
 
     --tau=<tau>       Timescale for moisture reaction [default: 1e-2]
     --k=<k>           Sharpness of smooth phase transition [default: 1e5]
@@ -62,7 +62,7 @@ Options:
 """
 import logging
 logger = logging.getLogger(__name__)
-for system in ['h5py._conv', 'matplotlib', 'PIL']:
+for system in ['h5py']:
      logging.getLogger(system).setLevel(logging.WARNING)
 
 import numpy as np
@@ -163,6 +163,7 @@ if args['--full_case_label']:
         case += '_Tz'
     else:
         case += '_L'
+    case +='_fluc'
 
 if args['--label']:
     data_dir += '_{:s}'.format(args['--label'])
@@ -213,6 +214,7 @@ u = dist.VectorField(coords, name='u', bases=bases)
 b1 = dist.Field(name='b1', bases=bases)
 q1 = dist.Field(name='q1', bases=bases)
 
+logger.info('solving for fluctuating (not full) variables q1, b1 about q0, b0')
 b = b1 + b0
 q = q1 + q0
 
