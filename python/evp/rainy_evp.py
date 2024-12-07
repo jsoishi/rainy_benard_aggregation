@@ -136,11 +136,11 @@ class RainyEVP():
         fig.savefig(total_filename)
         logger.info("eigenmode {:d} saved in {:s}".format(index, total_filename))
 
-    def solve(self, dense=True, N_evals=20, target=0):
+    def solve(self, dense=True, N_evals=20, target=0, rebuild_matrices=True):
         if dense:
-            self.solver.solve_dense(self.solver.subproblems[1], rebuild_matrices=True)
+            self.solver.solve_dense(self.solver.subproblems[1], rebuild_matrices=rebuild_matrices)
         else:
-            self.solver.solve_sparse(self.solver.subproblems[1], N=N_evals, target=target, rebuild_matrices=True)
+            self.solver.solve_sparse(self.solver.subproblems[1], N=N_evals, target=target, rebuild_matrices=rebuild_matrices)
         self.eigenvalues = self.solver.eigenvalues
 
 
@@ -1306,13 +1306,13 @@ class RainySpectrum():
         else:
             raise NotImplementedError('rejection method {:s}'.format(rejection_method))
 
-    def solve(self, dense=False, N_evals=5, target=0, quiet=False, plot_drift_ratios=False):
+    def solve(self, dense=False, N_evals=5, target=0, quiet=False, plot_drift_ratios=False, rebuild_matrices=False):
         for solver in [self.lo_res, self.hi_res]:
             if solver:
                 if self.restart:
                     solver.load()
                 else:
-                    solver.solve(dense=dense, N_evals=N_evals, target=target)
+                    solver.solve(dense=dense, N_evals=N_evals, target=target, rebuild_matrices=rebuild_matrices)
                     solver.save()
         evals_ok, indx_ok, ep = mode_reject(self.lo_res, self.hi_res, plot_drift_ratios=plot_drift_ratios)
         self.evals_good = evals_ok
