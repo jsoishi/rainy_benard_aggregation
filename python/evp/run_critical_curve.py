@@ -3,6 +3,7 @@ Script for automating critical_Ra calculations.
 
 The approach is to either fix gamma and sweep beta, or fix beta and sweep gamma.
 This is done by selecting a value of gamma or beta via the keyword arguments.
+If both beta and gamma are selected, than instead tau is swept.
 
 Usage:
      run_critical_curve.py [options]
@@ -23,6 +24,7 @@ Options:
      --use-heaviside
 
      --tau=<tau>          Timescale for moisture reaction [default: 0.01]
+     --k=<k>              Smooth heaviside width [default: 1e4]
 
      --nz=<nz>            z resolution [default: 128]
      --verbose
@@ -34,7 +36,8 @@ from docopt import docopt
 args = docopt(__doc__)
 
 q0 = float(args['--q0'])
-tau = float(args['--tau'])
+taus = [float(args['--tau'])]
+k = args['--k']
 
 min_Ra = float(args['--min_Ra'])
 max_Ra = float(args['--max_Ra'])
@@ -46,7 +49,15 @@ num_kx = int(float(args['--num_kx']))
 
 nz = int(args['--nz'])
 
-if args['--gamma']:
+if args['--gamma'] and args['--beta']:
+    gammas = [float(args['--gamma'])]
+    betas = [float(args['--beta'])]
+    min_tau = 1e-3
+    max_tau = 1e-1
+    num_tau = 5
+    taus = np.geomspace(min_tau,max_tau, num=num_tau)
+    print(f"sweeping tau = [{min_tau, max_tau}] with a total of {num_tau} samples")
+elif args['--gamma']:
     gammas = [float(args['--gamma'])]
 
     min_β = 1.0
@@ -78,12 +89,13 @@ else:
 
 for γ in gammas:
     for β in betas:
-        print(f"solving γ = {γ}, β = {β}:")
-        run_command = f"python3 convective_onset.py --beta={β} --gamma={γ} --q0={q0} \
-                 --nz={nz} --k=1e4 --tau={tau} \
-                 --min_Ra={min_Ra} --max_Ra={max_Ra} --num_Ra={num_Ra} \
-                 --min_kx={min_kx} --max_kx={max_kx} --num_kx={num_kx} \
-                 --erf --Legendre --top-stress-free {use_H}"
-        if args['--verbose']:
-            print(run_command)
-        sp.run(run_command, shell=True, capture_output=True)
+        for tau in taus:
+            print(f"solving γ = {γ}, β = {β}:")
+            run_command = f"python3 convective_onset.py --beta={β} --gamma={γ} --q0={q0} \
+                     --nz={nz} --k={k} --tau={tau} \
+                     --min_Ra={min_Ra} --max_Ra={max_Ra} --num_Ra={num_Ra} \
+                     --min_kx={min_kx} --max_kx={max_kx} --num_kx={num_kx} \
+                     --erf --Legendre --top-stress-free {use_H}"
+            if args['--verbose']:
+                print(run_command)
+            sp.run(run_command, shell=True, capture_output=True)
