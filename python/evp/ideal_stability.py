@@ -137,13 +137,13 @@ for iβ, β in enumerate(βs):
             sol = analytic_atmosphere.unsaturated
             zc = zc_analytic()
             Tc = Tc_analytic()
-            analytic_sol = sol(dist, zb, β, γ, zc(γ), Tc(γ), dealias=2, q0=0.6, α=3)
+            analytic_sol = sol(dist, zb, β, γ, zc(γ), Tc(γ), dealias=1, q0=0.6, α=3)
         elif case == 'saturated':
             sol = analytic_atmosphere.saturated
-            analytic_sol = sol(dist, zb, β, γ, dealias=2, q0=1, α=α)
+            analytic_sol = sol(dist, zb, β, γ, dealias=1, q0=1, α=α)
         elif case == 'VPT19':
             sol = analytic_atmosphere.saturated_VPT19
-            analytic_sol = sol(dist, zb, β, γ, dealias=2, q0=1, α=α)
+            analytic_sol = sol(dist, zb, β, γ, dealias=1, q0=1, α=α)
 
         grad_m[iβ,iγ] = dz(analytic_sol['m']).evaluate()['g'][0,0,0]
         grad_b[iβ,iγ] = np.min(dz(analytic_sol['b']).evaluate()['g'][0,0,:]) # get min value
