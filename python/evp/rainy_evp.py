@@ -484,6 +484,8 @@ class SplitThreeRainyBenardEVP(RainyEVP):
         ω = self.dist.Field(name='ω')
         dt = lambda A: ω*A
 
+        scrN0 = 1.0
+
         self.problem = de.EVP(variables, eigenvalue=ω, namespace=locals())
         for i in [1, 2, 3]:
             self.problem.add_equation(f'div(u{i}) + τp{i} + 1/PdR*dot(lift{i}1(τu2{i},-1),ez) = 0')
@@ -500,9 +502,11 @@ class SplitThreeRainyBenardEVP(RainyEVP):
                 self.problem.add_equation(f'dt(b{i}) - P*lap(b{i}) + u{i}@grad_b0{i} + lift{i}2(τb1{i}, -1) + lift{i}2(τb2{i}, -2) = 0')
                 self.problem.add_equation(f'dt(q{i}) - S*lap(q{i}) + u{i}@grad_q0{i} + lift{i}2(τq1{i}, -1) + lift{i}2(τq2{i}, -2) = 0')
             # saturated layer
-            self.problem.add_equation('dt(b3) - P*lap(b3) + u3@grad_b03 - γ/tau*(q3-α*qs03*b3) + lift32(τb13, -1) + lift32(τb23, -2) = 0')
-            self.problem.add_equation('dt(q3) - S*lap(q3) + u3@grad_q03 + 1/tau*(q3-α*qs03*b3) + lift32(τq13, -1) + lift32(τq23, -2) = 0')
-
+            # these should probably have scrN=0.5 rather than scrN=1.0
+            # does this explain observed differences?
+            self.problem.add_equation('dt(b3) - P*lap(b3) + u3@grad_b03 - γ/tau*(q3-α*qs03*b3)*scrN0 + lift32(τb13, -1) + lift32(τb23, -2) = 0')
+            self.problem.add_equation('dt(q3) - S*lap(q3) + u3@grad_q03 + 1/tau*(q3-α*qs03*b3)*scrN0 + lift32(τq13, -1) + lift32(τq23, -2) = 0')
+            logger.info(f'using scrN0 = {scrN0}')
         ncc_list = [grad_b01, grad_b02, grad_b03, grad_q01, grad_q02, grad_q03]
         if self.use_heaviside:
             ncc_list += [scrN1, scrN2, scrN3]
@@ -837,6 +841,8 @@ class SplitRainyBenardEVP(RainyEVP):
         ω = self.dist.Field(name='ω')
         dt = lambda A: ω*A
 
+        scrN0 = 1.0
+
         self.problem = de.EVP(variables, eigenvalue=ω, namespace=locals())
         for i in [1, 2]:
             self.problem.add_equation(f'div(u{i}) + τp + 1/PdR*dot(lift{i}(τu2{i},-1),ez) = 0')
@@ -850,9 +856,11 @@ class SplitRainyBenardEVP(RainyEVP):
             self.problem.add_equation('dt(b1) - P*lap(b1) + u1@grad_b01 + lift1(τb11, -1) + lift1(τb21, -2) = 0')
             self.problem.add_equation('dt(q1) - S*lap(q1) + u1@grad_q01 + lift1(τq11, -1) + lift1(τq21, -2) = 0')
             # saturated layer
-            self.problem.add_equation('dt(b2) - P*lap(b2) + u2@grad_b02 - γ/tau*(q2-α*qs02*b2) + lift2(τb12, -1) + lift2(τb22, -2) = 0')
-            self.problem.add_equation('dt(q2) - S*lap(q2) + u2@grad_q02 + 1/tau*(q2-α*qs02*b2) + lift2(τq12, -1) + lift2(τq22, -2) = 0')
-
+            # these should probably have scrN=0.5 rather than scrN=1.0
+            # does that explain observed differences?
+            self.problem.add_equation('dt(b2) - P*lap(b2) + u2@grad_b02 - γ/tau*(q2-α*qs02*b2)*scrN0 + lift2(τb12, -1) + lift2(τb22, -2) = 0')
+            self.problem.add_equation('dt(q2) - S*lap(q2) + u2@grad_q02 + 1/tau*(q2-α*qs02*b2)*scrN0 + lift2(τq12, -1) + lift2(τq22, -2) = 0')
+            logger.info(f'using scrN0 = {scrN0}')
         ncc_list = [grad_b01, grad_b02, grad_q01, grad_q02]
         if self.use_heaviside:
             ncc_list += [scrN1, scrN2]
