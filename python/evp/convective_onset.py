@@ -186,28 +186,38 @@ growth_rates = {}
 Ras = np.geomspace(float(args['--min_Ra']),float(args['--max_Ra']),num=int(float(args['--num_Ra'])))
 kxs = np.geomspace(min_kx, max_kx, num=nkx)
 print(Ras)
+bracket_found = False
+low_bound_found = False
+high_bound_found = False
 for Ra in Ras:
-    σ = []
-    # reset to base target for each Ra loop
-    target = float(args['--target'])
-    kx = kxs[0]
-    if q0 < 1:
-        lo_res = SplitRainyBenardEVP(nz, Ra, tau, kx, γ, α, β, q0, k, Legendre=Legendre, erf=erf, bc_type=bc_type, nondim=nondim, dealias=1,Lz=1, use_heaviside=use_heaviside)
-    else:
-        lo_res = RainyBenardEVP(nz, Ra, tau, kx, γ, α, β, q0, k, relaxation_method=relaxation_method, Legendre=Legendre, erf=erf, bc_type=bc_type, nondim=nondim, dealias=1,Lz=1)
-    lo_res.plot_background()
-    for system in ['rainy_evp', 'subsystems']:
-         logging.getLogger(system).setLevel(logging.WARNING)
+    if not bracket_found:
+        σ = []
+        # reset to base target for each Ra loop
+        target = float(args['--target'])
+        kx = kxs[0]
+        if q0 < 1:
+            lo_res = SplitRainyBenardEVP(nz, Ra, tau, kx, γ, α, β, q0, k, Legendre=Legendre, erf=erf, bc_type=bc_type, nondim=nondim, dealias=1,Lz=1, use_heaviside=use_heaviside)
+        else:
+            lo_res = RainyBenardEVP(nz, Ra, tau, kx, γ, α, β, q0, k, relaxation_method=relaxation_method, Legendre=Legendre, erf=erf, bc_type=bc_type, nondim=nondim, dealias=1,Lz=1)
+        lo_res.plot_background()
+        for system in ['rainy_evp', 'subsystems']:
+             logging.getLogger(system).setLevel(logging.WARNING)
 
-    for kx in kxs:
-        σ_i = compute_growth_rate(kx, Ra, target=target)
-        σ.append(σ_i)
-        logger.info('Ra = {:.2g}, kx = {:.2g}, σ = {:.2g}'.format(Ra, kx, σ_i))
-        if σ_i.imag > 0:
-            # update target if on growing branch
-            target = σ_i.imag
-    σ = np.array(σ)
-    growth_rates[Ra] = {'σ':σ, 'max σ.real':σ[np.argmax(σ.real)]}
+        for kx in kxs:
+            σ_i = compute_growth_rate(kx, Ra, target=target)
+            σ.append(σ_i)
+            logger.info('Ra = {:.2g}, kx = {:.2g}, σ = {:.2g}'.format(Ra, kx, σ_i))
+            if σ_i.imag > 0:
+                # update target if on growing branch
+                target = σ_i.imag
+        σ = np.array(σ)
+        growth_rates[Ra] = {'σ':σ, 'max σ.real':σ[np.argmax(σ.real)]}
+        if np.max(σ.real) < 0:
+            low_bound_found = True
+        if np.max(σ.real) > 0:
+            high_bound_found = True
+        bracket_found = low_bound_found*high_bound_found
+        #logger.info(f'Ra = {Ra:.2g}, {low_bound_found},{high_bound_found},{bracket_found}')
 
 fig, ax = plt.subplots(figsize=[6,6/1.6])
 
