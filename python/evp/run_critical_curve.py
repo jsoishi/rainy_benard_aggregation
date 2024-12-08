@@ -13,6 +13,7 @@ Options:
      --beta=<beta>        beta to solve at
      --q0=<q0>            Lower atmosphere moisture [default: 1]
 
+     --grid-search     Use a grid based search, which takes the following options
      --min_Ra=<mnRa>      Min Ra to search [default: 1e3]
      --max_Ra=<mxRa>      Max Ra to search [default: 1e7]
      --num_Ra=<nRa>       Num Ra to search [default: 2]
@@ -20,6 +21,9 @@ Options:
      --min_kx=<mnkx>      Min kx to search [default: 1]
      --max_kx=<mxkx>      Max kx to search [default: 3]
      --num_kx=<nkx>       Num kx to search [default: 5]
+
+     --Ra_guess=<Rag>  Starting point for Ra search [default: 1e4]
+     --kx_guess=<kxg>  Starting point for kx search [default: 2.5]
 
      --use-heaviside
 
@@ -46,6 +50,10 @@ num_Ra = int(float(args['--num_Ra']))
 min_kx = float(args['--min_kx'])
 max_kx = float(args['--max_kx'])
 num_kx = int(float(args['--num_kx']))
+
+grid_search = args['--grid-search']
+Ra_guess = float(args['--Ra_guess'])
+kx_guess = float(args['--kx_guess'])
 
 nz = int(args['--nz'])
 
@@ -95,7 +103,10 @@ for γ in gammas:
                      --nz={nz} --k={k} --tau={tau} \
                      --min_Ra={min_Ra} --max_Ra={max_Ra} --num_Ra={num_Ra} \
                      --min_kx={min_kx} --max_kx={max_kx} --num_kx={num_kx} \
+                     --Ra_guess={Ra_guess} --kx_guess={kx_guess} \
                      --erf --Legendre --top-stress-free {use_H}"
+            if args['--grid-search']:
+                run_command += ' --grid-search'
             if args['--verbose']:
                 print(run_command)
             sp.run(run_command, shell=True, capture_output=True)

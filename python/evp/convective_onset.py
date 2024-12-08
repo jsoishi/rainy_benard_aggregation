@@ -23,6 +23,7 @@ Options:
 
     --nondim=<n>      Non-Nondimensionalization [default: buoyancy]
 
+    --grid-search     Use a grid based search, which takes the following options
     --min_Ra=<minR>   Minimum Rayleigh number to sample [default: 1e4]
     --max_Ra=<maxR>   Maximum Rayleigh number to sample [default: 1e5]
     --num_Ra=<nRa>    How many Rayleigh numbers to sample [default: 5]
@@ -186,8 +187,7 @@ def compute_growth_rate(kx, Ra_in, target=0, plot_fastest_mode=False, log_Ra=Fal
         solver.plot_eigenmode(indx[-1])
     return peak_eval
 
-grid_based_search = False
-if grid_based_search:
+if args['--grid-search']:
     def peak_growth_rate(*args):
         rate = compute_growth_rate(*args)
         # flip sign so minimize finds maximum
