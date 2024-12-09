@@ -128,4 +128,4 @@ for β in βs:
 
 print('beta crit')
 for γ in γs:
-    print(f'γ = {γ:.2g}, γ_c = {β_crit(γ):.2g}')
+    print(f'γ = {γ:.2g}, β_c = {β_crit(γ):.2g}')
