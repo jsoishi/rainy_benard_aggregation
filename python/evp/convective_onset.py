@@ -410,4 +410,6 @@ else:
         f['crit/σ'] = crit_σ
         f['crit/tol'] = tol
         f.close()
+logger.info(f"Critical Ra={crit_Ra}")
+logger.info(f"Critical kx={crit_k}")
 logger.info("Critical curves written out to: {:}".format(f_curves))

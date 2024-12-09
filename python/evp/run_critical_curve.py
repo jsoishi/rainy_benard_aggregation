@@ -86,6 +86,7 @@ elif args['--beta']:
     print(f"sweeping γ = [{min_γ, max_γ}] with a total of {num_γ} samples")
     gammas = np.linspace(min_γ, max_γ, num=num_γ)
     gammas = np.round(gammas, decimals=3)
+    gammas = np.flip(gammas)
     print(gammas)
 else:
     raise ValueError("neither gamma nor beta specified; select one to fix")
@@ -95,18 +96,32 @@ if args['--use-heaviside']:
 else:
     use_H = ''
 
+continuation = False
 for γ in gammas:
+    if continuation:
+        Ra_guess = float(args['--Ra_guess'])
+        kx_guess = float(args['--kx_guess'])
     for β in betas:
         for tau in taus:
-            print(f"solving γ = {γ}, β = {β}:")
+            if args['--grid-search']:
+                print(f"solving γ = {γ}, β = {β}:")
+            else:
+                print(f"solving γ = {γ}, β = {β} with guess {kx_guess:.4g}, {Ra_guess:.4g}:")
             run_command = f"python3 convective_onset.py --beta={β} --gamma={γ} --q0={q0} \
                      --nz={nz} --k={k} --tau={tau} \
-                     --min_Ra={min_Ra} --max_Ra={max_Ra} --num_Ra={num_Ra} \
-                     --min_kx={min_kx} --max_kx={max_kx} --num_kx={num_kx} \
-                     --Ra_guess={Ra_guess} --kx_guess={kx_guess} \
                      --erf --Legendre --top-stress-free {use_H}"
             if args['--grid-search']:
                 run_command += ' --grid-search'
+                run_command += f' --min_Ra={min_Ra} --max_Ra={max_Ra} --num_Ra={num_Ra}'
+                run_command += f' --min_kx={min_kx} --max_kx={max_kx} --num_kx={num_kx}'
+            else:
+                run_command += f'--Ra_guess={Ra_guess} --kx_guess={kx_guess}'
             if args['--verbose']:
                 print(run_command)
-            sp.run(run_command, shell=True, capture_output=True)
+            result = sp.run(run_command, shell=True, capture_output=True, text=True)
+            if continuation:
+                for line in result.stdout.splitlines():
+                    if 'Critical Ra=' in line:
+                        Ra_guess = float(line.split('Critical Ra=')[-1])
+                    if 'Critical kx=' in line:
+                        kx_guess = np.abs(float(line.split('Critical kx=')[-1]))
