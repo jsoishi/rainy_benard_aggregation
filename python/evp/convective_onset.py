@@ -35,6 +35,8 @@ Options:
     --Ra_guess=<Rag>  Starting point for Ra search [default: 1e4]
     --kx_guess=<kxg>  Starting point for kx search [default: 2.5]
 
+    --log-search      Search in log Ra space
+
     --top-stress-free     Stress-free upper boundary
     --stress-free         Stress-free both boundaries
 
@@ -57,7 +59,7 @@ Options:
 """
 import logging
 logger = logging.getLogger(__name__)
-for system in ['h5py._conv', 'matplotlib', 'PIL']:
+for system in ['h5py']:
     logging.getLogger(system).setLevel(logging.WARNING)
 
 import os
@@ -156,11 +158,13 @@ def plot_eigenfunctions(evp, index, Rayleigh, kx):
 
 
 # fix Ra, find omega
-def compute_growth_rate(kx, Ra_in, target=0, plot_fastest_mode=False, log_Ra=False, solver=None):
-    if log_Ra:
+def compute_growth_rate(kx_in, Ra_in, target=0, plot_fastest_mode=False, log_search=False, solver=None):
+    if log_search:
         Ra = np.exp(Ra_in)
+        kx = kx_in #np.exp(kx_in)
     else:
         Ra = Ra_in
+        kx = kx_in
     if not solver:
         if q0 < 1:
             solver = SplitRainyBenardEVP(nz, Ra, tau, kx, γ, α, β, q0, k, Legendre=Legendre, erf=erf, bc_type=bc_type, nondim=nondim, dealias=1,Lz=1, use_heaviside=use_heaviside)
@@ -372,7 +376,7 @@ if args['--grid-search']:
         f.close()
 
 else:
-    log_Ra = False
+    log_search = args['--log-search']
     kx = float(args['--kx_guess'])
     Ra = float(args['--Ra_guess'])
     d_kx = 5e-2*kx
@@ -384,15 +388,15 @@ else:
     else:
         lo_res = RainyBenardEVP(nz, Ra, tau, kx, γ, α, β, q0, k, relaxation_method=relaxation_method, Legendre=Legendre, erf=erf, bc_type=bc_type, nondim=nondim, dealias=1,Lz=1)
 
-    if log_Ra:
-        crit_k, crit_ln_Ra = adaptive_critical_point(compute_growth_rate, kx, np.log(Ra), d_kx, np.log(d_Ra),
-                                                     factor=0.1, x_rtol=tol, use_fitting_error=True,
-                                                     target=0, log_Ra=True, plot_fastest_mode=False)
+    if log_search:
+        crit_k, crit_ln_Ra = adaptive_critical_point(compute_growth_rate, kx, np.log(Ra), d_kx, d_Ra/Ra,
+                                                     factor=0.1, x_rtol=tol, use_fitting_error=False,
+                                                     target=0, log_search=True, plot_fastest_mode=False)
         crit_Ra = np.exp(crit_ln_Ra)
     else:
         crit_k, crit_Ra = adaptive_critical_point(compute_growth_rate, kx, Ra, d_kx, d_Ra,
                                                      factor=0.1, x_rtol=tol, use_fitting_error=True,
-                                                     target=0, log_Ra=False, plot_fastest_mode=False)
+                                                     target=0, log_search=False, plot_fastest_mode=False)
 
     crit_σ = compute_growth_rate(crit_k, crit_Ra, target=0, plot_fastest_mode=False)
     f_curves = lo_res.case_name+'/critical_curves_adaptive_nz_{:d}.h5'.format(nz)
@@ -412,4 +416,5 @@ else:
         f.close()
 logger.info(f"Critical Ra={crit_Ra}")
 logger.info(f"Critical kx={crit_k}")
+logger.info(f"Critical σ={crit_σ}")
 logger.info("Critical curves written out to: {:}".format(f_curves))
