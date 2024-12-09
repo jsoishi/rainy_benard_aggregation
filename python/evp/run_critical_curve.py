@@ -25,6 +25,8 @@ Options:
      --Ra_guess=<Rag>  Starting point for Ra search [default: 1e4]
      --kx_guess=<kxg>  Starting point for kx search [default: 2.5]
 
+     --continuation    Use very simple continuation approach
+
      --use-heaviside
 
      --tau=<tau>          Timescale for moisture reaction [default: 0.01]
@@ -34,6 +36,11 @@ Options:
      --verbose
 
 """
+import logging
+logger = logging.getLogger(__name__)
+for system in ['h5py']:
+    logging.getLogger(system).setLevel(logging.WARNING)
+
 import subprocess as sp
 import numpy as np
 from docopt import docopt
@@ -42,6 +49,11 @@ args = docopt(__doc__)
 q0 = float(args['--q0'])
 taus = [float(args['--tau'])]
 k = args['--k']
+
+ΔT = -1
+α = 3
+γ_crit = lambda β: -(β+ΔT)/(np.exp(α*ΔT)-q0)
+β_crit = lambda γ: -γ*(np.exp(α*ΔT)-q0) - ΔT
 
 min_Ra = float(args['--min_Ra'])
 max_Ra = float(args['--max_Ra'])
@@ -96,12 +108,12 @@ if args['--use-heaviside']:
 else:
     use_H = ''
 
-continuation = False
+continuation = args['--continuation']
 for γ in gammas:
-    if continuation:
-        Ra_guess = float(args['--Ra_guess'])
-        kx_guess = float(args['--kx_guess'])
     for β in betas:
+        if β > β_crit(γ) or γ < γ_crit(β):
+            print(f"β {β} > β_crit(γ) {β_crit(γ):.3g} or γ {γ} < γ_crit(β) {γ_crit(β):.3g}, breaking")
+            continue
         for tau in taus:
             if args['--grid-search']:
                 print(f"solving γ = {γ}, β = {β}:")
@@ -115,7 +127,7 @@ for γ in gammas:
                 run_command += f' --min_Ra={min_Ra} --max_Ra={max_Ra} --num_Ra={num_Ra}'
                 run_command += f' --min_kx={min_kx} --max_kx={max_kx} --num_kx={num_kx}'
             else:
-                run_command += f'--Ra_guess={Ra_guess} --kx_guess={kx_guess}'
+                run_command += f'--Ra_guess={Ra_guess} --kx_guess={kx_guess} --log-search'
             if args['--verbose']:
                 print(run_command)
             result = sp.run(run_command, shell=True, capture_output=True, text=True)
@@ -125,3 +137,7 @@ for γ in gammas:
                         Ra_guess = float(line.split('Critical Ra=')[-1])
                     if 'Critical kx=' in line:
                         kx_guess = np.abs(float(line.split('Critical kx=')[-1]))
+            if kx_guess < 2:
+                print(f"suspect incorrect minimum, resetting guesses for next run")
+                kx_guess = float(args['--kx_guess'])
+                Ra_guess = float(args['--Ra_guess'])
