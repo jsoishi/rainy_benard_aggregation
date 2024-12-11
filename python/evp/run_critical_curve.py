@@ -127,7 +127,7 @@ for γ in gammas:
                 run_command += f' --min_Ra={min_Ra} --max_Ra={max_Ra} --num_Ra={num_Ra}'
                 run_command += f' --min_kx={min_kx} --max_kx={max_kx} --num_kx={num_kx}'
             else:
-                run_command += f'--Ra_guess={Ra_guess} --kx_guess={kx_guess} --log-search'
+                run_command += f' --Ra_guess={Ra_guess} --kx_guess={kx_guess} --log-search'
             if args['--verbose']:
                 print(run_command)
             result = sp.run(run_command, shell=True, capture_output=True, text=True)
