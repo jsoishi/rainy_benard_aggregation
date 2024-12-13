@@ -113,7 +113,7 @@ if __name__ == "__main__":
     if args['--tau']:
         tau_in = float(args['--tau'])
     # build solvers
-    spectrum = RainySpectrum(nz, Rayleigh, tau, kx, γ, α, β, lower_q0, k, Legendre=Legendre, erf=erf, bc_type=bc_type, nondim=nondim, dealias=dealias,Lz=1, use_heaviside=use_heaviside, restart=restart, rejection_method=rejection_method, dynamic_gamma_factor = dynamic_gamma)
+    spectrum = RainySpectrum(nz, Rayleigh, tau, kx, γ, α, β, lower_q0, k, Legendre=Legendre, erf=erf, bc_type=bc_type, nondim=nondim, dealias=dealias,Lz=1, use_heaviside=use_heaviside, restart=restart, rejection_method=rejection_method, dynamic_gamma_factor=dynamic_gamma)
 
     spectrum.lo_res.plot_background()
 
@@ -130,7 +130,7 @@ if __name__ == "__main__":
     if restart:
         fig_filename += "_restart"
     logger.info(f"good modes ({{$\delta_t$}} = {drift_threshold:.1e}):    max growth rate = {spectrum.evals_good[-1]}")
-    eps = 1e-4
+    eps = 1e-3
     logger.info(f"good fastest oscillating modes: {spectrum.evals_good[np.argmax(np.abs(spectrum.evals_good.imag))]}")
     col = np.where(np.abs(evals_good.imag) > eps, '#3182bd', np.where(evals_good.real > eps, '#e34a33', np.where(np.abs(evals_good.real) < eps, '#fdbb84', 'k')))
     spec_ax.scatter(evals_good.real, evals_good.imag, marker='o', c=col, label=f'good modes ($\delta_t$ = {drift_threshold:.1e})',s=100)#, alpha=0.5, s=25)
