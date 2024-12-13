@@ -40,7 +40,7 @@ Options:
     --top-stress-free     Stress-free upper boundary
     --stress-free         Stress-free both boundaries
 
-    --nz=<nz>         Number of coeffs to use in eigenvalue search; if not set, uses resolution of background [default: 128]
+    --nz=<nz>         Number of coeffs to use in eigenvalue search [default: 128]
     --target=<targ>   Target value for sparse eigenvalue search [default: 0]
     --eigs=<eigs>     Target number of eigenvalues to search for [default: 20]
 

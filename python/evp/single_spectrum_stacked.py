@@ -9,28 +9,26 @@ Vallis, Parker & Tobias, 2019, JFM,
 This script solves EVPs for an existing atmospheres, solved for by scripts in the nlbvp section.
 
 Usage:
-    convective_onset.py <case> [options]
+    convective_onset.py [options]
 
 Options:
-    <case>           Case (or cases) to calculate onset for
-
-                           Properties of analytic atmosphere, if used
+                           Properties of analytic atmosphere
     --alpha=<alpha>        alpha value [default: 3]
-    --beta=<beta>          beta value  [default: 1.1]
+    --beta=<beta>          beta value  [default: 1.05]
     --gamma=<gamma>        gamma value [default: 0.19]
     --q0=<q0>              basal q value [default: 0.6]
 
     --tau=<tau>            If set, override value of tau [default: 1e-3]
-    --k=<k>                If set, override value of k [default: 1e4]
+    --k=<k>                If set, override value of k [default: 1e5]
 
     --nondim=<n>           Non-Nondimensionalization [default: buoyancy]
 
-    --Ra=<Ra>              Rayleigh number [default: 1e4]
-    --kx=<kx>              x wavenumber [default: 0.1]
+    --Ra=<Ra>              Rayleigh number [default: 2.68e4]
+    --kx=<kx>              x wavenumber [default: 2.57]
     --top-stress-free      Stress-free upper boundary
     --stress-free          Stress-free both boundaries
 
-    --nz=<nz>              Number of coeffs to use in eigenvalue search; if not set, uses resolution of background [default: 128]
+    --nz=<nz>              Number of coeffs to use in eigenvalue search [default: 128]
     --target=<targ>        Target value for sparse eigenvalue search [default: 0]
     --eigs=<eigs>          Target number of eigenvalues to search for [default: 20]
     --normalization=<norm>      Eigenmode plot Normalization [default: m]
@@ -96,7 +94,7 @@ if __name__ == "__main__":
 
     Legendre = args['--Legendre']
     erf = args['--erf']
-    case = args['<case>']
+    case = 'analytic' #args['<case>']
     nondim = args['--nondim']
     if case == 'analytic':
         α = float(args['--alpha'])
