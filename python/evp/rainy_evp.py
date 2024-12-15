@@ -58,6 +58,7 @@ class RainyEVP():
             norm_data = data['b']
         i_max = np.argmax(np.abs(norm_data[self.z_slice]))
         phase_correction = norm_data[self.z_slice][i_max]
+        logger.info(f'phase correction: {phase_correction}')
 
         for v in ['q','b']:
             name = names[v]
@@ -85,6 +86,7 @@ class RainyEVP():
         axes['m'].plot(m_plot.imag, self.z, ':', label=r'$\sin$')
         axes['m'].set_xlabel(f"$m$")
         axes['m'].set_ylabel(r"$z$")
+
         if xlim:
             axes['m'].set_xlim(-1.05,1.05)
         axes['m'].legend(bbox_to_anchor=(1.05, 1),
@@ -164,6 +166,8 @@ class RainyEVP():
 class SplitThreeRainyBenardEVP(RainyEVP):
     def __init__(self, nz, Ra, tau_in, kx_in, γ, α, β, lower_q0, k, Legendre=True, erf=True, nondim='buoyancy', bc_type=None, Prandtl=1, Prandtlm=1, Lz=1, dealias=1, dtype=np.complex128, twoD=True, use_heaviside=True, dynamic_gamma_factor=1):
         self.param_string = f'Ra={Ra:}_kx={kx_in:}_α={α:}_β={β:}_γ={γ:}_tau={tau_in:}_k={k:}_nz={nz:}_bc_type={bc_type}'
+        if dynamic_gamma_factor != 1:
+            self.param_string += f'_dynamic_gamma_{dynamic_gamma_factor:}'
         logger.info(self.param_string.replace('_',', '))
         self.savefilename = f'{self.param_string.replace("=","_"):}_eigenvectors.h5'
         self.nz = nz
@@ -175,6 +179,7 @@ class SplitThreeRainyBenardEVP(RainyEVP):
         self.γ = γ
         self.lower_q0 = lower_q0
         self.k = k
+        self.dynamic_gamma_factor = dynamic_gamma_factor
 
         self.Prandtl = Prandtl
         self.Prandtlm = Prandtlm
@@ -448,7 +453,7 @@ class SplitThreeRainyBenardEVP(RainyEVP):
         # need local aliases...this is a weakness of this approach
         Lz = self.Lz
         #kx = self.kx
-        γ = self.γ
+        γ = self.γ * self.dynamic_gamma_factor
         α = self.α
         β = self.β
         tau = self.tau
@@ -499,6 +504,7 @@ class SplitThreeRainyBenardEVP(RainyEVP):
         dt = lambda A: ω*A
 
         scrN0 = 1.0
+        logger.info(f'using scaled version of γ = {γ:}')
 
         self.problem = de.EVP(variables, eigenvalue=ω, namespace=locals())
         for i in [1, 2, 3]:
@@ -573,6 +579,8 @@ class SplitThreeRainyBenardEVP(RainyEVP):
 class SplitRainyBenardEVP(RainyEVP):
     def __init__(self, nz, Ra, tau_in, kx_in, γ, α, β, lower_q0, k, Legendre=True, erf=True, nondim='buoyancy', bc_type=None, Prandtl=1, Prandtlm=1, Lz=1, dealias=3/2, dtype=np.complex128, twoD=True, use_heaviside=False, dynamic_gamma_factor=1):
         self.param_string = f'Ra={Ra:}_kx={kx_in:}_α={α:}_β={β:}_γ={γ:}_tau={tau_in:}_k={k:}_nz={nz:}_bc_type={bc_type}'
+        if dynamic_gamma_factor != 1:
+            self.param_string += f'_dynamic_gamma_{dynamic_gamma_factor:}'
         logger.info(self.param_string.replace('_',', '))
         self.savefilename = f'{self.param_string.replace("=","_"):}_eigenvectors.h5'
         self.nz = nz
@@ -584,6 +592,7 @@ class SplitRainyBenardEVP(RainyEVP):
         self.γ = γ
         self.lower_q0 = lower_q0
         self.k = k
+        self.dynamic_gamma_factor = dynamic_gamma_factor
 
         self.Prandtl = Prandtl
         self.Prandtlm = Prandtlm
@@ -809,7 +818,7 @@ class SplitRainyBenardEVP(RainyEVP):
         # need local aliases...this is a weakness of this approach
         Lz = self.Lz
         #kx = self.kx
-        γ = self.γ
+        γ = self.γ * self.dynamic_gamma_factor
         α = self.α
         β = self.β
         tau = self.tau
@@ -853,6 +862,7 @@ class SplitRainyBenardEVP(RainyEVP):
         dt = lambda A: ω*A
 
         scrN0 = 1.0
+        logger.info(f'using scaled version of γ = {γ:}')
 
         self.problem = de.EVP(variables, eigenvalue=ω, namespace=locals())
         for i in [1, 2]:
