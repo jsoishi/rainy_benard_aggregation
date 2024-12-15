@@ -130,7 +130,7 @@ if __name__ == "__main__":
     if restart:
         fig_filename += "_restart"
     logger.info(f"good modes ({{$\delta_t$}} = {drift_threshold:.1e}):    max growth rate = {spectrum.evals_good[-1]}")
-    eps = 1e-3
+    eps = 2e-3
     logger.info(f"good fastest oscillating modes: {spectrum.evals_good[np.argmax(np.abs(spectrum.evals_good.imag))]}")
     col = np.where(np.abs(evals_good.imag) > eps, '#3182bd', np.where(evals_good.real > eps, '#e34a33', np.where(np.abs(evals_good.real) < eps, '#fdbb84', 'k')))
     spec_ax.scatter(evals_good.real, evals_good.imag, marker='o', c=col, label=f'good modes ($\delta_t$ = {drift_threshold:.1e})',s=100)#, alpha=0.5, s=25)
@@ -162,6 +162,6 @@ if __name__ == "__main__":
     if emode is not None:
         spectrum.lo_res.plot_eigenmode(emode, plot_type=plot_type, normalization=normalization)
     else:
-        for i in [-1, -2, -3, -4, -5]:
+        for i in [-1, -2, -3, -4, -5, -6, -7]:
             emode = indx[i]
             spectrum.lo_res.plot_eigenmode(emode, plot_type=plot_type, normalization=normalization)

@@ -136,6 +136,23 @@ class RainyEVP():
         fig.savefig(total_filename)
         logger.info("eigenmode {:d} saved in {:s}".format(index, total_filename))
 
+        fig, ax = plt.subplots(figsize=[6, 6/1.6])
+        d = data['b']/phase_correction
+        mask = self.z > self.zc
+        ax.plot(d[0,mask].real, self.z[mask], label=r'$b$, $\cos$', color='#a63603')
+        ax.plot(d[0,mask].imag, self.z[mask], ':', label=r'$b$, $\sin$', color='#a63603')
+
+        d = gamma*data['q']/phase_correction
+        ax.plot(d[0,mask].real, self.z[mask], label=r'$\gamma q$, $\cos$', color='black')
+        ax.plot(d[0,mask].imag, self.z[mask], ':', label=r'$\gamma q$, $\sin$', color='black')
+        ax.axhline(self.zc, color='k',alpha=0.3)
+        ax.legend(fontsize='small', loc='upper right')
+        ax.set_xlabel(r'$b$, $\gamma q$')
+        ax.set_ylabel(r'$z$')
+        fig.tight_layout()
+        total_filename = f"{self.case_name}/{fig_filename}_b_and_q_zoom.{plot_type}"
+        fig.savefig(total_filename)
+
     def solve(self, dense=True, N_evals=20, target=0, rebuild_matrices=True):
         if dense:
             self.solver.solve_dense(self.solver.subproblems[1], rebuild_matrices=rebuild_matrices)
