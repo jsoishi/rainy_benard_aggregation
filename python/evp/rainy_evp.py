@@ -134,6 +134,8 @@ class RainyEVP():
             mode_label = index
         kx = 2*np.pi/self.Lx
         fig_filename=f"emode_indx_{mode_label}_Ra_{self.Rayleigh['g'].squeeze().real:.2e}_nz_{self.nz}_kx_{kx:.3f}_bc_{self.bc_type}"
+        if self.dynamic_gamma_factor != 1:
+            fig_filename += f"_dynamic-gamma{self.dynamic_gamma_factor:}"
         total_filename = f"{self.case_name}/{fig_filename}.{plot_type}"
         fig.savefig(total_filename)
         logger.info("eigenmode {:d} saved in {:s}".format(index, total_filename))
@@ -500,10 +502,15 @@ class SplitThreeRainyBenardEVP(RainyEVP):
             for i in range(3):
                 self.scrN.append((H(self.q0[i] - self.qs0[i]).evaluate()))
                 self.scrN[i].name=f'scrN{i+1}'
+            if self.dynamic_gamma_factor != 1:
+                for i in range(3):
+                    self.scrN[i]['g'] *= self.dynamic_gamma_factor
+                    logger.info(self.scrN[i]['g'])
 
             scrN1 = self.scrN[0]
             scrN2 = self.scrN[1]
             scrN3 = self.scrN[2]
+
         ω = self.dist.Field(name='ω')
         dt = lambda A: ω*A
 
@@ -1017,6 +1024,9 @@ class RainyBenardEVP(RainyEVP):
         # use only gradient in z direction.
         self.grad_b0 = de.grad(self.b0).evaluate()
         self.grad_q0 = de.grad(self.q0).evaluate()
+
+        if self.dynamic_gamma_factor != 1:
+            self.case_name += '_dynamic-gamma{:}'.format(self.dynamic_gamma_factor)
 
         if not os.path.exists('{:s}/'.format(self.case_name)) and MPI.COMM_WORLD.rank == 0:
             os.makedirs('{:s}/'.format(self.case_name))

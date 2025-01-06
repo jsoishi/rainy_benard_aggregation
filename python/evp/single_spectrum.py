@@ -44,7 +44,7 @@ Options:
     --plot_type=<plot_type>   File type for plots [default: pdf]
     --use-heaviside        Use the Heaviside function
     --restart              Don't solve, use saved eigenmodes and eigenvalues
-    --dynamic-gamma=<dyn_gam>       Factor to raise or lower gamma by in EVP (but not background!) [default: 1]
+    --dynamic_gamma=<dyn_gam>       Factor to raise or lower gamma by in EVP (but not background!) [default: 1]
 """
 import logging
 logger = logging.getLogger(__name__)
@@ -80,7 +80,7 @@ if __name__ == "__main__":
     use_heaviside = args['--use-heaviside']
     restart = args['--restart']
     rejection_method= args['--rejection_method']
-    dynamic_gamma = float(args['--dynamic-gamma'])
+    dynamic_gamma = float(args['--dynamic_gamma'])
     if dynamic_gamma != 1.0:
         logger.warning(f"dynamic_gamma factor is set to {dynamic_gamma:}. This is not self-consistent!")
     Prandtlm = 1
@@ -118,9 +118,9 @@ if __name__ == "__main__":
     spectrum.lo_res.plot_background()
 
     spectrum.solve(dense=dense, N_evals=N_evals, target=target, plot_drift_ratios=True)
-    print(40*'*')
-    spectrum.lo_res.solver.print_subproblem_ranks()
-    print(40*'*')
+    # print(40*'*')
+    # spectrum.lo_res.solver.print_subproblem_ranks()
+    # print(40*'*')
 
     evals_good = spectrum.evals_good
     indx = spectrum.indx
